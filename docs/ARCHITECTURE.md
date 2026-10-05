@@ -19,8 +19,8 @@ Mnemosyne OS (FastAPI, 50+ 端点)
   ├── sync/              端云同步 (SQLite ↔ PostgreSQL)
   └── docs/              白皮书 + 宫殿设计 + schema
 
-数据层: PostgreSQL 16 + pgvector 1024d (HNSW)(v7.8: Apache AGE 图已切除 — 实体关联走 entities/memory_entities/wiki_entities 表)
-模型层: 可插拔 —— 豆包 ARK / DeepSeek / 任意 OpenAI 兼容端点
+数据层: PostgreSQL 16 + pgvector 1536d (HNSW)(v7.8: Apache AGE 图已切除 — 实体关联走 entities/memory_entities/wiki_entities 表)
+模型层: embedding 固定走 OpenAI 兼容端点 (1536d)；对话/LLM 可插拔 —— 豆包 ARK / DeepSeek / 任意 OpenAI 兼容端点
 ```
 
 ---

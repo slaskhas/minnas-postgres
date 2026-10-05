@@ -1,10 +1,10 @@
 """
 Mnemosyne v7.7.0 — Embedding 抽象层 (深度优化版)
-主后端: 豆包 doubao-embedding-vision-251215 (ARK API)
-维度: 1024 (用户确认)
+主后端: OpenAI 兼容 embeddings API (OpenAI / Azure OpenAI / 本地 vLLM/Ollama)
+维度: 1536 (用户确认)
 
 v7.7.0 优化:
-  1. 并发调用: 实测 ARK embedding 模型不支持批量 input(多input只返第一条), 用并发逐条替代
+  1. 并发调用: 逐条并发请求 (简单可靠, 不依赖 provider 的批量 input 支持)
   2. LRU 缓存(OrderedDict 标准实现): 同内容不重算 (prefetch/搜索/同步复用)
   3. 指数退避重试: 429/5xx 自动重试 (3 次, 1s→2s→4s)
   4. 并发可配置: MAX_CONCURRENT 支持环境变量覆盖 (适配不同 API 配额)
@@ -26,10 +26,10 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, List, Optional, Tuple
 
 try:
-    from .config import ARK_API_KEY, EMBED_MODEL, EMBED_DIM, EMBED_URL
+    from .config import OPENAI_API_KEY, EMBED_MODEL, EMBED_DIM, EMBED_URL
 except ImportError:
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    from config import ARK_API_KEY, EMBED_MODEL, EMBED_DIM, EMBED_URL
+    from config import OPENAI_API_KEY, EMBED_MODEL, EMBED_DIM, EMBED_URL
 
 # ── 配置 (环境变量可覆盖) ──
 MAX_CONCURRENT = int(os.environ.get("EMBED_MAX_CONCURRENT", "8"))
@@ -93,32 +93,42 @@ def _cache_key(text: str) -> str:
     return hashlib.md5(text.encode("utf-8")).hexdigest()
 
 
-def _call_ark_single(text: str) -> List[float]:
-    """单条调用 ARK API (带重试) — 实测该模型不支持批量 input, 逐条并发"""
+class EmbeddingDimensionError(RuntimeError):
+    """Provider 实际返回的向量维度与 EMBED_DIM 不符 — 配置问题, 不可通过重试解决
+    (例如 Ollama 对超出模型原生维度的 `dimensions` 请求会静默忽略, 返回原生长度)"""
+
+
+def _call_openai_single(text: str) -> List[float]:
+    """单条调用 OpenAI 兼容 embeddings API (带重试)"""
     payload = json.dumps({
         "model": EMBED_MODEL,
-        "input": [{"type": "text", "text": text}],
+        "input": text,
         "dimensions": EMBED_DIM,
     }).encode()
     req = urllib.request.Request(
         EMBED_URL,
         data=payload,
         headers={"Content-Type": "application/json",
-                 "Authorization": f"Bearer {ARK_API_KEY}"}
+                 "Authorization": f"Bearer {OPENAI_API_KEY}"}
     )
     last_err = None
     for attempt in range(MAX_RETRIES):
         try:
             with urllib.request.urlopen(req, timeout=60) as resp:
                 data = json.loads(resp.read())
-            d = data.get("data", {})
-            if isinstance(d, dict):
-                emb_val = d.get("embedding")
-            else:
-                emb_val = d[0].get("embedding") if d else None
+            d = data.get("data")
+            emb_val = d[0].get("embedding") if d else None
             if emb_val:
+                if len(emb_val) != EMBED_DIM:
+                    raise EmbeddingDimensionError(
+                        f"embedding 维度不匹配: 期望 {EMBED_DIM}, 实际 {len(emb_val)} "
+                        f"(model={EMBED_MODEL}, url={EMBED_URL}) — 请检查 EMBED_DIM/"
+                        f"OPENAI_EMBED_MODEL 是否与该 provider 实际输出维度一致"
+                    )
                 return emb_val
             last_err = f"empty response: {str(data)[:200]}"
+        except EmbeddingDimensionError:
+            raise
         except urllib.error.HTTPError as e:
             last_err = f"HTTP {e.code}: {e.reason}"
             if e.code in (429, 500, 502, 503, 504):
@@ -133,8 +143,7 @@ def _call_ark_single(text: str) -> List[float]:
 
 def get_embedding(texts: List[str]) -> List[List[float]]:
     """同步版本 — LRU 缓存 + 并发调用 + 重试 (用于 run_in_executor)
-    实测: ARK doubao-embedding-vision 不支持批量 input(多input只返第一条),
-    故用并发替代批量, MAX_CONCURRENT=8 并行请求"""
+    逐条并发请求, MAX_CONCURRENT=8 并行"""
     _load_disk_cache()
     if not texts:
         return []
@@ -155,7 +164,7 @@ def get_embedding(texts: List[str]) -> List[List[float]]:
     # 3. 并发取未命中的
     def fetch_one(item):
         idx, text = item
-        vec = _call_ark_single(text)
+        vec = _call_openai_single(text)
         return idx, text, vec
 
     def _store(idx, text, vec):

@@ -44,8 +44,17 @@ def dsn_from_env() -> str:
     db = os.getenv("PGDATABASE", "mnemosyne")
     host = os.getenv("PGHOST", "127.0.0.1")
     port = os.getenv("PGPORT", "5432")
+    schema = os.getenv("PGSCHEMA", "public")
     auth = f"{user}:{pwd}@" if pwd else f"{user}@"
-    return f"postgresql://{auth}{host}:{port}/{db}"
+    dsn = f"postgresql://{auth}{host}:{port}/{db}"
+    if schema != "public":
+        # 本文件内 SQL 均为不带 schema 前缀的裸表名, 靠 search_path 解析 ——
+        # 必须随 DSN 显式带上, 否则会落到角色默认 search_path (通常含 public),
+        # 在与其它应用共享同一库/public schema 时读写到错误的表。
+        # 末尾保留 public 是为了 pgvector 的 vector 类型解析 (扩展装在 public) ——
+        # 表名解析仍优先命中 schema 下已存在的同名表, 不会误落到 public。
+        dsn += f"?options=-csearch_path%3D{schema}%2Cpublic"
+    return dsn
 
 
 CHECKS = [

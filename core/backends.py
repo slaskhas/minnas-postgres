@@ -1,6 +1,6 @@
 """
 Mnemosyne OS v5.0 — 多后端模型配置
-支持: 豆包(ARK) / OpenAI兼容 / 本地模型
+支持: 豆包(ARK, 仅 chat) / OpenAI兼容 (embedding + chat) / 本地模型
 """
 import os
 from typing import Optional
@@ -12,14 +12,13 @@ MODEL_BACKENDS = {
         "base_url": "https://ark.cn-beijing.volces.com/api/v3",
         "auth": lambda: f"Bearer {os.getenv('ARK_API_KEY', '')}",
         "models": {
-            "embedding": "doubao-embedding-vision-251215",
             "chat_mini": "doubao-seed-2-0-mini-260215",
             "chat_lite": "doubao-seed-2-0-lite-260215",
             "chat_code": "doubao-seed-2-0-code-preview-260215",
             "image": "doubao-seedream-5-0-260128",
         },
-        "dimensions": [1024, 2048],
-        "default_dim": 1024,
+        # 注: ARK 不再用于 embedding (embedding 走 openai 兼容后端, 见下)
+        "dimensions": [],
     },
     "openai": {
         "name": "OpenAI 兼容 (OpenAI / DeepSeek / 本地)",

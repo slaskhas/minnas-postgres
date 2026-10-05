@@ -59,7 +59,7 @@ _needs_db = pytest.mark.skipif(not _db_ready(), reason=f"v8.0 测试库不可用
 
 
 def _vec() -> str:
-    return "[" + ",".join(["0.01"] * 1024) + "]"
+    return "[" + ",".join(["0.01"] * 1536) + "]"
 
 
 async def _sync_seq(conn) -> None:
