@@ -39,7 +39,7 @@
 | **Memories** | 16,500+ active · 17,320 rows · 99.4% archived coverage |
 | **Search** | 🏰 3-channel summon (name/guide/resonate) · ~100-400ms |
 | **Palace** | Taxonomy 7 wings×20 rooms · Archive-no system · Tome cards · Retention tiers |
-| **Stack** | PostgreSQL 16 · pgvector 1024d HNSW · FastAPI |
+| **Stack** | PostgreSQL 16 · pgvector 1536d HNSW · FastAPI |
 | **Agent** | Hermes Memory Provider (14 tools incl. palace_summon) · auto-extract |
 | **Uptime** | 7×24 on modest cloud · edge-cloud sync (SQLite ↔ PG) |
 
@@ -89,7 +89,7 @@ Every step is **LLM-driven** — not templated. The same pipeline handles agent 
 | Tome cards (standardized description) | ✅ | ❌ | ❌ |
 | 3-channel summon (name/guide/resonate) | ✅ | ❌ | ❌ |
 | Fact extraction (dialogue→facts) | ✅ LLM pipeline | ❌ | ✅ |
-| Vector search (1024d HNSW) | ✅ | ✅ | ✅ |
+| Vector search (1536d HNSW) | ✅ | ✅ | ✅ |
 | Full-text (BM25 + ILIKE) | ✅ | ❌ | ❌ |
 | Retention tiers (permanent/long/short) | ✅ | ❌ | ❌ |
 | Entity graph (table-based) | ✅ entities + memory_entities | ❌ | ❌ |
@@ -217,7 +217,7 @@ WSL offline? Local SQLite cache. Back online? Silent push to PostgreSQL. Cron jo
 │  ├── /api/v1/wiki           Knowledge base            │
 │  └── /api/v1/echo           Health check              │
 │                                                        │
-│  PostgreSQL 16 · pgvector 1024d (HNSW)                │
+│  PostgreSQL 16 · pgvector 1536d (HNSW)                │
 │  Entity graph (entities + memory_entities tables)                     │
 │  asyncpg connection pool                               │
 │                                                        │
@@ -306,7 +306,7 @@ Single user + 5 agent workers, 7×24 on a modest cloud instance:
 | Tome cards | see `GET /api/v1/health/<user>` |
 | Taxonomy | 7 wings × 20 rooms (30 nodes) |
 | Summon latency | ~100-400ms (3-channel) |
-| Embedding | 1024d Doubao Embedding-Vision |
+| Embedding | 1536d OpenAI-compatible (`text-embedding-3-small` default) |
 | Fact extraction LLM | DeepSeek V4 (dual-base: DeepSeek + Doubao) |
 
 **Model-agnostic**: any OpenAI-compatible endpoint. Swap `EMBED_MODEL` / `LLM_MODEL_LITE` / `LLM_MODEL_PRO` env vars — zero code changes.

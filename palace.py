@@ -159,7 +159,7 @@ async def init_palace(pool) -> dict:
             archive_no = f"{cls['wing']}·{cls['room'].upper()}·{datetime.now().year}-{r['id']:04d}"
             try:
                 await conn.execute(
-                    "UPDATE public.memories SET archive_no=$1 WHERE id=$2 AND archive_no IS NULL",
+                    "UPDATE mnemosyne.memories SET archive_no=$1 WHERE id=$2 AND archive_no IS NULL",
                     archive_no, r["id"])
                 # 著录卡片
                 title = (r["content"] or "")[:30].replace("\n", " ")
@@ -440,7 +440,7 @@ async def extract_facts_pipeline(pool, batch: int = 20) -> dict:
                 # 短内容不值得提取, 但标记已处理 (防止无限 pending)
                 async with pool.acquire() as conn:
                     await conn.execute(
-                        "UPDATE public.memories SET metadata = COALESCE(metadata,'{}'::jsonb) || '{\"fact_extracted\":true}'::jsonb "
+                        "UPDATE mnemosyne.memories SET metadata = COALESCE(metadata,'{}'::jsonb) || '{\"fact_extracted\":true}'::jsonb "
                         "WHERE id=$1", c["id"])
                 processed += 1
                 continue
@@ -457,7 +457,7 @@ async def extract_facts_pipeline(pool, batch: int = 20) -> dict:
                         try:
                             async with pool.acquire() as conn:
                                 await conn.execute(
-                                    "UPDATE public.memories SET archive_no=$1 WHERE id=$2 AND (archive_no IS NULL OR archive_no='')",
+                                    "UPDATE mnemosyne.memories SET archive_no=$1 WHERE id=$2 AND (archive_no IS NULL OR archive_no='')",
                                     archive_no, nid)
                                 await conn.execute(
                                     "INSERT INTO tome_cards (memory_id, title, summary, archive_no, wing, room, shelf, tags, retention, source_session, created_by) "
@@ -468,7 +468,7 @@ async def extract_facts_pipeline(pool, batch: int = 20) -> dict:
             # 标记已提取 (无论有无事实)
             async with pool.acquire() as conn:
                 await conn.execute(
-                    "UPDATE public.memories SET metadata = COALESCE(metadata,'{}'::jsonb) || '{\"fact_extracted\":true}'::jsonb "
+                    "UPDATE mnemosyne.memories SET metadata = COALESCE(metadata,'{}'::jsonb) || '{\"fact_extracted\":true}'::jsonb "
                     "WHERE id=$1", c["id"])
             processed += 1
     except Exception as e:
@@ -499,11 +499,11 @@ async def apply_lifecycle(pool, user_id: str = "default") -> dict:
         for r in rows:
             if r["created_at"] and (datetime.now() - r["created_at"]).days > RETENTION_RULES["short"]["keep_days"]:
                 await conn.execute(
-                    "UPDATE public.memories SET is_deleted=TRUE, forgotten_at=NOW() WHERE id=$1", r["memory_id"])
+                    "UPDATE mnemosyne.memories SET is_deleted=TRUE, forgotten_at=NOW() WHERE id=$1", r["memory_id"])
                 expired += 1
         # 2. 永久/长期: 热度保护 (permanent 不衰减, 已由 decay=0 表达; 这里给永久卷热度下限)
         await conn.execute(
-            "UPDATE public.memories SET heat_score = GREATEST(heat_score, 0.8) "
+            "UPDATE mnemosyne.memories SET heat_score = GREATEST(heat_score, 0.8) "
             "WHERE id IN (SELECT memory_id FROM tome_cards WHERE retention='permanent') "
             "AND user_id=$1 AND is_deleted=FALSE", user_id)
         degraded = await conn.fetchval(

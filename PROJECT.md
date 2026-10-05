@@ -52,7 +52,7 @@ Mnemosyne 把这套"记忆的生命周期治理"做成系统：分类树 + 档�
 | 代码 | https://github.com/gymaira1990-jpg/Mnemosyne-OS |
 | 生产部署 | GZ 服务器 `/opt/mnemosyne`（见 `DEPLOY` 说明；生产 git 已冻结，勿 pull） |
 | 能力真相 | `openspec/specs/` |
-| 数据层 | PostgreSQL 16 + pgvector（1024d HNSW） |
+| 数据层 | PostgreSQL 16 + pgvector（1536d HNSW） |
 | 文档 | `docs/` |
 | 设计理念 | `docs/WHITEPAPER.md` · `docs/palace-architecture.md` |
 

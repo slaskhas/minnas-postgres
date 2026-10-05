@@ -33,7 +33,7 @@
 | **记忆** | 16,500+ 条活跃 · 17,320 行（含墓碑 743） · 归档率 99.4% |
 | **搜索** | 🏰 三通道召唤（点名/引导/共鸣）· ~100-400ms |
 | **宫殿** | 分类树 7翼×20房 · 档号体系 · 著录卡片 · 永恒分级 |
-| **技术** | PostgreSQL 16 · pgvector 1024d HNSW · FastAPI |
+| **技术** | PostgreSQL 16 · pgvector 1536d HNSW · FastAPI |
 | **Agent** | Hermes Memory Provider（11工具含 palace_summon）· 自动提取 |
 | **运行** | 7×24 云端 · 端云双活（SQLite ↔ PG） |
 
@@ -78,7 +78,7 @@ Mnemosyne OS 把记忆当作一等公民：**捕获 → 蒸馏 → 老化 → �
 
 | 能力 | Mnemosyne | Chroma/Pinecone | Mem0 |
 |---|---|---|---|
-| 向量搜索 (1024d HNSW) | ✅ | ✅ | ✅ |
+| 向量搜索 (1536d HNSW) | ✅ | ✅ | ✅ |
 | 全文搜索 (BM25 + ILIKE) | ✅ | ❌ | ❌ |
 | 时间衰减评分 | ✅ 7/30/90天分层 | ❌ | ❌ |
 | 事实提取 (对话→facts) | ✅ LLM管道 | ❌ | ✅ |
@@ -219,7 +219,7 @@ python main.py  # → :8010
 
 | 层 | 技术 |
 |---|---|
-| 数据库 | PostgreSQL 16 + pgvector 1024d (HNSW) |
+| 数据库 | PostgreSQL 16 + pgvector 1536d (HNSW) |
 | 图 | Apache AGE (Cypher) |
 | API | FastAPI + asyncpg · 50+ REST 端点（含 /palace/*） |
 | 搜索 | 三通道召唤（点名/引导/共鸣） |
@@ -239,7 +239,7 @@ python main.py  # → :8010
 | 数据行 | 17,320（含墓碑 743）· 297 MB |
 | 分类树 | 7翼 × 20房（30 节点） |
 | 召唤延迟 | ~100-400ms（三通道） |
-| 向量化 | 1024d 豆包 Embedding-Vision |
+| 向量化 | 1536d OpenAI 兼容 (默认 `text-embedding-3-small`) |
 | 事实提取 | DeepSeek V4（双底座：DeepSeek + 豆包） |
 
 ---

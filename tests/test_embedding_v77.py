@@ -1,6 +1,6 @@
 """v7.7.0 Embedding 深度优化 — 纯逻辑测试 (mock API, 不真实调用)
 
-覆盖: 缓存命中 / 批量切块 / 重试退避 / 并发 / LRU 裁剪 / 空输入
+覆盖: 缓存命中 / 批量切块 / 重试退避 / 并发 / LRU 裁剪 / 空输入 / 维度校验
 """
 import sys
 sys.path.insert(0, ".")
@@ -18,14 +18,14 @@ class TestCache:
     def test_cache_hit_no_api_call(self):
         """同文本二次调用 → 不再打 API"""
         fake = MagicMock(return_value=[0.1] * 3)
-        with patch.object(emb, "_call_ark_single", fake):
+        with patch.object(emb, "_call_openai_single", fake):
             emb.get_embedding(["hello"])
             emb.get_embedding(["hello"])
         assert fake.call_count == 1  # 只打了一次
 
     def test_partial_cache_miss(self):
         fake = MagicMock(return_value=[0.1] * 3)
-        with patch.object(emb, "_call_ark_single", fake):
+        with patch.object(emb, "_call_openai_single", fake):
             emb.get_embedding(["a", "b"])
             emb.get_embedding(["b", "c"])  # b 命中, c 新
         assert fake.call_count == 3  # a,b,c 三条各打一次 (并发逐条)
@@ -35,7 +35,7 @@ class TestCache:
         n = 30
         texts = [f"t{i}" for i in range(n)]
         fake = MagicMock(side_effect=lambda t: [float(t[1:])] * 3)  # 按文本编号返回
-        with patch.object(emb, "_call_ark_single", fake):
+        with patch.object(emb, "_call_openai_single", fake):
             out = emb.get_embedding(texts)
         assert len(out) == n
         # 顺序一致: 第 i 条向量首位 = i
@@ -48,7 +48,7 @@ class TestCache:
     def test_lru_cutoff(self):
         """超过 CACHE_SIZE 自动裁剪"""
         fake = MagicMock(return_value=[0.1] * 3)
-        with patch.object(emb, "_call_ark_single", fake):
+        with patch.object(emb, "_call_openai_single", fake):
             for i in range(emb.CACHE_SIZE + 50):
                 emb.get_embedding([f"unique{i}"])
         assert len(emb._cache) <= emb.CACHE_SIZE
@@ -74,19 +74,20 @@ class TestRetry:
             return False
 
     def test_retry_then_success(self):
-        """_call_ark_single 前两次 HTTP 失败, 第三次成功 → 返回结果"""
+        """_call_openai_single 前两次 HTTP 失败, 第三次成功 → 返回结果"""
         calls = {"n": 0}
 
         def flaky_urlopen(req, timeout=0):
             calls["n"] += 1
             if calls["n"] < 3:
                 raise urllib.error.HTTPError(req.full_url, 429, "Too Many", {}, None)
-            payload = json.dumps({"data": {"embedding": [0.5] * 3}}).encode()
+            payload = json.dumps({"data": [{"embedding": [0.5] * 3}]}).encode()
             return self.FakeResp(payload)
 
         with patch.object(emb.urllib.request, "urlopen", flaky_urlopen), \
-             patch.object(emb, "RETRY_BASE", 0.01):
-            out = emb._call_ark_single("x")
+             patch.object(emb, "RETRY_BASE", 0.01), \
+             patch.object(emb, "EMBED_DIM", 3):
+            out = emb._call_openai_single("x")
         assert len(out) == 3
         assert calls["n"] == 3
 
@@ -97,7 +98,27 @@ class TestRetry:
         with patch.object(emb.urllib.request, "urlopen", always_fail), \
              patch.object(emb, "RETRY_BASE", 0.01):
             try:
-                emb._call_ark_single("x")
+                emb._call_openai_single("x")
                 assert False, "should raise"
             except RuntimeError:
                 pass
+
+    def test_dimension_mismatch_raises_without_retry(self):
+        """返回维度与 EMBED_DIM 不符 (如 Ollama 对超原生维度的 dimensions 静默降级)
+        → 立即抛 EmbeddingDimensionError, 不重试 (重试对配置错误无意义)"""
+        calls = {"n": 0}
+
+        def wrong_dim_urlopen(req, timeout=0):
+            calls["n"] += 1
+            payload = json.dumps({"data": [{"embedding": [0.1] * 1024}]}).encode()
+            return self.FakeResp(payload)
+
+        with patch.object(emb.urllib.request, "urlopen", wrong_dim_urlopen), \
+             patch.object(emb, "RETRY_BASE", 0.01), \
+             patch.object(emb, "EMBED_DIM", 1536):
+            try:
+                emb._call_openai_single("x")
+                assert False, "should raise EmbeddingDimensionError"
+            except emb.EmbeddingDimensionError:
+                pass
+        assert calls["n"] == 1  # 不可重试的配置错误, 只应打一次

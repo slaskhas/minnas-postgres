@@ -106,7 +106,7 @@ async def extract_facts(content: str) -> tuple[list[str], str]:
 
 async def find_candidates(pool, batch: int) -> list[dict]:
     rows = await pool.fetch(
-        "SELECT id, content, category FROM public.memories "
+        "SELECT id, content, category FROM mnemosyne.memories "
         "WHERE user_id='default' AND category IN ('session','worklog') AND is_deleted=FALSE "
         "AND metadata->>'fact_extracted' IS NULL "
         "AND length(content) >= 80 "   # v7.0.1: 只取值得提取的长内容

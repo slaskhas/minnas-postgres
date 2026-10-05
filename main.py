@@ -123,7 +123,7 @@ def normalize_category(cat: str) -> str:
 
 # ── v5.0: 模块化导入 ──
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from config import PG_USER, PG_PASSWORD, PG_DB, PG_HOST, PG_PORT, HOST, PORT
+from config import PG_USER, PG_PASSWORD, PG_DB, PG_HOST, PG_PORT, PG_SEARCH_PATH, HOST, PORT
 from core.embedding import get_embedding_async
 from core.llm import call_llm as llm_call
 # TMT (兼容现有 v2.1 路由)
@@ -264,7 +264,7 @@ async def dialectic_search(req: DialecticRequest):
             phs = ",".join("${}".format(2 + i) for i in range(len(session_list)))
             s_rows = await conn.fetch(
                 "SELECT s.id::text, s.session_label, s.summary, s.heat_score, s.fragment_ids, s.start_time, s.created_at "
-                "FROM public.tmt_sessions s WHERE s.user_id=$1 AND s.id::text = ANY(ARRAY[" + phs + "])",
+                "FROM mnemosyne.tmt_sessions s WHERE s.user_id=$1 AND s.id::text = ANY(ARRAY[" + phs + "])",
                 user_id, *session_list
             )
             for s in s_rows:
@@ -311,7 +311,7 @@ async def tiered_read(memory_id: int, level: str = "L3", user_id: str = "default
             base["content_truncated"] = True
             if row["session_id"]:
                 s = await conn.fetchrow(
-                    "SELECT session_label FROM public.tmt_sessions WHERE id=$1",
+                    "SELECT session_label FROM mnemosyne.tmt_sessions WHERE id=$1",
                     row["session_id"]
                 )
                 if s and s["session_label"]:
@@ -326,7 +326,7 @@ async def tiered_read(memory_id: int, level: str = "L3", user_id: str = "default
             base["content_truncated"] = len(content_full) > 800
             if row["session_id"]:
                 s = await conn.fetchrow(
-                    "SELECT session_label, summary FROM public.tmt_sessions "
+                    "SELECT session_label, summary FROM mnemosyne.tmt_sessions "
                     "WHERE id=$1", row["session_id"]
                 )
                 if s:
@@ -347,7 +347,7 @@ async def tiered_read(memory_id: int, level: str = "L3", user_id: str = "default
                 s = await conn.fetchrow(
                     "SELECT session_label, summary, heat_score, fragment_ids, "
                     "start_time, end_time, token_count "
-                    "FROM public.tmt_sessions WHERE id=$1", sid
+                    "FROM mnemosyne.tmt_sessions WHERE id=$1", sid
                 )
                 if s:
                     base["session"] = {
@@ -382,7 +382,7 @@ async def tiered_read(memory_id: int, level: str = "L3", user_id: str = "default
             # 每日摘要（如果属于某天）
             try:
                 d = await conn.fetchrow(
-                    "SELECT d.date, d.summary FROM public.tmt_daily d "
+                    "SELECT d.date, d.summary FROM mnemosyne.tmt_daily d "
                     "WHERE d.user_id=$1 AND $2::date >= d.date "
                     "ORDER BY d.date DESC LIMIT 1",
                     user_id, str(row["created_at"])[:10]
@@ -670,7 +670,7 @@ async def startup():
         port=PG_PORT,
         min_size=2,
         max_size=10,
-        server_settings={'search_path': 'public'}
+        server_settings={'search_path': PG_SEARCH_PATH}
     )
     # 注入 TMT 模块
     tmt_module.pool = pool
@@ -693,14 +693,14 @@ async def shutdown():
     if pool:
         await pool.close()
 
-# ── v5.0: 豆包 API Embedding (替代本地 Qwen3-Embedding) ──
+# ── OpenAI 兼容 Embedding API (替代本地 Qwen3-Embedding) ──
 async def get_embedding(texts: List[str]) -> List[List[float]]:
-    """调用豆包 Embedding-Vision API — 1024维多模态向量"""
+    """调用 OpenAI 兼容 embeddings API — 1536维向量"""
     return await get_embedding_async(texts)
 
 async def rerank_docs(query: str, documents: List[str], top_k: int = 5) -> List[str]:
     """
-    v5.1 Reranker: 豆包 doubao-embedding-vision-251215 主用 (余弦相似度排序)
+    v5.1 Reranker: OpenAI 兼容 embedding 主用 (余弦相似度排序)
     本地 Qwen3-Embed 作为 fallback
     """
     RERANK_URL = "http://127.0.0.1:11436/v1/embeddings"
@@ -1768,7 +1768,7 @@ async def metrics():
         gc = await conn.fetchrow(
             "SELECT run_at, batch, purged, refused_ref, dry_run FROM gc_log "
             "ORDER BY id DESC LIMIT 1") if await conn.fetchval(
-            "SELECT to_regclass('public.gc_log') IS NOT NULL") else None
+            "SELECT to_regclass('mnemosyne.gc_log') IS NOT NULL") else None
         dup = await conn.fetchval(
             "SELECT count(*) FROM (SELECT dedup_fingerprint FROM memories "
             "WHERE dedup_fingerprint IS NOT NULL GROUP BY dedup_fingerprint "
