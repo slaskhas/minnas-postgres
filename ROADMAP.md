@@ -1,11 +1,11 @@
-# Mnemosyne OS · 路线图
+# Mnemosyne OS · Roadmap
 
-> v7.8.3 | 2026-09-12 🔧 服务端口/主机环境变量生效 (MNEMOSYNE_PORT / MNEMOSYNE_HOST) + 文档修正
-> v7.8.0 | 2026-08-18 🧹 精准排雷 + 架构瘦身
-> v7.7.0 | 2026-08-09 🧠 综合算法 + 高效检索
-> v7.2.0 | 2026-08-09 🧠 Bjork S/R 分离 + GZ 调优
-> v7.1.0 | 2026-08-09 🗄️ 抽屉化记忆(双轨制+空间感知遗忘)
-> v7.0.0 | 2026-08-06 🏰 魔法记忆宫殿
+> v7.8.3 | 2026-09-12 🔧 Service port / host env vars take effect (MNEMOSYNE_PORT / MNEMOSYNE_HOST) + doc fixes
+> v7.8.0 | 2026-08-18 🧹 Precise defusing + architecture slimming
+> v7.7.0 | 2026-08-09 🧠 Combined algorithm + efficient retrieval
+> v7.2.0 | 2026-08-09 🧠 Bjork S/R separation + GZ tuning
+> v7.1.0 | 2026-08-09 🗄️ Drawer-based memory (dual-track + spatial-aware forgetting)
+> v7.0.0 | 2026-08-06 🏰 Magic Memory Palace
 > v6.4.0 | 2026-08-05
 > v6.3.0 | 2026-08-05
 > v6.2.0 | 2026-08-05
@@ -13,95 +13,95 @@
 > v6.0.0 | 2026-08-02
 > v5.5.1 | 2026-07-23
 
-## 版本路线
+## Version Line
 
-v5.4 (三馆激活) ✅ → v5.5 (时间有效性) ✅ → v6.0 (认知架构) ✅ → v7.0 (魔法记忆宫殿) 🚀 → v7.6 (综合检索) ✅
+v5.4 (three halls activated) ✅ → v5.5 (temporal validity) ✅ → v6.0 (cognitive architecture) ✅ → v7.0 (Magic Memory Palace) 🚀 → v7.6 (combined retrieval) ✅
 
-## v7.x 已发布 (2026-08-09/10) ✅
+## v7.x Released (2026-08-09/10) ✅
 
-| 版本 | 内容 |
+| Version | Content |
 |------|------|
-| v7.1 | 🗄️ 抽屉化记忆 (温度×时间双轨制 + 遗忘候选) |
-| v7.2 | 🧠 Bjork S/R 分离 (存储强度永不衰减, 检索强度可恢复) + 生产调优 |
-| v7.3 | 📊 Rank 综合评分 + 抽屉分档 |
-| v7.4 | 🧩 WIKI 知识库 + 知识图谱 (Apache AGE) |
-| v7.5 | 🔍 WIKI 检索优化 (BM25+向量 RRF, precision@3 100%) |
-| v7.6 | 🔬 记忆隔离与来源追踪 + episodic/semantic/procedural 三分类 |
+| v7.1 | 🗄️ Drawer-based memory (temp × time dual-track + forget candidates) |
+| v7.2 | 🧠 Bjork S/R separation (storage strength never decays, retrieval strength recoverable) + production tuning |
+| v7.3 | 📊 Rank combined score + drawer tiering |
+| v7.4 | 🧩 WIKI knowledge base + knowledge graph (Apache AGE) |
+| v7.5 | 🔍 WIKI retrieval optimization (BM25+vector RRF, precision@3 100%) |
+| v7.6 | 🔬 Memory isolation & source tracking + episodic/semantic/procedural three-way classification |
 
-## v8.0 (规划) — 对外分享里程碑
+## v8.0 (Planned) — External-Sharing Milestone
 
-> 定位: 产品走向开源社区的第一步。功能已成熟，重心转向"让朋友用起来"。
+> Positioning: the first step for the product to go to the open-source community. Features are mature; the focus shifts to "getting friends to use it".
 
-- [x] INSTALL.md 分环境安装指南 (Linux/macOS/WSL)
-- [x] AGENTS.md 重写 (AI 对接手册: API速查/环境变量/Hermes接入)
-- [x] hermes-provider 同步运行版 (11 工具含 palace_summon)
-- [x] README 重构 + 仓库装修 (脱敏/模板/schema 修复)
-- [ ] setup.sh 裸机一键安装脚本
-- [ ] 真实用户灰度安装验证 (找 1-2 位朋友实测)
-- [ ] LongMemEval 复测 (目标 ≥50%, 基线 16.7%)
+- [x] INSTALL.md per-environment install guide (Linux/macOS/WSL)
+- [x] AGENTS.md rewrite (AI integration manual: API quick-reference / env vars / Hermes onboarding)
+- [x] hermes-provider synced running version (11 tools including palace_summon)
+- [x] README restructuring + repo refresh (desensitization / templates / schema fixes)
+- [ ] setup.sh bare-metal one-click install script
+- [ ] Real-user grayed install verification (find 1-2 friends to test in the field)
+- [ ] LongMemEval retest (target ≥50%, baseline 16.7%)
 
-## v7.0.0 — 魔法记忆宫殿 ✅
+## v7.0.0 — Magic Memory Palace ✅
 
-- 宫殿架构: 分类树(7翼×20房) + 档号 + 著录卡片 + 三通道召唤
-- 资料室: 全量事实提取 (2319 对话 → 6231 facts)
-- 永恒分级: 永久/长期/短期生命周期
-- Hermes 适配: palace_summon 工具 + 自动提取 + 宫殿注入
-- 数据: 8647 记忆 / 100% 归档 / 8614 卡片
+- Palace architecture: classification tree (7 wings × 20 rooms) + accession numbers + catalog cards + three-channel summoning
+- Reading Room: full fact extraction (2319 conversations → 6231 facts)
+- Permanence tiers: permanent / long-term / short-term lifecycles
+- Hermes adaptation: palace_summon tool + auto-extraction + palace injection
+- Data: 8647 memories / 100% archived / 8614 cards
 
-### 后续规划（功能深化，非优先）
-- [ ] 卡片精炼全量 (backfill 2346 张待精炼)
-- [ ] 分类树可视化 (宫殿导览 API)
+### Follow-up Planning (feature deepening, non-priority)
+- [ ] Full card refinement (backfill 2346 cards awaiting refinement)
+- [ ] Classification-tree visualization (palace tour API)
 
 
-## v5.4.0 — 三馆激活 ✅
+## v5.4.0 — Three Halls Activated ✅
 
-- 闸机接入异构审计 (双模型交叉验证)
-- 建议清单端点 (GET /halls/suggestions)
-- 工具归档路径修复
-- pytest 18 用例
+- Gate integrated with heterogeneous audit (dual-model cross-verification)
+- Suggestion list endpoint (GET /halls/suggestions)
+- Tool archive path fix
+- 18 pytest cases
 
-## v5.5.0 — 时间有效性 ✅
+## v5.5.0 — Temporal Validity ✅
 
-- 搜索/列表/统计 SQL 过滤过期记忆
-- 基准测试 39 用例 (temporal_validity + recall + conflict + weighting)
+- Search / list / stats SQL filters out expired memories
+- 39 benchmark cases (temporal_validity + recall + conflict + weighting)
 
-## v6.0 — 认知架构
+## v6.0 — Cognitive Architecture
 
-- 元认知层
-- 信念系统重构
-- 智能召回三阶段
-- 桌面应用 (端到端加密记忆访问)
+- Metacognitive layer
+- Belief system rework
+- Three-stage intelligent recall
+- Desktop app (end-to-end encrypted memory access)
 
-## v6.4.0 — 事实提取管道 ✅ (2026-08-05)
+## v6.4.0 — Fact Extraction Pipeline ✅ (2026-08-05)
 
-- [x] tmt/factextract.py: 对话 → 用户事实 (个人信息/偏好/事件/安排/能力) → preference/knowledge
-- [x] 短文本逐条提取 + 非 json 模式 (评测教训)
-- [x] ANN 去重闸机 + 热度 0.65 + 溯源 metadata
-- [x] cron 每日 02:00
+- [x] tmt/factextract.py: conversation → user facts (personal info / preferences / events / schedules / capabilities) → preference/knowledge
+- [x] Per-line short-text extraction + non-JSON mode (evaluation lessons)
+- [x] ANN dedup gate + heat 0.65 + provenance metadata
+- [x] cron daily 02:00
 
-## v6.3.0 — 认知写入信号 ✅ (2026-08-05)
+## v6.3.0 — Cognitive Write Signals ✅ (2026-08-05)
 
-- [x] compute_write_heat 写入信号 (待办+0.15/纠正+0.10/踩坑+0.10/决策+0.08/路径+0.05/重要+0.05, 类别加成)
-- [x] 保护衰减: pinned/preference 仅 -0.005 (reflect 热度v2)
-- [x] 蒸馏 pitfall 入库 0.70
+- [x] compute_write_heat write signals (todo +0.15 / correction +0.10 / pitfall +0.10 / decision +0.08 / path +0.05 / important +0.05, category bonus)
+- [x] Protected decay: pinned/preference only -0.005 (reflect heat v2)
+- [x] Distilled pitfall stored at 0.70
 
-## v6.2.0 — 认知热度引擎 ✅ (2026-08-05)
+## v6.2.0 — Cognitive Heat Engine ✅ (2026-08-05)
 
-- [x] 搜索/召回命中加热 (access+1, heat+0.05)
-- [x] 差异化衰减 (近48h活跃记忆慢衰减)
-- [x] 蒸馏增强: 入库热度信号 0.65 + 批内去重
-- [x] 健康监控备份新鲜度检查 (防静默丢记忆)
+- [x] Search / recall hits are heated (access+1, heat+0.05)
+- [x] Differential decay (recently active memories within 48h decay slowly)
+- [x] Distillation enhancement: stored heat signal 0.65 + intra-batch dedup
+- [x] Health-monitoring backup-freshness check (prevents silent memory loss)
 
-## v6.1 — 知识蒸馏 (2026-08-05)
+## v6.1 — Knowledge Distillation (2026-08-05)
 
-- [x] tmt/distill.py 知识蒸馏管道 v0.1 — NCP-008 七步 + TEL/MAIL 概念映射
-  (session/worklog → knowledge/pitfall, 信号词筛选 + LLM 凝练 + ANN 去重闸机 + 溯源)
-- [x] GZ cron 每日 1:10 批量蒸馏 60 条 (首轮 30 条: +22 knowledge, +1 pitfall)
-- [ ] 批内去重 (同批相似条目合并)
-- [ ] 蒸馏质量反馈回路 (high/medium/low confidence 影响热度)
+- [x] tmt/distill.py knowledge distillation pipeline v0.1 — NCP-008 seven steps + TEL/MAIL concept mapping
+  (session/worklog → knowledge/pitfall, keyword screening + LLM distillation + ANN dedup gate + provenance)
+- [x] GZ cron batch-distills 60 items daily 1:10 (first run 30 items: +22 knowledge, +1 pitfall)
+- [ ] Intra-batch dedup (merge similar items in the same batch)
+- [ ] Distillation-quality feedback loop (high/medium/low confidence affects heat)
 
-## 迭代纪律
+## Iteration Discipline
 
-1. PLAN→code→test→隐私扫描→文档→tag
-2. 本地开发→GZ验证→仓库发布
-3. 安全第一：公网不暴露敏感数据
+1. PLAN→code→test→privacy scan→docs→tag
+2. Local development→GZ verification→repo release
+3. Safety first: do not expose sensitive data on the public network

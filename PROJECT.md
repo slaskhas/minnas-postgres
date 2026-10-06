@@ -1,70 +1,69 @@
 # Mnemosyne OS
 
-> 项目宪章 —— 任何会话接手先读这份，3 分钟知道这是什么、为什么、到哪了。
+> Project charter — read this first when taking over any session; in 3 minutes you'll know what it is, why it exists, and where it stands.
 
-## 1. 一句话定位
+## 1. One-Sentence Positioning
 
-**给 AI Agent 用的长期记忆操作系统**：它把对话里值得留的东西捕获下来，蒸馏成知识，按"宫殿"体系归档，需要时按语义/关键词/时间/信任/热度多路召回 —— 让 Agent 跨会话记住你是谁、做过什么、为什么这么决定。
+**A long-term memory operating system for AI agents**: it captures from conversations whatever is worth keeping, distills it into knowledge, files it under the "palace" system, and recalls via multiple channels (semantic / keyword / time / trust / heat) when needed — so the agent remembers, across sessions, who you are, what it has done, and why it made the decision.
 
-**不是**向量数据库，**不是** RAG 管道（这是最容易误解的一点：它自己会**捕获 → 蒸馏 → 老化 → 遗忘 → 浮现**）。
+**Not** a vector database, **not** a RAG pipeline (this is the easiest thing to misunderstand: it does **capture → distill → age → forget → surface** on its own).
 
-## 2. 为什么存在
+## 2. Why It Exists
 
-通用 LLM 没有跨会话记忆：每次对话都从零开始，用户偏好、踩过的坑、项目决策全部丢失。市面方案（RAG / 向量库 / 简单 key-value 记忆）只解决"存和取"，不解决**记忆的治理**：
+General LLMs have no cross-session memory: every conversation starts from zero, user preferences, pitfalls stepped on, project decisions — all lost. The mainstream solutions (RAG / vector stores / simple key-value memory) only solve "storing and fetching"; they don't solve **memory governance**:
 
-- 存进去的垃圾永远不会被遗忘 → 库只增不减，召回被噪音淹没
-- 没有热度/时效概念 → 三个月前的临时状态和今天的核心决策一样权重
-- 没有蒸馏 → 原始碎句堆积，无法形成知识
-- 没有结构 → 找不到、说不清"为什么系统是这样"
+- Garbage stored in is never forgotten → the store only grows and never shrinks, and recall is drowned in noise
+- No heat / timeliness concept → a transient state from three months ago and today's core decision carry the same weight
+- No distillation → raw fragments pile up, never forming knowledge
+- No structure → you can't find or explain "why the system is the way it is"
 
-Mnemosyne 把这套"记忆的生命周期治理"做成系统：分类树 + 档号 + 著录卡片、三通道召唤、认知热度与永恒分级。
+Mnemosyne turns this "memory lifecycle governance" into a system: classification tree + accession numbers + catalog cards, three-channel summoning, cognitive heat and permanence tiers.
 
-## 3. 范围边界
+## 3. Scope Boundaries
 
-- ✅ **做**：记忆捕获与蒸馏 · 宫殿分类归档（九翼/房/档号/著录卡片）· 多路召回（向量+BM25+时间+信任+热度）· 三通道召唤（点名/引导/共鸣）· 生命周期（热度衰减/遗忘/permanent 保护）· 端云双活缓冲 · 多 Agent 集成（REST / SDK / Hermes Memory Provider / MCP）
-- ❌ **不做**：GUI 客户端 · 通用 RAG 框架 · 多租户 SaaS · 自研向量索引（用 pgvector/HNSW）· 存代码与二进制（那是 git 的事）
-  > 边界要守死：功能无限膨胀 = 大乱炖的起点。
+- ✅ **Do**: memory capture & distillation · palace classification & filing (nine wings / rooms / accession numbers / catalog cards) · multi-channel recall (vector+BM25+time+trust+heat) · three-channel summoning (named / guided / resonant) · lifecycle (heat decay / forgetting / permanent protection) · end-cloud dual-live buffer · multi-agent integration (REST / SDK / Hermes Memory Provider / MCP)
+- ❌ **Do not**: GUI client · general-purpose RAG framework · multi-tenant SaaS · in-house vector index (use pgvector/HNSW) · storing code and binaries (that's git's job)
+  > Guard the boundaries strictly: unbounded feature bloat = the start of a big mess.
 
-## 4. 当前状态与路线（Living）
+## 4. Current Status & Roadmap (Living)
 
-| 版本 | 状态 | 内容 | 日期 |
+| Version | Status | Content | Date |
 |---|---|---|---|
-| v8.0.0 | ✅ 已实现·待部署 | **记忆宫殿 OS 8.0**：写得对·收得回·找得准·弄得清 —— 写入原子+幂等键 / 记忆回收 GC / 完整性巡检 / 可观测 / 四通道 RRF 融合 / 分层模型可执行规格 / 发布流程状态机 → `openspec/changes/2026-09-25-v8-memory-os/` | 2026-09-25 |
-| v7.8.4 | ✅ 已发布 | 归档质量：收尾汇报/用户消息不再被切 + 工具证据签名 + 短会话不弃 + 汇报卡(worklog) | 2026-09-24 |
-| v7.8.3 | ✅ 生产 | 服务端口/监听地址环境变量真正生效 | 2026-09-12 |
-| v7.8.2 | ✅ 已发 | MCP 桥契约修复回库 + capabilities 自描述对齐 | 2026-09-12 |
-| v7.8.1 | ✅ 已发 | 当日失明修复（写入即分词） | 2026-08-24 |
-| v7.8.0 | ✅ 已发 | 精准排雷 + 架构瘦身（Apache AGE 图切除） | 2026-08-18 |
+| v8.0.0 | ✅ Implemented, awaiting deployment | **Memory Palace OS 8.0**: write right · recover back · find precisely · clarify — write atomicity + idempotency key / memory GC / integrity inspection / observability / four-channel RRF fusion / executable spec for the layered model / release pipeline state machine → `openspec/changes/2026-09-25-v8-memory-os/` | 2026-09-25 |
+| v7.8.4 | ✅ Released | Archive quality: wrap-up reports / user messages no longer truncated + tool evidence signatures + short sessions no longer discarded + report cards (worklog) | 2026-09-24 |
+| v7.8.3 | ✅ Production | Service port / bind-address environment variables actually take effect | 2026-09-12 |
+| v7.8.2 | ✅ Released | MCP bridge contract fixes back into repo + capabilities self-description alignment | 2026-09-12 |
+| v7.8.1 | ✅ Released | Same-day blindness fix (tokenize on write) | 2026-08-24 |
+| v7.8.0 | ✅ Released | Precise defusing + architecture slimming (Apache AGE graph removal) | 2026-08-18 |
 
-> 只留最近 5 条；完整历史见 [CHANGELOG.md](CHANGELOG.md)。
+> Only the last 5 rows are kept; see [CHANGELOG.md](CHANGELOG.md) for the full history.
 
-## 5. 关键决策索引
+## 5. Key Decisions Index
 
-| 日期 | 决策 | 记录 |
+| Date | Decision | Record |
 |---|---|---|
-| 2026-09-24 | 采用 G-CAT 项目治理标准（AGENTS.md 瘦身 + openspec 活规格 + ADR） | [ADR-0001](docs/adr/0001-采用项目治理标准.md) |
-| 2026-09-25 | 文件系统机制取舍：只做 PostgreSQL 没给且真缺的 4 件，其余 17 维进触发器（>500万行 / 正文>4KB / 真多租户 / 档号碰撞 / 删除事故） | [ADR-0002](docs/adr/0002-文件系统机制取舍与触发器.md) |
+| 2026-09-24 | Adopt G-CAT project governance standard (AGENTS.md slimming + openspec living specs + ADR) | [ADR-0001](docs/adr/0001-采用项目治理标准.md) |
+| 2026-09-25 | Filesystem mechanism trade-offs: only do the 4 items PostgreSQL doesn't provide that we genuinely need; the remaining 17 dimensions go into triggers (>5M rows / body >4KB / true multi-tenancy / accession-number collision / deletion incident) | [ADR-0002](docs/adr/0002-文件系统机制取舍与触发器.md) |
 
-## 6. 核心资产位置
+## 6. Core Asset Locations
 
-| 东西 | 在哪 |
+| Thing | Where |
 |---|---|
-| 代码 | https://github.com/gymaira1990-jpg/Mnemosyne-OS |
-| 生产部署 | GZ 服务器 `/opt/mnemosyne`（见 `DEPLOY` 说明；生产 git 已冻结，勿 pull） |
-| 能力真相 | `openspec/specs/` |
-| 数据层 | PostgreSQL 16 + pgvector（1536d HNSW） |
-| 文档 | `docs/` |
-| 设计理念 | `docs/WHITEPAPER.md` · `docs/palace-architecture.md` |
+| Code | https://github.com/gymaira1990-jpg/Mnemosyne-OS |
+| Production deployment | GZ server `/opt/mnemosyne` (see `DEPLOY` notes; production git is frozen — do not pull) |
+| Capabilities truth | `openspec/specs/` |
+| Data layer | PostgreSQL 16 + pgvector (1536d HNSW) |
+| Documentation | `docs/` |
+| Design philosophy | `docs/WHITEPAPER.md` · `docs/palace-architecture.md` |
 
-## 7. 现状规模（2026-09-24 实测）
+## 7. Current Scale (measured 2026-09-24)
 
-- 记忆 **16,595** 条（user_id: default 为主 + 几个独立分区），软删 **697** 条
-- 生产每日 03:00 备份（保留 8 份）+ HK 异地副本（保留 3 份）—— 备份链曾静默断裂 36 天，2026-09-23 修复，v8.0 起加**可恢复性复验**
-- **实测漂移已归零**：本地 = GitHub = 生产（v8.0.0 部署后）
+- **16,595** memories (user_id: default dominant + a few independent partitions), **697** soft-deleted
+- Production backup daily 03:00 (8 copies retained) + HK offsite replica (3 copies retained) — the backup chain once silently broke for 36 days; fixed 2026-09-23; from v8.0, **recoverability re-verification** was added
+- **Measured drift now zero**: local = GitHub = production (after v8.0.0 deployment)
 
-### 能力真相索引（`openspec/specs/`）
+### Capabilities Truth Index (`openspec/specs/`)
 
-| 规格 | 内容 |
+| Spec | Content |
 |---|---|
-| [memory-layers.md](openspec/specs/memory-layers.md) | 记忆分层模型（L0-L4 + 横切产出物索引，三族冲突策略）—— 可执行规格，写入路径已接线 |
-
+| [memory-layers.md](openspec/specs/memory-layers.md) | Memory layering model (L0-L4 + cross-cutting artifact index, three-family conflict strategies) — executable spec, write path wired in |
