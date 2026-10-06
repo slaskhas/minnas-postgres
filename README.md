@@ -1,47 +1,7 @@
-<p align="center">
-  <img src="https://img.shields.io/badge/version-8.1.0-brightgreen?style=flat-square" alt="version">
-  <img src="https://img.shields.io/github/actions/workflow/status/gymaira1990-jpg/Mnemosyne-OS/test.yml?style=flat-square&label=CI" alt="CI">
-  <img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="license">
-  <img src="https://img.shields.io/badge/python-3.11+-blue?style=flat-square" alt="python">
-  <img src="https://img.shields.io/badge/DB-PostgreSQL%2016%20%2B%20pgvector-336791?style=flat-square" alt="postgres">
-  
-  <img src="https://img.shields.io/badge/agent-Hermes%20native-8A2BE2?style=flat-square" alt="hermes">
-</p>
 
-<h1 align="center">🏛️ Mnemosyne OS</h1>
-<h3 align="center">A Cognitive Memory Operating System for AI Agents</h3>
 
-<p align="center">
-  <i>Not a vector database. Not a RAG pipeline.<br>
-  A living memory palace that archives, refines, and summons knowledge —<br>
-  the way libraries, archives, and medicine cabinets have done for centuries.</i>
-</p>
 
-<p align="center">
-  <img src="docs/poster.png" alt="Mnemosyne OS Overview" width="560">
-</p>
 
-<p align="center">
-  <a href="#the-problem">Why</a> ·
-  <a href="#how-it-works">How</a> ·
-  <a href="#what-sets-it-apart">Features</a> ·
-  <a href="#architecture">Architecture</a> ·
-  <a href="#quick-start">Quick Start</a> ·
-  <a href="#performance">Performance</a> ·
-  <a href="#version-history">Versions</a> ·
-  <a href="README_CN.md">🇨🇳 中文</a>
-</p>
-
----
-
-| | |
-|---|---|
-| **Memories** | 16,500+ active · 17,320 rows · 99.4% archived coverage |
-| **Search** | 🏰 3-channel summon (name/guide/resonate) · ~100-400ms |
-| **Palace** | Taxonomy 7 wings×20 rooms · Archive-no system · Tome cards · Retention tiers |
-| **Stack** | PostgreSQL 16 · pgvector 1536d HNSW · FastAPI |
-| **Agent** | Hermes Memory Provider (14 tools incl. palace_summon) · auto-extract |
-| **Uptime** | 7×24 on modest cloud · edge-cloud sync (SQLite ↔ PG) |
 
 ---
 
@@ -49,7 +9,7 @@
 
 Every AI agent today suffers from the same amnesia: conversations reset, context windows overflow, important decisions vanish into scrollback. We duct-tape solutions — vector DBs for retrieval, RAG for injection, prompt stuffing for continuity — but none of them **understand** memory. They store bytes. They don't know what matters and what doesn't.
 
-**Mnemosyne OS** treats memory as a first-class system with its own lifecycle: **capture → distill → age → forget → resurface**. It's built for agents that need to remember across weeks, not just within a single `context_length`.
+
 
 ---
 
