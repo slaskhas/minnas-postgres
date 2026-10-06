@@ -1,25 +1,25 @@
-# 贡献指南
+# Contributing Guide
 
-## 提交规范
-Conventional Commits：`feat:` `fix:` `docs:` `style:` `refactor:` `perf:` `test:` `chore:` `release:`
-标题命令式、英文短句；描述写**为什么**，不写「做了什么」。
+## Commit Conventions
+Conventional Commits: `feat:` `fix:` `docs:` `style:` `refactor:` `perf:` `test:` `chore:` `release:`
+Titles are imperative, short English sentences; descriptions explain **why**, not "what".
 
-## 分支与合并
-1. `git fetch origin`，确认本地 `main` 与 `origin/main` 一致
-2. 开功能分支：`git worktree add ../wt/mnemosyne-<topic> -b <type>/<topic> origin/main`
-3. 改 → `pytest tests/` → commit → push → 开 PR → **盯 CI 全绿**
+## Branching & Merging
+1. `git fetch origin`, confirm local `main` matches `origin/main`
+2. Create a feature branch: `git worktree add ../wt/mnemosyne-<topic> -b <type>/<topic> origin/main`
+3. Change → `pytest tests/` → commit → push → open PR → **watch CI until all green**
 
-## 改动前必做
-- 改**行为** → 先在 `openspec/changes/<name>/` 写 `proposal.md`，改完合入 `openspec/specs/` 并归档
-- 改**对外接口 / 字段名 / 参数位置** → 必须加契约测试 + 反证（`git stash` 掉修复后必须红）
-- **架构取舍** → 补 `docs/adr/NNNN-*.md`
+## Before Making Changes
+- **Behavior** change → first write `proposal.md` in `openspec/changes/<name>/`; after completion, fold into `openspec/specs/` and archive
+- **Outward-facing interface / field name / parameter position** change → must add contract tests + counter-evidence (must go red after `git stash`ing the fix)
+- **Architecture trade-off** → add `docs/adr/NNNN-*.md`
 
-## 发版
-四段式门禁：A 开发 → B 测试全绿 → C 真实链路验收 → D tag/push/Release。
-版本号**三处一致**：`VERSION` / 双语 README badge / `CHANGELOG.md`。发版前跑 `scripts/version-scan.sh`。
+## Releasing
+Four-stage gate: A develop → B tests all green → C real-path acceptance → D tag/push/Release.
+Version numbers must be **consistent in three places**: `VERSION` / bilingual README badge / `CHANGELOG.md`. Run `scripts/version-scan.sh` before release.
 
-## 红线
-- ❌ 绝不硬编码 API Key / 真实 IP / 域名 / 密码
-- ❌ push 前必须隐私扫描（判据：**零输出**）
-- ❌ 不得把 `AGENTS.md` / `CLAUDE.md` 交给 AI 静默改写（投毒攻击面，改动走 PR 审阅）
-- ❌ 未过 B 段不进 C 段，未过 C 段不发 D 段
+## Red Lines
+- ❌ Never hardcode API Keys / real IPs / domains / passwords
+- ❌ Privacy scan is mandatory before push (criterion: **zero output**)
+- ❌ Do not hand `AGENTS.md` / `CLAUDE.md` to AI for silent rewriting (prompt-injection attack surface; changes go through PR review)
+- ❌ Do not advance to C without passing B, nor release at D without passing C

@@ -1,17 +1,20 @@
 #!/usr/bin/env python3
 """
-Mnemosyne MCP Server — 桥接 Hermes 与记忆宫殿
+Mnemosyne MCP Server — bridging Hermes to the memory palace
 
-通过 SSH 隧道 (localhost:18010) 连接到生产服务器上的 Mnemosyne REST API,
-为 Hermes Agent 提供记忆存储/检索/MCP 工具。
+Connects to the Mnemosyne REST API on the production server over the SSH tunnel
+(localhost:18010), exposing memory store/retrieve tools to the Hermes agent via MCP.
 
-契约铁律 (踩过一次坑, 见 tests/test_mcp_bridge_contract.py):
-  · 入参位置按服务端要求 —— feedback/delete/restore 的 user_id、feedback 是 **query 参数**,
-    发成 JSON body 或漏传 → 422 Unprocessable Entity (用户侧表现为"工具坏了")。
-  · 响应字段名以 capabilities/schema 为准, 不要凭印象猜 —— heat-top 返回的是 heat_score。
-  · 改动任何 handler 后必须跑契约测试; 静默失效(不报错=永远取到默认值)比报错更危险。
+Contract iron rules (bitten once before, see tests/test_mcp_bridge_contract.py):
+  * Parameter positions follow the server — feedback/delete/restore user_id, and
+    feedback are **query** parameters; sending them as a JSON body or omitting them
+    gives 422 Unprocessable Entity (from the user's side the tool "just breaks").
+  * Response field names follow capabilities/schema — never guess from memory —
+    heat-top returns heat_score.
+  * Contract tests MUST be run after any handler change; silent failure (no error
+    = always falls back to the default value) is more dangerous than an error.
 
-启动方式 (注册到 Hermes config.yaml):
+How to start (registered in Hermes config.yaml):
   mcp_servers:
     mnemosyne:
       command: "python3"
@@ -25,12 +28,12 @@ import httpx
 from typing import Any, Optional
 from mcp.server.stdio import stdio_server
 
-# ── Mnemosyne API 地址 ─────────────────────────────────
+# ── Mnemosyne API address ──────────────────────────────
 MNEMOSYNE_URL = os.getenv("MNEMOSYNE_URL", "http://127.0.0.1:18010")
 API_BASE = f"{MNEMOSYNE_URL}/api/v1"
 
 
-# ── MCP SDK 导入 ───────────────────────────────────────
+# ── MCP SDK import ─────────────────────────────────────
 try:
     import mcp.server as mcp_server
     import mcp.types as types
@@ -40,18 +43,18 @@ except ImportError:
     sys.exit(1)
 
 
-# ── HTTP 客户端 ────────────────────────────────────────
+# ── HTTP client ────────────────────────────────────────
 import time as _time
 
 def _mk_client():
-    """每次创建新客户端，避免连接池缓存断连。"""
+    """Fresh client per call, to avoid the connection pool caching dead connections."""
     return httpx.Client(timeout=30, base_url=MNEMOSYNE_URL, limits=httpx.Limits(max_keepalive_connections=2))
 
 http = _mk_client()
 
 
 def _call(method: str, path: str, **kwargs) -> dict:
-    """调用 Mnemosyne REST API，带指数退避重连。"""
+    """Call the Mnemosyne REST API with exponential backoff reconnect."""
     global http
     max_retries = 3
     for attempt in range(max_retries):
@@ -60,9 +63,9 @@ def _call(method: str, path: str, **kwargs) -> dict:
             r.raise_for_status()
             return r.json()
         except (httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout) as e:
-            # 连接失败：退避重试 + 重建客户端（丢弃可能损坏的连接池）
+            # Connection failed: backoff retry + rebuild client (discard a possibly corrupt pool)
             if attempt < max_retries - 1:
-                wait = 2 ** attempt  # 1s → 2s → 4s
+                wait = 2 ** attempt  # 1s -> 2s -> 4s
                 _time.sleep(wait)
                 try:
                     http.close()
@@ -79,38 +82,38 @@ def _call(method: str, path: str, **kwargs) -> dict:
 
 
 
-# ── MCP Server 定义 ────────────────────────────────────
-# (app 在 handler 定义后通过构造回调注册, mcp>=2.0 API)
+# ── MCP server definition ──────────────────────────────
+# (app is registered via constructor callback after handler definitions, mcp>=2.0 API)
 
 
-# ── 工具列表 ────────────────────────────────────────────
+# ── Tool list ──────────────────────────────────────────
 async def list_tools(ctx, params) -> types.ListToolsResult:
     return types.ListToolsResult(tools=[
-        # ── 记忆核心 ──
+        # ── Memory core ──
         types.Tool(
             name="store_memory",
-            description="存储一条记忆到 Mnemosyne。用户 ID 默认为 'default'。",
+            description="Store a memory in Mnemosyne. User ID defaults to 'default'.",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "content": {"type": "string", "description": "记忆内容"},
-                    "category": {"type": "string", "description": "分类: fact|experience|belief|chat|work|note|test", "default": "fact"},
-                    "user_id": {"type": "string", "description": "用户 ID (实际数据库用 default)", "default": "default"},
-                    "importance": {"type": "number", "description": "重要性 0-1", "default": 0.5},
+                    "content": {"type": "string", "description": "Memory content"},
+                    "category": {"type": "string", "description": "Category: fact|experience|belief|chat|work|note|test", "default": "fact"},
+                    "user_id": {"type": "string", "description": "User ID (actual DB uses default)", "default": "default"},
+                    "importance": {"type": "number", "description": "Importance 0-1", "default": 0.5},
                 },
                 "required": ["content"],
             },
         ),
         types.Tool(
             name="search_memories",
-            description="四维搜索记忆（语义+关键词+时序+图谱）。返回最匹配的记忆。",
+            description="Search memories on 4 dimensions (semantic + keyword + temporal + graph). Returns the best matching memories.",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "query": {"type": "string", "description": "搜索关键词"},
-                    "user_id": {"type": "string", "description": "用户 ID (实际数据库用 default)", "default": "default"},
-                    "top_k": {"type": "integer", "description": "返回条数", "default": 5},
-                    "category": {"type": "string", "description": "可选：按分类过滤"},
+                    "query": {"type": "string", "description": "Search terms"},
+                    "user_id": {"type": "string", "description": "User ID (actual DB uses default)", "default": "default"},
+                    "top_k": {"type": "integer", "description": "Number of results to return", "default": 5},
+                    "category": {"type": "string", "description": "Optional: filter by category"},
                     "mode": {"type": "string", "description": "hybrid|semantic|fulltext", "default": "hybrid"},
                 },
                 "required": ["query"],
@@ -118,47 +121,47 @@ async def list_tools(ctx, params) -> types.ListToolsResult:
         ),
         types.Tool(
             name="dialectic_search",
-            description="深度语义搜索记忆，附带L2/L3会话上下文（多因子评分+BM25+时序+热度+可靠性）。比 search_memories 更深入，返回关联会话摘要。",
+            description="Deep semantic search over memories, with L2/L3 session context (multi-factor scoring + BM25 + temporal + heat + reliability). More thorough than search_memories; returns related session summaries.",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "query": {"type": "string", "description": "搜索关键词"},
-                    "user_id": {"type": "string", "description": "用户 ID (实际数据库用 default)", "default": "default"},
-                    "max_results": {"type": "integer", "description": "返回条数", "default": 3},
+                    "query": {"type": "string", "description": "Search terms"},
+                    "user_id": {"type": "string", "description": "User ID (actual DB uses default)", "default": "default"},
+                    "max_results": {"type": "integer", "description": "Number of results to return", "default": 3},
                 },
                 "required": ["query"],
             },
         ),
         types.Tool(
             name="get_hot_memories",
-            description="获取热度最高的记忆（L1梯队）。快速了解当前最重要信息。",
+            description="Get the hottest memories (L1 tier). A quick view of the currently most important information.",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "user_id": {"type": "string", "description": "用户 ID (实际数据库用 default)", "default": "default"},
-                    "limit": {"type": "integer", "description": "返回条数", "default": 10},
-                    "min_heat": {"type": "number", "description": "最低热度阈值", "default": 0.0},
+                    "user_id": {"type": "string", "description": "User ID (actual DB uses default)", "default": "default"},
+                    "limit": {"type": "integer", "description": "Number of results to return", "default": 10},
+                    "min_heat": {"type": "number", "description": "Minimum heat threshold", "default": 0.0},
                 },
             },
         ),
-        # ── 记忆管理 ──
+        # ── Memory management ──
         types.Tool(
             name="get_memory_stats",
-            description="获取记忆库健康报告：总条数、分类分布、热度层级、平均热度、删除数。",
+            description="Get a memory-store health report: total count, category distribution, heat tiers, average heat, deleted count.",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "user_id": {"type": "string", "description": "用户 ID (实际数据库用 default)", "default": "default"},
+                    "user_id": {"type": "string", "description": "User ID (actual DB uses default)", "default": "default"},
                 },
             },
         ),
         types.Tool(
             name="feedback_memory",
-            description="对记忆可信度反馈：positive=升温, negative=降温。影响后续检索排序。",
+            description="Credibility feedback on a memory: positive = heat up, negative = cool down. Affects ranking in later retrieval.",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "memory_id": {"type": "integer", "description": "记忆 ID"},
+                    "memory_id": {"type": "integer", "description": "Memory ID"},
                     "feedback": {"type": "string", "description": "positive|negative"},
                 },
                 "required": ["memory_id", "feedback"],
@@ -166,59 +169,59 @@ async def list_tools(ctx, params) -> types.ListToolsResult:
         ),
         types.Tool(
             name="get_memory_traces",
-            description="查看记忆的生命周期历史：存储、召回、反馈、删除、恢复等。",
+            description="View a memory's lifecycle history: stored, recalled, feedback, deleted, restored, etc.",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "memory_id": {"type": "integer", "description": "记忆 ID"},
+                    "memory_id": {"type": "integer", "description": "Memory ID"},
                 },
                 "required": ["memory_id"],
             },
         ),
         types.Tool(
             name="delete_memory",
-            description="软删除一条记忆（可恢复）。",
+            description="Soft-delete a memory (reversible).",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "memory_id": {"type": "integer", "description": "记忆 ID"},
+                    "memory_id": {"type": "integer", "description": "Memory ID"},
                 },
                 "required": ["memory_id"],
             },
         ),
         types.Tool(
             name="restore_memory",
-            description="恢复一条已软删除的记忆。",
+            description="Restore a soft-deleted memory.",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "memory_id": {"type": "integer", "description": "记忆 ID"},
+                    "memory_id": {"type": "integer", "description": "Memory ID"},
                 },
                 "required": ["memory_id"],
             },
         ),
-        # ── 知识图谱 ──
+        # ── Knowledge graph ──
         types.Tool(
             name="search_graph",
-            description="在知识图谱中搜索实体和关系。",
+            description="Search entities and relations in the knowledge graph.",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "query": {"type": "string", "description": "搜索关键词"},
-                    "user_id": {"type": "string", "description": "用户 ID (实际数据库用 default)", "default": "default"},
-                    "limit": {"type": "integer", "description": "返回条数", "default": 10},
+                    "query": {"type": "string", "description": "Search terms"},
+                    "user_id": {"type": "string", "description": "User ID (actual DB uses default)", "default": "default"},
+                    "limit": {"type": "integer", "description": "Number of results to return", "default": 10},
                 },
                 "required": ["query"],
             },
         ),
         types.Tool(
             name="extract_entities",
-            description="从文本中自动提取实体，存入知识图谱。",
+            description="Automatically extract entities from text and store them in the knowledge graph.",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "text": {"type": "string", "description": "待提取的文本"},
-                    "user_id": {"type": "string", "description": "用户 ID (实际数据库用 default)", "default": "default"},
+                    "text": {"type": "string", "description": "Text to extract entities from"},
+                    "user_id": {"type": "string", "description": "User ID (actual DB uses default)", "default": "default"},
                 },
                 "required": ["text"],
             },
@@ -226,52 +229,52 @@ async def list_tools(ctx, params) -> types.ListToolsResult:
         # ── Wiki ──
         types.Tool(
             name="create_wiki_page",
-            description="创建或更新 Wiki 页面（版本化知识文档）。",
+            description="Create or update a Wiki page (versioned knowledge document).",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "title": {"type": "string", "description": "Wiki 标题"},
-                    "content": {"type": "string", "description": "Wiki 内容"},
-                    "user_id": {"type": "string", "description": "用户 ID (实际数据库用 default)", "default": "default"},
+                    "title": {"type": "string", "description": "Wiki title"},
+                    "content": {"type": "string", "description": "Wiki content"},
+                    "user_id": {"type": "string", "description": "User ID (actual DB uses default)", "default": "default"},
                 },
                 "required": ["title", "content"],
             },
         ),
         types.Tool(
             name="search_wiki",
-            description="搜索 Wiki 页面（支持模糊匹配）。",
+            description="Search Wiki pages (fuzzy matching supported).",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "query": {"type": "string", "description": "搜索关键词"},
-                    "user_id": {"type": "string", "description": "用户 ID (实际数据库用 default)", "default": "default"},
-                    "limit": {"type": "integer", "description": "返回条数", "default": 5},
+                    "query": {"type": "string", "description": "Search terms"},
+                    "user_id": {"type": "string", "description": "User ID (actual DB uses default)", "default": "default"},
+                    "limit": {"type": "integer", "description": "Number of results to return", "default": 5},
                 },
                 "required": ["query"],
             },
         ),
-        # ── 信念系统 ──
+        # ── Belief system ──
         types.Tool(
             name="store_belief",
-            description="存储一条信念到信念系统。",
+            description="Store a belief in the belief system.",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "content": {"type": "string", "description": "信念内容"},
-                    "user_id": {"type": "string", "description": "用户 ID (实际数据库用 default)", "default": "default"},
+                    "content": {"type": "string", "description": "Belief content"},
+                    "user_id": {"type": "string", "description": "User ID (actual DB uses default)", "default": "default"},
                 },
                 "required": ["content"],
             },
         ),
         types.Tool(
             name="search_beliefs",
-            description="搜索信念库。",
+            description="Search the belief store.",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "query": {"type": "string", "description": "搜索关键词"},
-                    "user_id": {"type": "string", "description": "用户 ID (实际数据库用 default)", "default": "default"},
-                    "top_k": {"type": "integer", "description": "返回条数", "default": 5},
+                    "query": {"type": "string", "description": "Search terms"},
+                    "user_id": {"type": "string", "description": "User ID (actual DB uses default)", "default": "default"},
+                    "top_k": {"type": "integer", "description": "Number of results to return", "default": 5},
                 },
                 "required": ["query"],
             },
@@ -279,7 +282,7 @@ async def list_tools(ctx, params) -> types.ListToolsResult:
     ])
 
 
-# ── 工具调用处理 ──────────────────────────────────────
+# ── Tool call dispatch ─────────────────────────────────
 async def _dispatch(name: str, arguments: dict) -> list[types.TextContent]:
     user_id = arguments.pop("user_id", "default")
 
@@ -323,7 +326,7 @@ async def _dispatch(name: str, arguments: dict) -> list[types.TextContent]:
             return [types.TextContent(type="text", text=json.dumps(data, ensure_ascii=False))]
 
         elif name == "feedback_memory":
-            # API 要求 query 参数 (user_id + feedback); 发 JSON body 会 422 (2026-09-12 实测)
+            # API requires query params (user_id + feedback); JSON body gives 422 (observed 2026-09-12)
             data = _call("POST", f"/memories/{arguments['memory_id']}/feedback",
                          params={"user_id": user_id, "feedback": arguments["feedback"]})
             return [types.TextContent(type="text", text=json.dumps(data, ensure_ascii=False))]
@@ -333,7 +336,7 @@ async def _dispatch(name: str, arguments: dict) -> list[types.TextContent]:
             return [types.TextContent(type="text", text=json.dumps(data, ensure_ascii=False))]
 
         elif name == "delete_memory":
-            # user_id 是必填 query 参数, 缺失即 422 (2026-09-12 实测)
+            # user_id is a required query param; missing = 422 (observed 2026-09-12)
             data = _call("DELETE", f"/memories/{arguments['memory_id']}", params={"user_id": user_id})
             return [types.TextContent(type="text", text=json.dumps(data, ensure_ascii=False))]
 
@@ -394,7 +397,7 @@ async def _dispatch(name: str, arguments: dict) -> list[types.TextContent]:
         return [types.TextContent(type="text", text=json.dumps({"error": str(e)}, ensure_ascii=False))]
 
 
-# ── MCP 2.0 回调适配 + 启动 ────────────────────────────
+# ── MCP 2.0 callback adapters + startup ─────────────────
 async def call_tool(ctx, params) -> types.CallToolResult:
     return types.CallToolResult(content=await _dispatch(params.name, dict(params.arguments or {})))
 

@@ -1,30 +1,30 @@
-# Mnemosyne OS 状态
+# Mnemosyne OS Status
 
-## 状态: v8.0.0 — 本地 267 用例绿；正式环境已部署（含两步修正），P4 复测待跑
+## Status: v8.0.0 — 267 tests green locally; production deployed (with two corrections), P4 retest pending
 
-## 当前版本: 8.0.0 — 「写得对 · 收得回 · 找得准 · 弄得清」
+## Current Version: 8.0.0 — "write right · recover back · find precisely · clarify"
 
-> 用户 2026-09-25 定调：测试阶段发现的缺陷**在同一版本号内吃掉**，不新增版本（故无 8.0.1）。
+> User directive 2026-09-25: defects found in the testing phase are **absorbed within the same version number**, no new version added (hence no 8.0.1).
 
-## 本版内容（详见 CHANGELOG）
-- [x] S1-1 写入原子性（单事务包裹）
-- [x] S1-2 幂等键（**分层**：L0 用来源上下文/小时桶；L1~L4 内容指纹）
-- [x] 冲突检测**按层分流**（L0 跳过语义合并，保「只增不改」契约）
-- [x] S1-3 记忆回收 GC + 冷归档（**四表全快照**）+ CSV 凭证 + 整批还原 + 完整性断言
-- [x] S1-3 完整性巡检（只读）
-- [x] S1-4 延迟埋点 + `/api/v1/metrics`
-- [x] S1-4 备份可恢复性复验
-- [x] S2-1 四通道 RRF 融合（默认关闭，待评测）
-- [x] S3-1 记忆分层模型（可执行规格，写入接线）
-- [x] S3-2 发布流程状态机（七阶段 + 三关卡，`publish` 唯一入口）
-- [x] S3-3 产出物指针策略
+## This Release (see CHANGELOG for details)
+- [x] S1-1 Write atomicity (single-transaction wrapping)
+- [x] S1-2 Idempotency key (**layered**: L0 uses source context / hour bucket; L1~L4 content fingerprint)
+- [x] Conflict detection **routed by layer** (L0 skips semantic merge, keeping the "only-add-never-modify" contract)
+- [x] S1-3 Memory GC + cold archive (**full snapshot of four tables**) + CSV vouchers + batch restore + integrity assertion
+- [x] S1-3 Integrity inspection (read-only)
+- [x] S1-4 Latency instrumentation + `/api/v1/metrics`
+- [x] S1-4 Backup recoverability re-verification
+- [x] S2-1 Four-channel RRF fusion (off by default, awaiting evaluation)
+- [x] S3-1 Memory layering model (executable spec, write-path wired)
+- [x] S3-2 Release pipeline state machine (7 stages + 3 gates, `publish` is the sole entry point)
+- [x] S3-3 Artifact pointer policy
 
-## 未做（挂账）
-- [ ] 开源就绪件（setup.sh / INSTALL.md 更新 / 外部视角文档）
-- [ ] 检索评测基线（E3 已交付 150 条设计，未跑）
-- [ ] 分层模型决策化（layer 目前仅标注，未进决策）
-- [ ] RRF tie-break 取向
+## Not Done (outstanding)
+- [ ] Open-source readiness (setup.sh / INSTALL.md updates / external-perspective docs)
+- [ ] Recall evaluation baseline (E3 delivered a 150-item design, not yet run)
+- [ ] Layering-model decisioning (layer is currently only annotated, not yet feeding decisions)
+- [ ] RRF tie-break direction
 
-## 部署与回滚
-- 部署通道：内容级对账 → 备份（验证可恢复）→ 最小覆盖 → 三重验证 → 服务自报版号复验
-- 回滚：从 `/opt/mnemosyne/.pre-deploy-<stamp>/` 整目录还原 + `systemctl restart mnemosyne`
+## Deployment & Rollback
+- Deploy path: content-level reconciliation → backup (verify recoverability) → minimal coverage → three-way verification → service self-reported version re-check
+- Rollback: restore the whole directory from `/opt/mnemosyne/.pre-deploy-<stamp>/` + `systemctl restart mnemosyne`
