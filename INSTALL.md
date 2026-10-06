@@ -35,7 +35,7 @@
 | ② Standalone deploy | Self-hosting / other agent frameworks | ~15 min | Full service, REST API + SDK |
 | ③ Python SDK | If you want to call it from your own code | Depends on ② | One import line on top of the standalone deployment |
 
-> ⚠️ All three options depend on a **PostgreSQL 16 database** (with pgvector + Apache AGE extensions) and at least one **LLM/Embedding API** (Volcano Engine ARK / DeepSeek / any OpenAI-compatible endpoint).
+> ⚠️ All three options depend on a **PostgreSQL 16 database** (with the pgvector extension) and at least one **LLM/Embedding API** (Volcano Engine ARK / DeepSeek / any OpenAI-compatible endpoint).
 
 ---
 
@@ -45,7 +45,7 @@
 |-----------|-------------|
 | OS | Linux / macOS / Windows (WSL2) |
 | Python | 3.11+ |
-| PostgreSQL | 16.x (with pgvector ≥ 0.7, Apache AGE ≥ 1.5) |
+| PostgreSQL | 16.x (with pgvector ≥ 0.7) |
 | Memory | 8GB+ (recommended) |
 | Model API | Pick one: Volcano Engine ARK (Doubao), DeepSeek, or an OpenAI-compatible endpoint |
 | Disk | 2GB+ (not including database growth) |
@@ -84,8 +84,8 @@ ssh -L 18010:127.0.0.1:8010 your-server
 #### Ubuntu / Debian 24.04+
 
 ```bash
-# Install PostgreSQL 16 + extensions (Apache AGE + pgvector)
-sudo apt install postgresql-16 postgresql-16-age postgresql-16-pgvector
+# Install PostgreSQL 16 + pgvector extension
+sudo apt install postgresql-16 postgresql-16-pgvector
 
 # Start the service
 sudo systemctl enable --now postgresql
@@ -102,15 +102,6 @@ SQL
 ```bash
 brew install postgresql@16
 brew install pgvector
-# Apache AGE: no official Homebrew package — compile from source (see "AGE build" below)
-```
-
-**Compile AGE from source (macOS / environments without an apt package)**:
-
-```bash
-git clone https://github.com/apache/age.git
-cd age && make PG_CONFIG=/usr/local/opt/postgresql@16/bin/pg_config
-sudo make install PG_CONFIG=/usr/local/opt/postgresql@16/bin/pg_config
 ```
 
 #### Windows (WSL2)
@@ -125,14 +116,14 @@ sudo make install PG_CONFIG=/usr/local/opt/postgresql@16/bin/pg_config
 git clone https://github.com/gymaira1990-jpg/Mnemosyne-OS.git
 cd Mnemosyne-OS
 
-# Import the full table structure (30 tables, including palaces / graph / knowledge base)
+# Import the full table structure (21 tables, including palaces / knowledge base)
 # ⚠️ Must run as a database superuser (e.g., postgres): CREATE EXTENSION requires elevated privileges
-# schema.sql ships with CREATE EXTENSION (age/vector/pg_trgm); the extensions are created automatically on import
+# schema.sql ships with CREATE EXTENSION (pg_trgm + vector); the extensions are created automatically on import
 sudo -u postgres psql -d mnemosyne -f docs/schema.sql
 
 # After import, hand the permissions over to the application user
-sudo -u postgres psql -d mnemosyne -c "GRANT ALL ON ALL TABLES IN SCHEMA public, ag_catalog, mnemosyne_graph TO mnemosyne;"
-sudo -u postgres psql -d mnemosyne -c "GRANT ALL ON ALL SEQUENCES IN SCHEMA public, ag_catalog, mnemosyne_graph TO mnemosyne;"
+sudo -u postgres psql -d mnemosyne -c "GRANT ALL ON ALL TABLES IN SCHEMA public, mnemosyne TO mnemosyne;"
+sudo -u postgres psql -d mnemosyne -c "GRANT ALL ON ALL SEQUENCES IN SCHEMA public, mnemosyne TO mnemosyne;"
 
 # Verify the table structure
 PGPASSWORD=your-strong-password psql -h 127.0.0.1 -U mnemosyne -d mnemosyne -c "\dt"
@@ -200,7 +191,7 @@ python main.py
 ```bash
 # Health check
 curl http://127.0.0.1:8010/api/v1/echo
-# → {"status":"ok","service":"Mnemosyne OS","version":"8.0.0"}
+# → {"status":"ok","service":"Mnemosyne OS","version":"8.1.0"}
 
 # Store a memory
 curl -X POST http://127.0.0.1:8010/api/v1/memories \
@@ -214,6 +205,13 @@ curl -X POST http://127.0.0.1:8010/api/v1/memories/search \
 
 # Three-channel summoning (the palace's core ability)
 curl "http://127.0.0.1:8010/api/v1/palace/summon?q=test&user_id=default&top_k=3"
+
+# MCP in-process endpoint (/mcp, streamable HTTP — v8.1; stdio also still available)
+curl -i -N -X POST http://127.0.0.1:8010/mcp \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{}}}'
+# → 200; SSE data contains "server":{"name":"mnemosyne"}
 ```
 
 ---
@@ -245,16 +243,15 @@ m.search_by_hall("research")      # unverified
 
 ### Ubuntu/Debian
 
-✅ The least-hassle path (this guide's test environment): one apt command installs PG16+AGE+pgvector.
+✅ The least-hassle path (this guide's test environment): one apt command installs PG16+pgvector.
 
 ```bash
-sudo apt install postgresql-16 postgresql-16-age postgresql-16-pgvector
+sudo apt install postgresql-16 postgresql-16-pgvector
 ```
 
 ### macOS
 
 - PostgreSQL 16 + pgvector: install directly via Homebrew.
-- Apache AGE: no official package; needs [source compilation](#age-compile-from-source-macos--environments-without-an-apt-package) (10 minutes, one Makefile command).
 
 ### Windows (WSL2)
 
@@ -267,9 +264,6 @@ sudo apt install postgresql-16 postgresql-16-age postgresql-16-pgvector
 
 **Q: Startup reports `column ... does not exist`?**
 A: The database schema hasn't been imported. Make sure you ran `psql -f docs/schema.sql` and that the version matches the repo.
-
-**Q: Reports `extension "age" is not available`?**
-A: Apache AGE is not installed. Ubuntu: `sudo apt install postgresql-16-age`; macOS: compile from source, then `CREATE EXTENSION`.
 
 **Q: Search returns embedding-related errors?**
 A: The model API key is not configured or invalid. Check `ARK_API_KEY` / `OPENAI_API_KEY` in `.env` and verify with `curl` that the endpoint is reachable.

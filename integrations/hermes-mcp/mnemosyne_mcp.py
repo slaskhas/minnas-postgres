@@ -1,56 +1,92 @@
 #!/usr/bin/env python3
 """
-Mnemosyne MCP Server — bridging Hermes to the memory palace
+Mnemosyne MCP Server — bridging the agent to the memory palace
 
-Connects to the Mnemosyne REST API on the production server over the SSH tunnel
-(localhost:18010), exposing memory store/retrieve tools to the Hermes agent via MCP.
+Connects to the Mnemosyne REST API and exposes memory store/retrieve tools via
+MCP. Two transports share the *same* handlers:
+
+  * **stdio** — the classic form. Launched as a subprocess (Hermes config, or the
+    slask client over the SSH tunnel localhost:18010 → core 8010). Entered via
+    `python3 integrations/hermes-mcp/mnemosyne_mcp.py` (see `__main__`).
+  * **streamable HTTP** — the in-process merge (v8.1). `main.py` mounts the 15
+    tools at `/mcp` inside the core FastAPI process. Handlers reach the core over
+    loopback REST via `set_base_url()`, so the *same* contract-tested
+    `_dispatch`/`_call` serve both transports.
 
 Contract iron rules (bitten once before, see tests/test_mcp_bridge_contract.py):
-  * Parameter positions follow the server — feedback/delete/restore user_id, and
-    feedback are **query** parameters; sending them as a JSON body or omitting them
-    gives 422 Unprocessable Entity (from the user's side the tool "just breaks").
+  * Parameter positions follow the server — feedback/delete/restore `user_id`, and
+    `feedback`, are **query** parameters; sending them as a JSON body or omitting
+    them gives 422 Unprocessable Entity (from the user's side the tool "just
+    breaks").
   * Response field names follow capabilities/schema — never guess from memory —
-    heat-top returns heat_score.
+    heat-top returns `heat_score`.
   * Contract tests MUST be run after any handler change; silent failure (no error
     = always falls back to the default value) is more dangerous than an error.
 
-How to start (registered in Hermes config.yaml):
-  mcp_servers:
-    mnemosyne:
-      command: "python3"
-      args: ["/path/to/hermes/tools/mnemosyne_mcp.py"]
+How to start
+  * Hermes (stdio):
+      mcp_servers:
+        mnemosyne:
+          command: "python3"
+          args: ["/path/to/hermes/tools/mnemosyne_mcp.py"]
+  * In-process HTTP (v8.1): nothing to do — `main.py` mounts `/mcp` itself when
+    the `mcp` SDK is installed. Point handlers at the core's own loopback
+    address via `set_base_url("http://<host>:<port>")` before mounting.
 """
+from __future__ import annotations
 
 import json
 import os
 import sys
 import httpx
 from typing import Any, Optional
-from mcp.server.stdio import stdio_server
+
 
 # ── Mnemosyne API address ──────────────────────────────
+# Defaults to the local SSH-tunnel endpoint (the pre-v8.1 stdio default). When
+# mounted in-process by `main.py`, `set_base_url()` repoints it at the core's
+# own listen address so handlers reach the core over loopback (direct uvicorn,
+# no Nginx auth layer).
 MNEMOSYNE_URL = os.getenv("MNEMOSYNE_URL", "http://127.0.0.1:18010")
 API_BASE = f"{MNEMOSYNE_URL}/api/v1"
 
 
-# ── MCP SDK import ─────────────────────────────────────
+# ── MCP SDK import (guarded so `main.py` can be imported without it) ──
 try:
-    import mcp.server as mcp_server
-    import mcp.types as types
+    from mcp.server.stdio import stdio_server
     from mcp.server.lowlevel import Server
+    import mcp.types as types
+    _MCP_AVAILABLE = True
 except ImportError:
-    print("ERROR: mcp package not installed. Run: pip install mcp", file=sys.stderr)
-    sys.exit(1)
+    _MCP_AVAILABLE = False
 
 
 # ── HTTP client ────────────────────────────────────────
 import time as _time
 
+
 def _mk_client():
     """Fresh client per call, to avoid the connection pool caching dead connections."""
-    return httpx.Client(timeout=30, base_url=MNEMOSYNE_URL, limits=httpx.Limits(max_keepalive_connections=2))
+    return httpx.Client(timeout=30, base_url=MNEMOSYNE_URL,
+                        limits=httpx.Limits(max_keepalive_connections=2))
+
 
 http = _mk_client()
+
+
+def set_base_url(url: str) -> None:
+    """Point the bridge at a new Mnemosyne REST base.
+
+    The stdio default (`MNEMOSYNE_URL` env / `http://127.0.0.1:18010`) is the
+    SSH-tunnel endpoint. When this module is mounted in-process by `main.py`,
+    call this with the core's *own* listen address (`http://<host>:<port>`) so
+    handlers reach the core over loopback. It recomputes `API_BASE` and rebuilds
+    the `httpx` client, because `_call` resolves absolute URLs from `API_BASE`.
+    """
+    global MNEMOSYNE_URL, API_BASE, http
+    MNEMOSYNE_URL = url
+    API_BASE = f"{MNEMOSYNE_URL}/api/v1"
+    http = _mk_client()
 
 
 def _call(method: str, path: str, **kwargs) -> dict:
@@ -79,11 +115,6 @@ def _call(method: str, path: str, **kwargs) -> dict:
             if hasattr(e, "response") and e.response is not None:
                 detail = e.response.text
             return {"error": str(e), "detail": detail}
-
-
-
-# ── MCP server definition ──────────────────────────────
-# (app is registered via constructor callback after handler definitions, mcp>=2.0 API)
 
 
 # ── Tool list ──────────────────────────────────────────
@@ -397,19 +428,85 @@ async def _dispatch(name: str, arguments: dict) -> list[types.TextContent]:
         return [types.TextContent(type="text", text=json.dumps({"error": str(e)}, ensure_ascii=False))]
 
 
-# ── MCP 2.0 callback adapters + startup ─────────────────
+# ── MCP 2.0 callback adapter ───────────────────────────
 async def call_tool(ctx, params) -> types.CallToolResult:
     return types.CallToolResult(content=await _dispatch(params.name, dict(params.arguments or {})))
 
 
-app = Server("mnemosyne", on_list_tools=list_tools, on_call_tool=call_tool)
+# ── Server builders ────────────────────────────────────
+if _MCP_AVAILABLE:
+    # The single low-level Server backing both transports (stdio + streamable
+    # HTTP). Created once per process; each uvicorn worker imports this module
+    # separately, so there is exactly one per worker.
+    server = Server("mnemosyne", on_list_tools=list_tools, on_call_tool=call_tool)
 
+    def build_server() -> Server:
+        """Return the low-level MCP Server used by stdio and streamable HTTP."""
+        return server
 
-async def main():
-    async with stdio_server() as (read_stream, write_stream):
-        await app.run(read_stream, write_stream, app.create_initialization_options())
+    def build_http_app(streamable_http_path: str = "/mcp", stateless_http: bool = True):
+        """Return the mountable Starlette app for streamable HTTP.
+
+        `stateless_http=True` keeps every request independent — the right choice
+        when the app is mounted behind `uvicorn --workers N` (no per-connection
+        state to lose or bounce across workers). All 15 Mnemosyne tools are
+        stateless anyway.
+        """
+        return server.streamable_http_app(
+            streamable_http_path=streamable_http_path,
+            stateless_http=stateless_http,
+        )
+
+    def build_mcp_mount():
+        """Return the raw pieces for mounting MCP at ``/mcp`` in a host app.
+
+        Returns a 2-tuple ``(asgi_endpoint, run_cm)``:
+
+        - ``asgi_endpoint``: the raw per-endpoint ASGI app (path-agnostic; the
+          JSON-RPC method lives in the request body, not the URL path). This is
+          ``session_manager.asgi_app`` — the same app the SDK's standalone
+          ``streamable_http_app()`` routes ``/mcp`` to.
+        - ``run_cm``: an async context manager (``session_manager.run()``) that
+          initializes the session manager's task group. It must be entered on
+          startup and exited on shutdown; without it the endpoint 500s
+          ("Task group is not initialized"). A Starlette ``Mount`` never runs a
+          sub-app lifespan, so the host app must drive this itself — mirroring
+          the SDK's own ``lifespan=lambda app: session_manager.run()``.
+        """
+        # Build via the SDK's own helper so transport-security / stateless
+        # settings match the standalone app; this also populates
+        # server.session_manager. The path only names the sub-app's route, which
+        # we do not use here (the host registers the raw endpoint at /mcp
+        # directly as a plain Route).
+        _ = server.streamable_http_app(
+            streamable_http_path="/mcp", stateless_http=True
+        )
+        sm = server.session_manager
+        return sm.asgi_app, sm.run
+
+    async def main():
+        async with stdio_server() as (read_stream, write_stream):
+            await server.run(read_stream, write_stream, server.create_initialization_options())
+
+else:
+    # Stubs so the module imports cleanly and `main.py`'s capability checks pass
+    # without the mcp SDK (minimal install). Calling them raises a clear error.
+    def build_server() -> Server:
+        raise RuntimeError("mcp SDK not installed; cannot build the MCP server")
+
+    def build_http_app(streamable_http_path: str = "/mcp", stateless_http: bool = True):
+        raise RuntimeError("mcp SDK not installed; cannot build the MCP HTTP app")
+
+    def build_mcp_mount():
+        raise RuntimeError("mcp SDK not installed; cannot build the MCP mount")
+
+    async def main():
+        raise RuntimeError("mcp SDK not installed")
 
 
 if __name__ == "__main__":
+    if not _MCP_AVAILABLE:
+        print("ERROR: mcp package not installed. Run: pip install mcp", file=sys.stderr)
+        sys.exit(1)
     import asyncio
     asyncio.run(main())

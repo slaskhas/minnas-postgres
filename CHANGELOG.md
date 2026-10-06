@@ -63,6 +63,37 @@
     separately planted a genuine hardcoded sample, and both the credential-class and internal-domain scans **went red at the same time** (counter-evidence passed)
   - This discipline was also written into the `AGENTS.md` red line (pattern change: reproduce locally step-by-step + two-way self-test + clean counter-evidence)
 
+## release · v8.1.0 (2026-10-06) — MCP bridge folded into core: 15 tools now serve /mcp over streamable HTTP (stdio kept)
+
+> Basis: proposal [P-20261006-03](openspec/changes/2026-10-06-mcp-inprocess-http-merge/proposal.md) · ADR [0003](docs/adr/0003-MCP桥内进程化取舍与触发器.md) · user instruction "do alternative A, implement"
+> Net effect: the 15 Mnemosyne MCP tools — previously a separate stdio subprocess behind the 18010→8010 SSH tunnel —
+> are now **mounted in-process** on the core uvicorn process at `/mcp`. The *same* contract-tested handlers
+> (`_dispatch`/`_call`/`list_tools`/`call_tool`) serve **both** transports; stdio is preserved untouched for backwards compatibility.
+
+### 🧠 In-process `/mcp` (streamable HTTP)
+
+- `integrations/hermes-mcp/mnemosyne_mcp.py`
+  - New guarded `mcp` import → `_MCP_AVAILABLE`; the module now imports cleanly without the MCP SDK (so the REST core is never taken down by a missing dependency).
+  - New `set_base_url(url)`: re-computes `MNEMOSYNE_URL` / `API_BASE` and rebuilds the `httpx` client so handlers reach the core over **loopback REST**.
+  - New `build_server()` (the low-level `Server` shared by stdio + HTTP), `build_http_app(streamable_http_path="/mcp", stateless_http=True)` (standalone Starlette app, kept for the in-process test), and — what `main.py` actually mounts — `build_mcp_mount()` -> `(asgi_endpoint, run_cm)`: the raw per-endpoint ASGI app (`session_manager.asgi_app`, path-agnostic, the JSON-RPC method lives in the body) + the `session_manager.run()` async context manager (initializes the session-manager task group; missing it -> 500).
+  - New `__main__` guard (stdio entry unchanged); stubs raise a clear error when the SDK is absent.
+  - **`_dispatch`/`_call`/`list_tools`/`call_tool` are byte-identical** (contract red line: never guess field names / param positions).
+- `main.py`: loads the bridge **by file path** (`hermes-mcp` contains a hyphen → not a normal import path), checks `_MCP_AVAILABLE` + `set_base_url`/`build_mcp_mount`, then, inside a `lifespan` (`asynccontextmanager`; `app = FastAPI(..., lifespan=_mcp_lifespan)`): `set_base_url("http://<HOST>:<PORT>")` (`0.0.0.0`/empty → `127.0.0.1`) and `asgi_endpoint, run_cm = build_mcp_mount()` + `_app.router.add_route("/mcp", asgi_endpoint, methods=None, include_in_schema=False)`, driving `async with run_cm():` (initializes the session-manager task group). **Not** `app.mount` — a `Mount` never runs the sub-app lifespan (500 "Task group not initialized") and a sub-app whose own route is `/mcp` would nest to `/mcp/mcp`; a plain `Route(..., methods=None)` at exact `/mcp` mirrors the SDK's own standalone app.
+  Wrapped in `try/except`: absent SDK / changed bridge → DEBUG-only skip, REST API unaffected.
+  `stateless_http=True` (set inside `build_mcp_mount`) keeps each request independent → safe under `uvicorn --workers N`.
+- `tests/test_mcp_http_mount.py` (new): in-process `mcp.Client(build_server())` lists all 15 tools; `build_http_app()` returns a Starlette app with a `/mcp` route;
+  `set_base_url` re-points `API_BASE` + the client. Gated by `pytest.importorskip("mcp")` (auto-skip on minimal installs).
+- `requirements.txt`: added `mcp>=2.0` (REST core still works without it — the mount self-skips).
+
+### ✅ Verification (live uvicorn, single worker, 2026-10-06)
+
+- [x] Syntax green: `py_compile` on the bridge, the new test file, and `main.py`.
+- [x] Without the SDK: bridge imports cleanly, stubs raise `RuntimeError`, and the core's mount degrades to a DEBUG log (REST stays up).
+- [x] With the SDK: `POST /mcp initialize` → **200**, SSE body contains `"mnemosyne"` (`serverInfo.name`); a real `mcp.Client("http://127.0.0.1:8010/mcp")` lists **all 15** tools and a `get_memory_stats` call round-trips; `GET /api/v1/echo` → 200 (REST intact); `POST /mcp/mcp` → 404; `POST /mcp/` → 307 → `/mcp`.
+- [x] Existing `tests/test_mcp_bridge_contract.py` unaffected (handlers unchanged).
+- [x] Full `pytest tests/` green: **261 passed, 19 skipped** (the 19 = no local PG test DB, pre-existing skips).
+- [x] Version consistent in VERSION / README badges (EN+CN) / CHANGELOG (= **8.1.0**); local privacy reproduction (creds / domain / internal-file gates) **zero hits** on tracked files.
+
 ## release · v8.0.0 (2026-09-25) — Memory Palace OS 8.0: write right · recover back · find precisely · clarify
 
 > Basis: proposal [P-20260925-01](openspec/changes/2026-09-25-v8-memory-os/proposal.md) · ADR [0002](docs/adr/0002-文件系统机制取舍与触发器.md)

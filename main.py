@@ -19,6 +19,7 @@ import os, sys, json, uuid, math, re, time, difflib, hashlib
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 import logging
+from contextlib import asynccontextmanager
 
 # v7.8: 真 BM25 — jieba 分词(query 与 memory_keywords 同词典), 懒加载避免启动拖慢
 try:
@@ -130,7 +131,65 @@ from core.llm import call_llm as llm_call
 import tmt.router as tmt_module
 from tmt.router import router as tmt_router
 
-app = FastAPI(title="Mnemosyne OS v7.8.4 — 认知型记忆操作系统")
+# ── v8.1: MCP over streamable HTTP — lifespan-driven in-process mount at /mcp ──
+# Reuses the hermes-mcp bridge's contract-tested handlers verbatim. Loaded by file
+# path (the parent dir `hermes-mcp` has a hyphen → not a normal import path).
+# Handlers reach the core over loopback REST via set_base_url() (direct uvicorn,
+# no Nginx auth layer); stateless so it is safe under `uvicorn --workers N`.
+#
+# A Starlette Mount never runs a sub-app lifespan, and mounting a sub-app whose
+# own route is /mcp nests to /mcp/mcp — so we (a) register the raw per-endpoint
+# ASGI app as a plain Route at exact /mcp (methods=None → all methods; exact
+# match → no double path, no trailing-slash 307 for /mcp) and (b) drive run()
+# from this app's lifespan — mirroring the SDK's own standalone app
+# (Route(path, endpoint, methods=None) + lifespan=lambda app: session_manager.run()).
+# Skipped silently when the mcp SDK is absent so the REST API is never taken down.
+@asynccontextmanager
+async def _mcp_lifespan(_app: "FastAPI"):
+    run_cm = None
+    try:
+        import importlib.util as _mcp_importlib
+        _mcp_path = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            "integrations", "hermes-mcp", "mnemosyne_mcp.py")
+        _mcp_spec = _mcp_importlib.spec_from_file_location(
+            "_mnemosyne_mcp_bridge", _mcp_path)
+        if _mcp_spec is not None and _mcp_spec.loader is not None:
+            _mcp_mod = _mcp_importlib.module_from_spec(_mcp_spec)
+            sys.modules["_mnemosyne_mcp_bridge"] = _mcp_mod
+            _mcp_spec.loader.exec_module(_mcp_mod)
+            if (getattr(_mcp_mod, "_MCP_AVAILABLE", False)
+                    and callable(getattr(_mcp_mod, "set_base_url", None))
+                    and callable(getattr(_mcp_mod, "build_mcp_mount", None))):
+                # Point handlers at the core's own loopback address. A `0.0.0.0`/
+                # empty host binds everywhere → clients should connect via
+                # 127.0.0.1.
+                _loopback_host = str(HOST).strip()
+                if _loopback_host in ("0.0.0.0", ""):
+                    _loopback_host = "127.0.0.1"
+                _mcp_mod.set_base_url(f"http://{_loopback_host}:{PORT}")
+                asgi_endpoint, run_cm = _mcp_mod.build_mcp_mount()
+                # Raw per-endpoint ASGI app (path-agnostic; the JSON-RPC method
+                # lives in the request body). methods=None → accepts POST/DELETE/etc.
+                _app.router.add_route(
+                    "/mcp", asgi_endpoint, methods=None, include_in_schema=False)
+    except Exception as _e:  # mcp SDK absent / bridge changed → REST unaffected
+        logger.debug("MCP mount skipped: %s", _e)
+
+    if run_cm is None:
+        # Not available — still yield so the host app starts (no /mcp).
+        logger.debug("MCP (/mcp) not available; REST API unaffected")
+        yield
+        return
+
+    async with run_cm():
+        logger.info("MCP (/mcp) mounted — 15 Mnemosyne tools via streamable HTTP")
+        yield
+
+    logger.info("MCP (/mcp) session manager stopped")
+
+
+app = FastAPI(title="Mnemosyne OS v8.1.0 — 认知型记忆操作系统", lifespan=_mcp_lifespan)
 
 # ── 挂载 v5.0 路由 ──
 app.include_router(tmt_router)
@@ -156,6 +215,7 @@ skills_module.pool = None
 import api.injection as injection_module
 from api.injection import router as injection_router
 app.include_router(injection_router)
+
 
 # v8.0 S3-1 记忆分层模型（可执行规格）
 import core.layers as layers_mod

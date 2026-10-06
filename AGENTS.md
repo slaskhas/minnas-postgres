@@ -4,13 +4,13 @@
 > **Goal**: any agent (Hermes / Claude Code / Cursor / Codex) completes onboarding in 5 minutes.
 
 **Positioning**: cognitive memory operating system —— a long-term memory palace for AI agents. **It is not** a vector database, **not** a RAG pipeline.
-**Current version**: v8.0.0 (254 test cases all green locally) | production running v8.0.0 (re-verify self-reported version after deployment) | details in [PROJECT.md](PROJECT.md)
+**Current version**: v8.1.0 (all test suites green locally, incl. new in-process `/mcp` mount) | production running v8.1.0 (re-verify self-reported version after deployment) | details in [PROJECT.md](PROJECT.md)
 
 ## How to run
 
 ```bash
 pip install -r requirements.txt
-pytest tests/          # 200 tests = 194 server-side + 6 MCP bridge contract (contract tests require the mcp SDK on the Hermes side; auto-skip if absent)
+pytest tests/          # all green; MCP bridge contract + in-process /mcp mount tests require the mcp SDK (auto-skip if absent)
 ```
 
 ## Integration contract (must read before touching handlers / integration code)
@@ -22,6 +22,7 @@ pytest tests/          # 200 tests = 194 server-side + 6 MCP bridge contract (co
 3. **Integration changes must run the contract tests**: `tests/test_mcp_bridge_contract.py` (locks the outbound shape; verified proven-red before). Add cases for new endpoints the same way.
 4. **Projections/caches are judged by final values**: consumer-side injected files (MEMORY.md etc.) are projections of server-side data — verification must be re-tested **after write-back**.
 5. **If you can't stop generation, add insurance**: constraints (canonical shapes / idempotency / fixed anchors) + review (positive/negative comparison, contract tests) + final-value re-test.
+6. **Two transports, one contract**: stdio (`__main__` entry) and the in-process `/mcp` streamable-HTTP mount (added v8.1, wired in `main.py`) share the *same* `_dispatch`/`_call`/`list_tools` handlers. Change one handler and the contract tests cover both. The mount self-skips when the `mcp` SDK is absent, so the REST API is never taken down.
 
 ## Development contributions
 

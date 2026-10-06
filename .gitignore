@@ -41,3 +41,5 @@ skill_manifest.json
 
 # 日志
 *.log
+
+*~
