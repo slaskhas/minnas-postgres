@@ -1,24 +1,24 @@
 # Mnemosyne Memory Provider
 
-版本: 7.8.2 | 状态: 已发布 | 日期: 2026-09-12
-架构: Hermes ABC MemoryProvider 插件 (v1.1.0 演进)
+Version: 7.8.2 | Status: Released | Date: 2026-09-12
+Architecture: Hermes ABC MemoryProvider plugin (evolved from v1.1.0)
 
-## 版本历史
+## Version history
 
-| 7.8.2 | 2026-09-12 | 与仓库同版本发布(本版 provider 代码无变更, 仅版本对齐) |
+| 7.8.2 | 2026-09-12 | Released alongside the repo at the same version (no provider code changes this round, version alignment only) |
 
-| 版本 | 日期 | 核心变更 |
+| Version | Date | Key changes |
 |------|------|---------|
-| 7.8.0 | 2026-08-18 | 版本号同步 + AGENTS.md 更新 |
-| 7.7.0 | 2026-08-11 | 同步 Hermes 运行版本: palace_summon 工具 + v7 全套能力 |
-| 1.1.0 | 2026-07-29 | 写过滤(低价值跳过) + 首轮冷启动 + 格式优化 |
-| 1.0.0 | 2026-07-06 | 初始: 10工具 + sync_turn + prefetch + 写队列 + 熔断器 |
+| 7.8.0 | 2026-08-18 | Version number sync + AGENTS.md update |
+| 7.7.0 | 2026-08-11 | Synced to Hermes runtime version: palace_summon tool + full v7 capability set |
+| 1.1.0 | 2026-07-29 | Write filtering (skip low-value writes) + first-turn cold start + formatting improvements |
+| 1.0.0 | 2026-07-06 | Initial: 10 tools + sync_turn + prefetch + write queue + circuit breaker |
 
-## 工具矩阵 (11 tools)
+## Tool matrix (11 tools)
 
-| 工具 | 状态 |
+| Tool | Status |
 |------|:---:|
-| mnemosyne_palace_summon | ✅ v7 三通道召唤 |
+| mnemosyne_palace_summon | ✅ v7 three-channel summon |
 | mnemosyne_search | ✅ |
 | mnemosyne_remember | ✅ |
 | mnemosyne_recall | ✅ |
@@ -30,7 +30,7 @@
 | mnemosyne_wiki | ✅ |
 | mnemosyne_media | ✅ |
 
-## 依赖
+## Dependencies
 
-- Mnemosyne OS 服务 v5.5.1+（推荐 v7.x）
+- Mnemosyne OS service v5.5.1+ (v7.x recommended)
 - Hermes v0.19.0+

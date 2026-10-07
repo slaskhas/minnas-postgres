@@ -1,13 +1,13 @@
-"""v7.3 综合算法 — Rank 公式/提及升级/双向动态 单元测试 (无需 DB)
+"""v7.3 combined algorithm — Rank formula / mention-based upgrade / bidirectional dynamics unit tests (no DB needed)
 
-覆盖: Rank 计算 / 提及计数升级 / S 累计升级 / 抽屉百分位分档
+Coverage: Rank calculation / mention-count upgrades / cumulative S upgrades / drawer percentile banding
 """
 import pytest
 import sys, os, math
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
-# ── 与生产 reflect Rank 逻辑同源的纯函数 ──
+# ── Pure functions from the same logic as production reflect's Rank ──
 def rank_score(S: float, R: float, mention_count: int, heat: float) -> float:
     """Rank = 0.3S + 0.3R + 0.2ln(mention+1)/ln(1001)*10 + 0.2heat*10"""
     m_term = 10.0 * (math.log(mention_count + 1) / math.log(1001))
@@ -15,7 +15,7 @@ def rank_score(S: float, R: float, mention_count: int, heat: float) -> float:
 
 
 def s_after_mentions(initial_s: float, mentions: int) -> float:
-    """累计5次提及 S+1 (跨过5的倍数才升)"""
+    """Every 5 cumulative mentions, S+1 (only upgrades when crossing a multiple of 5)"""
     return min(10.0, initial_s + mentions // 5)
 
 
@@ -28,7 +28,7 @@ def drawer_by_percentile(pr: float) -> str:
 
 class TestRankScore:
     def test_high_value_high_mention(self):
-        # 常提高价值: 分数应高
+        # Frequently mentioned increases value: score should be high
         r = rank_score(7, 6, 30, 0.8)
         assert r > 6.0
 
@@ -37,15 +37,15 @@ class TestRankScore:
         assert r < 3.0
 
     def test_mention_boost(self):
-        """提及次数提升 Rank (久远但常提 → 升级)"""
+        """Mention count boosts Rank (old but frequently mentioned → upgraded)"""
         low = rank_score(3, 1, 0, 0.3)
         high = rank_score(3, 1, 50, 0.3)
         assert high > low
 
     def test_multi_dimensional(self):
-        """多维融合: S/R/提及/热度 都影响"""
+        """Multi-dimensional fusion: S/R/mentions/heat all have an effect"""
         r1 = rank_score(5, 5, 10, 0.5)
-        r2 = rank_score(3, 3, 10, 0.5)  # S/R 更低
+        r2 = rank_score(3, 3, 10, 0.5)  # lower S/R
         assert r1 > r2
 
 
@@ -64,7 +64,7 @@ class TestSUpgrade:
         assert s_after_mentions(10, 100) == 10
 
     def test_rebound(self):
-        """降级后重提 → S 可回弹 (双向动态)"""
+        """Re-mentioned after downgrading → S can rebound (bidirectional dynamics)"""
         assert s_after_mentions(3, 15) == 6
 
 

@@ -1,17 +1,17 @@
 ---
 name: Feature Request
-about: 建议新功能
+about: Suggest a new feature
 title: "[FEATURE] "
 labels: enhancement
 assignees: gymaira1990-jpg
 ---
 
-## 问题描述
-<!-- 这个功能解决什么问题？ -->
+## Problem description
+<!-- What problem does this feature solve? -->
 
-## 建议方案
+## Proposed solution
 
-## 替代方案
+## Alternatives considered
 
-## 相关版本
-<!-- v7.x / 下一版本 -->
+## Relevant version
+<!-- v7.x / next release -->

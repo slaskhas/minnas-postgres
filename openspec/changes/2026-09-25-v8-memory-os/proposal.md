@@ -1,111 +1,116 @@
 ---
-提案号: P-20260925-01
-提案者: EN-诺亚
-时间: 2026-09-25T06:30+08:00
-目标: mnemosyne/v8.0.0
-动作: ADDED
-依据: [原《记忆文件系统（Memory FS）——统一架构研究报告》, 提案 P-20260924-04 议题池 A1~A10, 箱子《记忆分层模型_v1》/《记忆系统8.0_专家团评估》, 2026-09-25 三方现状实测, gcat-std docs/adr/0004]
-状态: in-progress
-冲突: []
-旧版: v7.8.4
+Proposal ID: P-20260925-01
+Proposer: EN-Noah
+Date: 2026-09-25T06:30+08:00
+Target: mnemosyne/v8.0.0
+Action: ADDED
+Basis: [Original "Memory Filesystem (Memory FS) — Unified Architecture Research Report", Proposal P-20260924-04 agenda pool A1~A10, box docs "Memory Layering Model v1" / "Memory System 8.0 Expert Panel Assessment", 2026-09-25 three-way status measurement, gcat-std docs/adr/0004]
+Status: in-progress
+Conflicts: []
+Previous version: v7.8.4
 ---
 
-# 记忆宫殿 OS v8.0 · 变更提案（PRD 级）
+# Memory Palace OS v8.0 · Change Proposal (PRD-level)
 
-> **一句话**：让记忆体从「**存得住**」升级为「**写得对 · 收得回 · 找得准 · 弄得清**」。
-> **不是**文件系统工程原理的照搬 —— 是**只补 PostgreSQL 没给、且我们真的缺**的那几件。
+> **One line**: upgrade the memory substrate from "**can be stored**" to "**written correctly · retrievable · findable accurately · fully traceable**."
+> **This is not** a wholesale port of filesystem engineering principles — it's **only the handful of things PostgreSQL doesn't already give us, that we genuinely lack**.
 
-## 0. 为什么是现在
+## 0. Why now
 
-1. 用户 2026-09-25 明确授权立项并「本地、正式、仓库今天都推完」。
-2. 前一轮（09-23/24）已完成**取证**：FS 报告 10/10 代码锚点回查命中，三方版本对账，红队 6 条质疑 —— 研究阶段已收敛，进入实施阶段。
-3. 实测存在**唯一真实漂移**：正式环境跑 v7.8.3，仓库已 v7.8.4 → 本次一并收口。
+1. On 2026-09-25 the user explicitly authorized the project and asked for "local, production, and the repo all pushed through today."
+2. The previous round (09-23/24) already completed **fact-finding**: the FS report's 10/10 code-anchor spot checks hit, three-way version reconciliation done, red-team's 6 objections addressed — the research phase has converged, moving into implementation.
+3. Measurement found **exactly one real drift**: production is running v7.8.3 while the repo is already at v7.8.4 → this gets reconciled as part of this round.
 
-## 1. 判断依据（三条设计原则，不可违背）
+## 1. Basis for judgment (three design principles, non-negotiable)
 
-| # | 原则 | 含义 |
+| # | Principle | Meaning |
 |---|---|---|
-| R1 | **有效性优先于体量** | 凡 PostgreSQL 已提供的（WAL/MVCC/shared buffer/btree），**一律不重造**。文件系统的 20 维里，只有 PG 没覆盖的才进范围 |
-| R2 | **未触发不得新增机制** | 报告自设的边界（>500 万行才拆表等）升级为 **ADR 触发器**，未触发不许动手 |
-| R3 | **每一改动必须有判据** | 要么修「数据会错」的真缺陷，要么带来**可测量**的质量提升（A/B 数字），否则不做 |
+| R1 | **Effectiveness over scale** | Anything PostgreSQL already provides (WAL/MVCC/shared buffer/btree) is **never rebuilt**. Of the filesystem's 20 dimensions, only the ones PG doesn't cover are in scope |
+| R2 | **No new mechanism without a trigger** | The report's self-imposed thresholds (e.g. only split tables past 5M rows) are elevated to **ADR triggers**; nothing moves until triggered |
+| R3 | **Every change must have a falsifiable criterion** | It either fixes a real defect ("data would be wrong"), or brings a **measurable** quality improvement (A/B numbers) — otherwise it doesn't happen |
 
-> R2/R3 是对前一轮红队处方的制度化。**不写进 ADR 的"暂缓"等于没暂缓**。
+> R2/R3 institutionalize the previous round's red-team prescription. **A "deferred" that isn't written into an ADR isn't actually deferred.**
 
-## 2. 改什么（What）
+## 2. What changes (What)
 
-### S1 · 可靠性层 —— 修真缺陷（有「数据会错」后果）
+### S1 · Reliability layer — fixing real defects (defects with "data could be wrong" consequences)
 
-| # | 改造 | 现状证据【已查证】 | 判据（做完怎么算成） |
+| # | Change | Current-state evidence [verified] | Acceptance criterion (how we know it's done) |
 |---|---|---|---|
-| **S1-1** | `create_memory` 写入包住**单个 PG 事务**（含实体同步 + 分词 + 著录） | `main.py:778-836` 在 `pool.acquire()` 下顺序 `execute`，全文无 `conn.transaction()` → asyncpg 自动提交，**非原子**；崩溃可留"有记忆无实体/无分词"的半成品 | 注入异常中断后，`memories`/`entities`/`memory_keywords` 三表**零残留**；183+ 用例全绿 |
-| **S1-2** | 激活 `dedup_fingerprint` **幂等键** = `sha256(content + category + user_id)`，建唯一索引 + `ON CONFLICT DO NOTHING` | 该列 v7.1 就加了（`schema.sql:333`），**代码里从未写入过** → 无幂等，重试/重连即重复入库 | 同一 content 重复 POST **返回同一个 id**；库里只有一行；历史重复已先去重 |
-| **S1-3** | **记忆回收（GC / compaction）**：软删超保留窗口且引用归零 → 冷归档表 → 物理删 → `VACUUM (ANALYZE)`；补 `memory_traces` 外键 CASCADE | 全仓**无 `DELETE FROM memories`、无 `VACUUM`** → 软删即终点，tombstone 永久堆积、表只增不减 | tombstone 有过期出口；**删前有回滚凭证（CSV）**；orphan 巡检报告为 0；误删可在窗口内恢复 |
-| **S1-4** | **可观测**：写入/召回延迟埋点（p50/p95）暴露在健康端点；备份从「跑没跑」升级为「**跑完必验 + 失败告警**」 | 历史事故：备份链**静默断裂 36 天**；`perf_alert.py` 阈值 2000ms 但无实测埋点 | 一次请求可读到实测 p95；备份做**可恢复性抽验**（真解压/真读表），而非仅看文件存在 |
+| **S1-1** | Wrap `create_memory` writes in a **single PG transaction** (including entity sync + tokenization + cataloging) | `main.py:778-836` runs sequential `execute` calls under `pool.acquire()`, with no `conn.transaction()` anywhere → asyncpg auto-commits, **non-atomic**; a crash can leave a half-finished state with "memory but no entity / no tokens" | After an injected exception interrupts the flow, **zero leftover rows** across the `memories`/`entities`/`memory_keywords` tables; 183+ test cases all green |
+| **S1-2** | Activate the `dedup_fingerprint` **idempotency key** = `sha256(content + category + user_id)`, add a unique index + `ON CONFLICT DO NOTHING` | This column was added back in v7.1 (`schema.sql:333`), **but the code has never written to it** → no idempotency, retries/reconnects duplicate rows | Reposting identical content **returns the same id**; only one row exists in the DB; existing duplicates are pre-deduplicated |
+| **S1-3** | **Memory reclamation (GC / compaction)**: soft-deleted rows past the retention window with zero references → cold archive table → physical delete → `VACUUM (ANALYZE)`; add `memory_traces` FK CASCADE | The whole repo has **no `DELETE FROM memories`, no `VACUUM`** anywhere → soft delete is the end of the line, tombstones accumulate forever, tables only ever grow | Tombstones have an expiry exit; **a rollback receipt (CSV) exists before deletion**; orphan audit reports 0; mistaken deletes can be restored within the window |
+| **S1-4** | **Observability**: write/recall latency instrumentation (p50/p95) exposed on the health endpoint; backups upgraded from "did it run" to "**ran AND was verified, with failure alerts**" | Past incident: backups **silently broke for 36 days**; `perf_alert.py` has a 2000ms threshold but no real instrumentation | A single request can read real measured p95; backups get a **restorability spot-check** (actually decompress, actually read the table), not just a file-exists check |
 
-### S2 · 检索质量层 —— 可测量的提升
+### S2 · Retrieval quality layer — measurable improvements
 
-| # | 改造 | 现状证据【已查证】 | 判据 |
+| # | Change | Current-state evidence [verified] | Criterion |
 |---|---|---|---|
-| **S2-0** | **先建评测基线**（100 条内金标 query + precision@k / MRR），**改召回前必须已存在** | 红队原话：「'RRF 更好'无评测支撑」 | baseline 数字落盘；后续任何排序改动与之 A/B 对照 |
-| **S2-1** | 四通道 **RRF 融合**：`summon/guide/resonate/wiki` 进同一 RRF 池（复用已验证的 `wiki/wiki_bm25.py: rrf_fuse`，k=60），统一 top_k | `palace.py:180-250` 四路**各自独立返回、不融合、无统一截断** | 同一 query 返回**单一融合排序**；金标 precision@3 **不低于** baseline（有数字） |
-| **S2-2** | 候选-重排两阶段：各通道取 top-50 候选 → RRF 融合 → 取 top-20；rerank **默认关闭**（可开关） | 现状无候选池概念 | 候选池可配置；rerank 开关默认 off，不引入未验证行为 |
+| **S2-0** | **Build the evaluation baseline first** (≤100 gold-label queries + precision@k / MRR); **must exist before touching recall** | Red team's own words: "'RRF is better' has no evaluation backing it" | Baseline numbers committed; any future ranking change gets an A/B comparison against it |
+| **S2-1** | Four-channel **RRF fusion**: `summon/guide/resonate/wiki` merged into one RRF pool (reusing the already-verified `wiki/wiki_bm25.py: rrf_fuse`, k=60), unified top_k | `palace.py:180-250` currently returns the four channels **independently, unfused, with no unified cutoff** | The same query returns a **single fused ranking**; gold-label precision@3 is **no worse than** baseline (with numbers) |
+| **S2-2** | Two-stage candidate-then-rerank: each channel takes top-50 candidates → RRF fusion → top-20; rerank **off by default** (toggleable) | Currently there's no candidate-pool concept at all | Candidate pool is configurable; rerank toggle defaults to off, no unverified behavior introduced |
 
-### S3 · 治理层 —— 用户钦定的「分层 + 流程」
+### S3 · Governance layer — the "layering + process" the user mandated
 
-| # | 改造 | 判据 |
+| # | Change | Criterion |
 |---|---|---|
-| **S3-1** | **记忆分层模型 L0-L4 + 横切产出物索引**写进 `openspec/specs/`（活规格）；写入侧给出**落层判定**（可执行，不是文档） | 每层有载体 + 写规则 + 冲突策略；**一条新记忆能被判定落哪层**（有可运行判定函数） |
-| **S3-2** | **发布流程状态机**：A 本地 → B 测试+反证 → C 真实验证 → D 部署 → E 公开 → F 归纳；脚本 + 状态文件，**未过上一段不进下一段** | 一条命令回答「当前该走哪段」；每段留可复核证据行；本次发布回填为第一个样本 |
-| **S3-3** | **产出物指针策略**：交付=箱子 / 检索=Wiki / 版本=仓库；记忆只放**指针 + 指纹** | 从记忆条目一步跳到实体（路径 / URL / sha256） |
+| **S3-1** | **Memory layering model L0-L4 + cross-cutting artifact index** written into `openspec/specs/` (living spec); write path gets a **layering decision** (executable, not just documentation) | Every layer has a carrier + write rule + conflict policy; **a new memory can be assigned a layer** (there's a runnable decision function) |
+| **S3-2** | **Release process state machine**: A local → B test + falsification → C real-world verification → D deploy → E public → F retrospective; script + state file, **can't advance past a stage until the previous one is cleared** | One command answers "what stage are we at now"; every stage leaves auditable evidence; this release becomes the first sample |
+| **S3-3** | **Artifact pointer policy**: deliverables = box / retrieval = Wiki / versioning = repo; memory only holds **pointer + fingerprint** | One hop from a memory entry to the entity (path / URL / sha256) |
 
-## 3. 不改什么（Out of Scope）—— 写进 ADR-0002 并带触发器
+## 3. Out of scope — written into ADR-0002 with triggers
 
-`memory_inode` 元数据拆表 · `memory_wal` 应用层日志 · `archive_directory` 档号目录树 · 块级快照回滚 · 配额系统 · 多租户隔离重构 · 内容/embedding 物理分离 · 页缓存调优 · defrag · 向量时钟
+`memory_inode` metadata table split · `memory_wal` application-layer journal · `archive_directory`
+accession-number directory tree · block-level snapshot rollback · quota system · multi-tenancy isolation
+refactor · content/embedding physical separation · page cache tuning · defrag · vector clocks
 
-**触发器（未触发不得新增上述机制）**：
-1. `memories` 单表 **> 500 万行**；或
-2. 正文平均 **> 4KB**；或
-3. 真实出现**第二个租户**需求（非同名收敛）。
+**Triggers (none of the above may be added until triggered)**:
+1. The `memories` table exceeds **5 million rows**; or
+2. Average body size exceeds **4KB**; or
+3. A real second tenant appears (not just name convergence).
 
-> 依据：前一轮红队 6 条质疑 + 报告自设边界。**"暂缓"必须可判定，否则等于没暂缓。**
+> Basis: the previous round's 6 red-team objections + the report's own self-imposed boundaries.
+> **"Deferred" must be judgeable, otherwise it isn't actually deferred.**
 
-另外明确不做（历史决策）：GUI 客户端 · Docker 方案（2026-08-11 已否决）· 自研向量索引。
+Also explicitly not doing (historical decisions): GUI client · Docker approach (rejected 2026-08-11) ·
+in-house vector index.
 
-## 4. 验收标准（三段，全过才算成）
+## 4. Acceptance criteria (three stages, all must pass)
 
-| 段 | 标准 |
+| Stage | Criteria |
 |---|---|
-| **A 本地** | ① 全量用例绿（183 → 新增后 ≥190）② 每个新机制有**反证测试**（造违规样本证明它真能拦住）③ 契约测试锁住 MCP 桥 / Provider 14 工具形态 ④ 红队复核通过 |
-| **B 真实环境** | ① 备份先行且验证可恢复 ② 最小覆盖部署 ③ 服务**自报版号**与仓库一致 ④ 端点实测（写入/召回/GC 干跑） |
-| **C 公开** | ① 版本三处一致（VERSION / README badge / CHANGELOG）② 隐私两层扫描**零输出** ③ 独立 clone 复扫 ④ tag + Release 非草稿 |
+| **A Local** | ① Full test suite green (183 → ≥190 after additions) ② every new mechanism has a **falsification test** (construct a violating sample and prove it's actually blocked) ③ contract tests lock the MCP bridge / Provider's 14-tool shape ④ red-team review passed |
+| **B Real environment** | ① backup runs first and restorability is verified ② minimal-footprint deploy ③ the service **self-reports its version** consistent with the repo ④ endpoints measured live (write/recall/GC dry-run) |
+| **C Public** | ① version consistent in three places (VERSION / README badge / CHANGELOG) ② both privacy scan layers produce **zero output** ③ re-scanned on an independent clone ④ tag + non-draft Release |
 
-**发布顺序不可颠倒**：**先部署 GZ 且验稳 → 才 tag/push/Release**。（颠倒 = 「文档写了、实际没跑」的 404 死链根源，实测踩过。）
+**The release order cannot be reversed**: **deploy to GZ and verify stability first → only then tag/push/Release**.
+(Reversing this is the root cause of "documentation says it but it never actually ran" 404 dead links — this has bitten us for real.)
 
-## 5. 推进顺序（今天）
+## 5. Execution order (today)
 
 ```
-① 立项（本提案 + ADR-0002）
-② 专家组并行研究（对标 / 红队 / 评测设计 / 架构评审）→ 回灌方案
-③ S1-1+S1-2 实现（原子 + 幂等）→ 测试反证
-④ S2-0 评测基线建立（先量后改）→ ⑤ S2-1/S2-2 融合（A/B 对照）
-⑥ S1-3 GC + S1-4 可观测
-⑦ S3 治理三件（分层规格 / 发布状态机 / 产出物指针）
-⑧ B 段：部署 GZ + 复验 → ⑨ C 段：tag/Release v8.0
-⑩ F 段：归纳（CHANGELOG / PROJECT / 交付三件套 / 记忆归档）
+① Kickoff (this proposal + ADR-0002)
+② Expert panel parallel research (benchmarking / red-team / eval design / architecture review) → feed back into the plan
+③ S1-1+S1-2 implementation (atomicity + idempotency) → falsification tests
+④ S2-0 build the eval baseline (measure before changing) → ⑤ S2-1/S2-2 fusion (A/B comparison)
+⑥ S1-3 GC + S1-4 observability
+⑦ S3 governance trio (layering spec / release state machine / artifact pointers)
+⑧ Stage B: deploy to GZ + re-verify → ⑨ Stage C: tag/Release v8.0
+⑩ Stage F: retrospective (CHANGELOG / PROJECT / delivery trio / memory archival)
 ```
 
-## 6. 依据（真实指针，可复核）
+## 6. Basis (real pointers, can be re-checked)
 
-- 原报告：《记忆文件系统 · 统一架构研究报告》（193 KB，20 维映射 + 附录 A 代码审计 + 附录 B 原理） —— 内部保管位置见 Mnemosyne 档号 #20077 会话记录（公开仓库不写本机路径）
-- 议题池：`~/gcat-std/openspec/changes/2026-09-24-memory-os-v8-agenda/proposal.md`（P-20260924-04）
-- 箱子：`记忆分层模型_v1_据口述整理_2026-09-24.html` · `记忆系统8.0_专家团评估_双击看_2026-09-24.html`
-- 前一轮工作区：`~/memfs-8.0-team/`（章程 + 12 份交付物）
-- 代码锚点：`main.py:778-836` · `palace.py:180-250` · `wiki/wiki_bm25.py` · `docs/schema.sql:301-344`
-- 三方实测：2026-09-25 06:14（本地 `bf9ebb2`/7.8.4 · GitHub Release v7.8.4 · GZ 运行 7.8.3）
+- Original report: "Memory Filesystem · Unified Architecture Research Report" (193 KB, 20-dimension mapping + Appendix A code audit + Appendix B principles) — internal storage location is in the Mnemosyne accession #20077 session record (the public repo does not record local machine paths)
+- Agenda pool: `~/gcat-std/openspec/changes/2026-09-24-memory-os-v8-agenda/proposal.md` (P-20260924-04)
+- Box docs: `Memory-Layering-Model_v1_from-dictation_2026-09-24.html` · `Memory-System-8.0_Expert-Panel-Assessment_double-click-to-view_2026-09-24.html`
+- Previous round's workspace: `~/memfs-8.0-team/` (charter + 12 deliverables)
+- Code anchors: `main.py:778-836` · `palace.py:180-250` · `wiki/wiki_bm25.py` · `docs/schema.sql:301-344`
+- Three-way measurement: 2026-09-25 06:14 (local `bf9ebb2`/7.8.4 · GitHub Release v7.8.4 · GZ running 7.8.3)
 
-## 7. 待用户拍板（不阻塞本次实施，但需知悉）
+## 7. Pending user decisions (not blocking this implementation, but need to be known)
 
-1. ~~清 lme_eval 垃圾 / 冻结生产 .git / 补 v7.8.3 tag~~ —— **已于 09-23 执行完毕**
-2. **S1-3 GC 会物理删数据** —— 保留窗口定 **30 天**（可调），删前导出 CSV 回滚凭证，干跑默认开启
-3. **A8 存量脱敏清史**（force push / 重建 tag）—— **破坏性动作，本次不做**，仍挂账
-4. **A7 Hermes 内核压缩回写缺陷** —— 本次只做「取证闭环」（0 风险），不改内核
+1. ~~Clean up lme_eval junk / freeze production .git / backfill v7.8.3 tag~~ — **already done on 09-23**
+2. **S1-3 GC physically deletes data** — retention window set to **30 days** (adjustable), a CSV rollback receipt is exported before deletion, dry-run is on by default
+3. **A8 bulk historical de-identification / history rewrite** (force push / rebuild tags) — **a destructive action, not done in this round**, still on the backlog
+4. **A7 Hermes core compression write-back defect** — this round only does "fact-finding closure" (zero risk), the core itself is not modified

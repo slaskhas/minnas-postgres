@@ -1,21 +1,26 @@
 #!/usr/bin/env python3
 """
-汇报卡 — 把"交付级汇报"从会话里抽出来, 结构化留存 + 可选入记忆宫殿
+Report cards — extract "deliverable-grade reports" out of sessions, keep them as
+structured records, and optionally push them into the Memory Palace
 
-为什么: 收尾汇报是每轮任务最浓缩的成果, 但会话级归档把整场会话揉成一条记忆,
-汇报里的**交付物绝对路径 / URL / 哈希 / 实测数字**在语义层查不到。
-本工具把这些要素单独抽成"汇报卡"(证据层留原文摘录, 语义层留可召回条目)。
+Why: the final report is the most concentrated output of each task round, but
+session-level archiving mashes the whole session into one memory, so the report's
+**absolute deliverable paths / URLs / hashes / measured numbers** can't be found at the
+semantic-search layer.
+This tool extracts those elements separately into a "report card" (the evidence layer
+keeps a verbatim excerpt; the semantic layer keeps a retrievable entry).
 
-用法:
-  python3 report_card.py --session-id ID            # 抽取单个会话的卡(只落本地)
-  python3 report_card.py --last 5 --push            # 抽最近5场的卡并推入记忆宫殿
-  python3 report_card.py --last 1 --dry-run         # 只看会抽到什么, 不写入
-  python3 report_card.py --list                     # 列出已抽到的卡
+Usage:
+  python3 report_card.py --session-id ID            # extract the card for a single session (local only)
+  python3 report_card.py --last 5 --push            # extract cards for the last 5 sessions and push them into the Memory Palace
+  python3 report_card.py --last 1 --dry-run         # preview what would be extracted, write nothing
+  python3 report_card.py --list                     # list extracted cards
 
-落点: ~/.hermes/reports/cards.jsonl (一行一张卡) + .index.json (去重索引)
-入宫: POST /api/v1/memories {user_id, content, category='worklog'}
-      category 取自 capabilities 受控词表(knowledge|pitfall|reference|project|ops|deploy|
-      preference|session|worklog|temp) —— **不许自造**, 否则服务端静默归一化为 knowledge。
+Output: ~/.hermes/reports/cards.jsonl (one card per line) + .index.json (dedup index)
+Push target: POST /api/v1/memories {user_id, content, category='worklog'}
+      category is drawn from the capabilities controlled vocabulary (knowledge|pitfall|reference|
+      project|ops|deploy|preference|session|worklog|temp) — **never invent your own**, or the
+      server will silently normalize it to knowledge.
 """
 import argparse
 import hashlib
@@ -34,24 +39,27 @@ INDEX_FILE = os.path.join(REPORTS_DIR, ".index.json")
 MNEMOSYNE_MEMORIES_API = os.environ.get(
     "MNEMOSYNE_MEMORIES_API", "http://127.0.0.1:18010/api/v1/memories")
 
-# capabilities 受控词表(权威: GET /api/v1/capabilities) —— 只许取这里面的值
+# capabilities controlled vocabulary (authoritative: GET /api/v1/capabilities) —— only
+# values from this list are allowed
 CONTROLLED_CATEGORIES = frozenset([
     "knowledge", "pitfall", "reference", "project", "ops",
     "deploy", "preference", "session", "worklog", "temp",
 ])
-CATEGORY = "worklog"          # 汇报卡归类: 工作产出记录
-assert CATEGORY in CONTROLLED_CATEGORIES, "汇报卡 category 必须在受控词表内"
+CATEGORY = "worklog"          # report-card category: work-output record
+assert CATEGORY in CONTROLLED_CATEGORIES, "report-card category must be in the controlled vocabulary"
 
-EXCERPT = 1500                # 原文摘录上限
-MAX_SIG_LEN = 160             # 单个信号片段上限(防把整段 diff 输出当"路径")
-FINAL_LOOKBACK = 3            # final 模式向前回看条数(会话常以一句简短收尾结束, 汇报在其前面)
-THRESHOLD_SCAN = 3            # scan 模式: 信号种类下限(实测 >=2 太松: 3 场会话抽出 66 张卡 → 污染记忆)
-STRICT_KINDS = ("收尾语", "哈希", "校验语", "路径")   # scan 模式必须至少命中其一
+EXCERPT = 1500                # cap on the verbatim excerpt
+MAX_SIG_LEN = 160             # cap on a single signal fragment (prevents treating a whole diff dump as a "path")
+FINAL_LOOKBACK = 3            # how many messages "final" mode looks back (sessions often end on a short closing line, with the report just before it)
+THRESHOLD_SCAN = 3            # "scan" mode: minimum number of distinct signal kinds (measured: >=2 is too loose — 3 sessions produced 66 cards → polluted memory)
+STRICT_KINDS = ("收尾语", "哈希", "校验语", "路径")   # "scan" mode must hit at least one of these
 REPORT_TAIL = "汇报完毕请指示"
 
-# 信号定义: 交付要素 —— 有这些东西的 AI 消息 = 交付级汇报, 不是普通闲聊
+# Signal definitions: deliverable elements —— an AI message containing these = a
+# deliverable-grade report, not idle chat
 SIGNALS = [
-    # 排除反斜杠/加号/反引号: 工具输出的 `\n` 转义与 diff 的 `+++` 会被误当路径(实测踩到)
+    # Backslash/plus/backtick are excluded: tool-output `\n` escapes and diff `+++` lines
+    # were getting misdetected as paths (hit this in practice)
     ("路径", re.compile(r"[A-Za-z]:\\[^\s\"'，。；）)\]`+]+")),
     ("路径", re.compile(r"/(?:home|mnt|opt|var|etc|usr|srv|root|tmp)/[^\s\"'，。；）)\]`+\\]+")),
     ("URL", re.compile(r"https?://[^\s\"'，。；）)\]]+")),
@@ -63,7 +71,7 @@ SIGNALS = [
 
 
 def extract_signals(text: str) -> dict:
-    """按信号类型归组抽取(保序去重), 返回 {信号名: [命中片段...]}"""
+    """Extract and group by signal type (order-preserving dedup), returning {signal_name: [matched fragments...]}"""
     out = {}
     for name, rx in SIGNALS:
         hits = []
@@ -78,12 +86,16 @@ def extract_signals(text: str) -> dict:
 
 
 def is_report_card(text: str, signals: dict | None = None, mode: str = "final") -> bool:
-    """判定是否交付级汇报。
+    """Determine whether this is a deliverable-grade report.
 
-    mode="final"(默认): 收尾汇报 —— 每场会话只取**最后一条** AI 消息, 命中任一交付要素即算。
-                        (用户的定义: "你每干完一个事不都会做一个汇报吗")
-    mode="scan":  全会话扫描, 门槛更严: >=3 类信号 **且** 至少一类是交付证据(路径/哈希/校验/收尾语)。
-    mode="all":   最宽(>=2 类), 只用于分析, 别用于入库。
+    mode="final" (default): the final report —— for each session, only look at the
+                        **last** AI message; hitting any one deliverable element counts.
+                        (per the user's definition: "don't you always write a report
+                        after finishing something?")
+    mode="scan":  scan the whole session, stricter threshold: >=3 signal kinds **and**
+                        at least one of them is deliverable evidence (path/hash/
+                        verification/closing phrase).
+    mode="all":   loosest (>=2 kinds), analysis only — don't use this for storage.
     """
     signals = signals if signals is not None else extract_signals(text)
     kinds = [k for k, v in signals.items() if v]
@@ -102,7 +114,7 @@ def message_time(ts) -> str:
 
 
 def build_card(msg: dict, signals: dict | None = None) -> dict:
-    """把一条消息变成汇报卡(dict, 可直接 json.dumps)"""
+    """Turn a message into a report card (a dict, directly json.dumps-able)"""
     content = (msg.get("content") or "").strip()
     signals = signals if signals is not None else extract_signals(content)
     card = {
@@ -121,13 +133,13 @@ def build_card(msg: dict, signals: dict | None = None) -> dict:
 
 
 def card_digest(card: dict) -> str:
-    """卡片指纹(去重用): 会话+消息+原文, 与时间无关"""
+    """Card fingerprint (for dedup): session + message + verbatim text, independent of time"""
     raw = f"{card['session_id']}|{card['msg_id']}|{card['excerpt']}"
     return hashlib.sha256(raw.encode()).hexdigest()[:32]
 
 
 def card_text(card: dict) -> str:
-    """推入记忆宫殿的正文(人类可读 + 可被语义检索)"""
+    """The body pushed into the Memory Palace (human-readable + semantically searchable)"""
     parts = [f"[汇报卡] {card['session_id']} · msg#{card['msg_id']} · {card['time']}",
              "信号: " + ", ".join(f"{k}×{v}" for k, v in card["signals"].items())]
     if card["paths"]:
@@ -164,7 +176,7 @@ def append_cards(cards: list):
 
 
 def push_card(card: dict) -> dict:
-    """入宫: POST /api/v1/memories (json body + 受控 category)"""
+    """Push into the Memory Palace: POST /api/v1/memories (json body + controlled category)"""
     payload = json.dumps({
         "user_id": "default",
         "content": card_text(card),
@@ -182,10 +194,10 @@ def push_card(card: dict) -> dict:
 
 def fetch_report_messages(db_path: str, session_id: str | None = None, last: int = 1,
                           mode: str = "final", max_per_session: int = 3) -> list:
-    """取候选 AI 消息(带正文), 按会话时间倒序
+    """Fetch candidate AI messages (with body text), newest session first
 
-    mode="final": 每场会话只取最后一条有正文的 AI 消息(收尾汇报)。
-    其他模式: 全扫, 命中门槛由 is_report_card 决定, 每会话最多 max_per_session 张。
+    mode="final": for each session, only take the last AI message that has body text (the final report).
+    Other modes: scan everything; the hit threshold is decided by is_report_card, up to max_per_session cards per session.
     """
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
@@ -200,12 +212,14 @@ def fetch_report_messages(db_path: str, session_id: str | None = None, last: int
     out = []
     for sid in sids:
         msgs = conn.execute(
-            # 只认 assistant 本体的发言: role='tool' 是工具回显, 会把 diff/日志当交付物(实测踩到)
+            # Only count the assistant's own speech: role='tool' is tool echo output,
+            # which would get mistaken for deliverable diffs/logs (hit this in practice)
             "SELECT id, session_id, role, content, timestamp FROM messages "
             "WHERE session_id=? AND active=1 AND role='assistant' AND content!='' ORDER BY id",
             (sid,)).fetchall()
         if mode == "final":
-            # 向前回看最多 FINAL_LOOKBACK 条, 取**最近一条**含交付要素的消息(汇报常不在最后一句)
+            # Look back up to FINAL_LOOKBACK messages, taking the **most recent** message
+            # that contains a deliverable element (the report is often not the very last line)
             for m in reversed(msgs[-FINAL_LOOKBACK:]):
                 txt = m["content"] or ""
                 if not txt.strip():
@@ -230,7 +244,7 @@ def fetch_report_messages(db_path: str, session_id: str | None = None, last: int
 
 def run(db_path: str, session_id: str | None = None, last: int = 1,
         push: bool = False, dry_run: bool = False, mode: str = "final") -> dict:
-    """主流程: 抽卡 → 落本地 → 可选入宫。返回统计。"""
+    """Main flow: extract cards → write locally → optionally push into the Memory Palace. Returns stats."""
     idx = load_index()
     found = fetch_report_messages(db_path, session_id, last, mode)
     fresh, dup = [], 0
@@ -265,7 +279,7 @@ def run(db_path: str, session_id: str | None = None, last: int = 1,
                                     "ok": ok, "session_id": c["session_id"], "msg_id": c["msg_id"]}
                 result["pushed"] += 1 if ok else 0
         else:
-            for c in fresh:   # 只落本地也要记索引, 避免重复抽
+            for c in fresh:   # even local-only runs need to record the index, to avoid re-extracting
                 idx[c["digest"]] = {"pushed_at": None, "session_id": c["session_id"],
                                     "msg_id": c["msg_id"], "ok": False}
         save_index(idx)
@@ -273,27 +287,27 @@ def run(db_path: str, session_id: str | None = None, last: int = 1,
 
 
 if __name__ == "__main__":
-    ap = argparse.ArgumentParser(description="汇报卡抽取 → 本地 JSONL + 记忆宫殿")
-    ap.add_argument("--session-id", help="指定会话")
-    ap.add_argument("--last", type=int, default=1, help="最近 N 场会话(默认1)")
-    ap.add_argument("--push", action="store_true", help="推入记忆宫殿(category=worklog)")
-    ap.add_argument("--dry-run", action="store_true", help="只预览, 不写任何东西")
+    ap = argparse.ArgumentParser(description="Report-card extraction → local JSONL + Memory Palace")
+    ap.add_argument("--session-id", help="a specific session")
+    ap.add_argument("--last", type=int, default=1, help="the last N sessions (default 1)")
+    ap.add_argument("--push", action="store_true", help="push into the Memory Palace (category=worklog)")
+    ap.add_argument("--dry-run", action="store_true", help="preview only, write nothing")
     ap.add_argument("--mode", choices=["final", "scan", "all"], default="final",
-                    help="final=每会话只取收尾汇报(默认); scan=全扫(严); all=最宽(仅分析)")
-    ap.add_argument("--list", action="store_true", help="列出已抽到的卡")
-    ap.add_argument("--db", default=HERMES_DB, help="state.db 路径(测试用)")
+                    help="final=only the final report per session (default); scan=full scan (strict); all=loosest (analysis only)")
+    ap.add_argument("--list", action="store_true", help="list already-extracted cards")
+    ap.add_argument("--db", default=HERMES_DB, help="path to state.db (for testing)")
     args = ap.parse_args()
 
     if args.list:
         idx = load_index()
         if not os.path.exists(CARDS_FILE):
-            print("(还没有卡)")
+            print("(no cards yet)")
             sys.exit(0)
         with open(CARDS_FILE) as f:
             for line in f:
                 c = json.loads(line)
                 print(f"  msg#{c['msg_id']:<7} {c['time']}  {c['session_id'][:22]}  "
-                      f"信号:{','.join(c['signals'])}  入宫:{'是' if idx.get(c.get('digest'), {}).get('pushed_at') else '否'}")
+                      f"signals:{','.join(c['signals'])}  pushed:{'yes' if idx.get(c.get('digest'), {}).get('pushed_at') else 'no'}")
         sys.exit(0)
 
     out = run(args.db, args.session_id, args.last, args.push, args.dry_run, args.mode)

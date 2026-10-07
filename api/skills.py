@@ -1,7 +1,8 @@
 """
-Mnemosyne v7.7.0 — 程序性记忆翼 (技能资产 API)
-技能 = 可执行记忆, 与陈述性记忆并列, 共享分层/热度/召唤体系, 自有状态机(对齐 curator)
-状态: active / stale / archived — 永不 DELETE, 只流转
+Mnemosyne v7.7.0 — Procedural Memory Wing (skill assets API)
+Skill = executable memory, sitting alongside declarative memory, sharing the
+layering/heat/recall system, with its own state machine (aligned with curator)
+States: active / stale / archived — never DELETEd, only transitioned
 """
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -41,13 +42,15 @@ class SkillSearchRequest(BaseModel):
 
 @router.post("/sync")
 async def sync_skills(req: SkillSyncRequest):
-    """批量同步技能资产 (幂等 upsert, skill_sync.py 调用)
-    描述非空 → 计算 embedding; 描述为空 → 用 skill_name+category 兜底计算 (防失联)
-    单条 embedding 失败 → 该条跳过(保留已有), 不影响成功条目"""
+    """Batch-sync skill assets (idempotent upsert, called by skill_sync.py)
+    Non-empty description → compute embedding; empty description → fall back to
+    skill_name+category (avoids an un-embeddable skill)
+    A single item's embedding failing → that item is skipped (keeps its existing
+    value), doesn't affect the successful ones"""
     if not req.skills:
         return {"synced": 0, "updated": 0, "new": 0}
     from core.embedding import get_embedding_async
-    # 批量算 embedding: 描述优先, 空描述用 name+category 兜底
+    # Batch-compute embeddings: description preferred, empty description falls back to name+category
     desc_map = {}
     for s in req.skills:
         text = s.description.strip() if s.description.strip() else f"{s.skill_name} {s.category}"
@@ -66,7 +69,7 @@ async def sync_skills(req: SkillSyncRequest):
     from datetime import datetime, timezone
 
     def _dt(v):
-        """ISO 字符串 → datetime (容错)"""
+        """ISO string → datetime (fault-tolerant)"""
         if not v:
             return None
         try:
@@ -118,13 +121,15 @@ async def sync_skills(req: SkillSyncRequest):
 
 @router.post("/search")
 async def search_skills(req: SkillSearchRequest):
-    """语义召唤技能 (含沉寂/归档): 向量 + BM25 双通道 RRF 融合 + 状态权重
-    对齐 wiki search 模式: 向量候选池 → BM25 补强 → 状态标注
-    状态权重: active×1.0 / stale×0.85 / archived×0.7 (沉寂可唤醒, 活跃优先)"""
+    """Semantically recall skills (including dormant/archived): vector + BM25
+    dual-channel RRF fusion + state weighting
+    Aligned with wiki search mode: vector candidate pool → BM25 boost → state tagging
+    State weights: active×1.0 / stale×0.85 / archived×0.7 (dormant skills are
+    wakeable, active ones preferred)"""
     from core.embedding import get_embedding_async
 
     STATE_WEIGHT = {"active": 1.0, "stale": 0.85, "archived": 0.7}
-    # 向量通道
+    # Vector channel
     r_q = (await get_embedding_async([req.query]))[0]
     q_str = "[" + ",".join(str(x) for x in r_q) + "]"
     async with pool.acquire() as conn:
@@ -140,7 +145,7 @@ async def search_skills(req: SkillSearchRequest):
         )
         vec_ranked = [(r["id"], r["dist"]) for r in rows]
 
-        # BM25 通道 (jieba 分词, 租户隔离)
+        # BM25 channel (jieba tokenization, tenant-isolated)
         bm25_scores = {}
         try:
             import jieba
@@ -169,7 +174,7 @@ async def search_skills(req: SkillSearchRequest):
         except Exception:
             bm25_scores = {}
 
-        # RRF 融合 + 状态权重
+        # RRF fusion + state weighting
         from wiki.wiki_bm25 import rrf_fuse
         fused = rrf_fuse(vec_ranked, bm25_scores) if (bm25_scores or vec_ranked) else []
         id2row = {r["id"]: r for r in rows}
@@ -199,7 +204,7 @@ async def search_skills(req: SkillSearchRequest):
 
 @router.patch("/{skill_name}")
 async def update_skill_state(skill_name: str, body: dict):
-    """状态流转 (唤醒/降级): body={"state": "active", "reason": "..."}"""
+    """State transition (wake/downgrade): body={"state": "active", "reason": "..."}"""
     state = (body or {}).get("state", "")
     if state not in ("active", "stale", "archived"):
         raise HTTPException(400, "无效状态: " + str(state))
@@ -218,7 +223,7 @@ async def update_skill_state(skill_name: str, body: dict):
 
 @router.post("/{skill_name}/touch")
 async def touch_skill(skill_name: str):
-    """使用回馈: 召唤命中/加载时调用, 使用即升温"""
+    """Usage feedback: called on a recall hit/load, using a skill warms it up"""
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
             """UPDATE skill_assets

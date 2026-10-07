@@ -1,14 +1,14 @@
-"""v7.4 WIKI 知识图谱 — 纯函数逻辑测试 (不依赖 DB)
+"""v7.4 WIKI knowledge graph — pure logic tests (no DB dependency)
 
-覆盖: 幂等判定 (同hash→exists / 异hash→updated) + 指纹计算 + 抽取结果解析。
-生产逻辑同源复制 (见 main.py create_wiki_page / scripts/md_ingest.py file_hash)。
+Coverage: idempotency decisions (same hash→exists / different hash→updated) + fingerprint computation + extraction-result parsing.
+Copied from the same logic as production (see main.py create_wiki_page / scripts/md_ingest.py file_hash).
 """
 import hashlib
 import json
 
 
 def file_hash(path: str) -> str:
-    """与 scripts/md_ingest.py 同源"""
+    """Same logic as scripts/md_ingest.py"""
     h = hashlib.sha256()
     with open(path, "rb") as f:
         for chunk in iter(lambda: f.read(65536), b""):
@@ -17,7 +17,7 @@ def file_hash(path: str) -> str:
 
 
 def decide_status(existing_hash: str, new_hash: str) -> str:
-    """幂等判定 (同源同hash→exists / 异hash→updated / 无存量→created)"""
+    """Idempotency decision (same source + same hash→exists / different hash→updated / no existing record→created)"""
     if not existing_hash:
         return "created"
     if existing_hash == new_hash:
@@ -26,7 +26,7 @@ def decide_status(existing_hash: str, new_hash: str) -> str:
 
 
 def parse_extract_output(raw) -> dict:
-    """解析 LLM 抽取输出 (兼容 str/dict)"""
+    """Parses the LLM extraction output (handles both str/dict)"""
     if isinstance(raw, str):
         data = json.loads(raw)
     elif isinstance(raw, dict):

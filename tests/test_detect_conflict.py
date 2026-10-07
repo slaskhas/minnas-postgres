@@ -1,28 +1,28 @@
 """
-test_detect_conflict.py — 矛盾检测 6 用例
+test_detect_conflict.py — 6 conflict-detection cases
 """
 import pytest
 import sys
 sys.path.insert(0, ".")
 
-# 不连数据库，纯测逻辑：直接测 text_diff_ratio + 手工构造 mock 数据
+# No DB connection, pure logic test: directly tests text_diff_ratio + hand-built mock data
 
 
 def test_text_diff_identical():
-    """完全相同文本 → ratio = 1.0"""
+    """Identical text → ratio = 1.0"""
     from main import text_diff_ratio
     assert text_diff_ratio("hello world", "hello world") == 1.0
 
 
 def test_text_diff_different():
-    """完全不同文本 → ratio < 0.5"""
+    """Completely different text → ratio < 0.5"""
     from main import text_diff_ratio
     r = text_diff_ratio("hello world", "postgresql index optimization")
     assert r < 0.5
 
 
 def test_text_diff_similar():
-    """相似文本 → 0.5~0.85"""
+    """Similar text → 0.5~0.85"""
     from main import text_diff_ratio
     r = text_diff_ratio(
         "HNSW index has better recall than IVFFlat",
@@ -32,32 +32,33 @@ def test_text_diff_similar():
 
 
 def test_detect_conflict_merge():
-    """向量距离 < 0.12 + 文本相似 > 0.85 → action=merge"""
-    # 通过检查 text_diff_ratio 逻辑验证
+    """Vector distance < 0.12 + text similarity > 0.85 → action=merge"""
+    # Verified by checking the text_diff_ratio logic
     from main import text_diff_ratio
     r = text_diff_ratio(
         "pgvector HNSW index is faster",
         "pgvector HNSW index is faster"
     )
-    assert r > 0.85  # 满足 merge 条件
+    assert r > 0.85  # satisfies the merge condition
 
 
 def test_detect_conflict_conflict():
-    """向量距离 < 0.12 + 文本相似 < 0.5 → action=conflict"""
+    """Vector distance < 0.12 + text similarity < 0.5 → action=conflict"""
     from main import text_diff_ratio
     r = text_diff_ratio(
         "HNSW is the best index",
         "IVFFlat is actually better for low dimensions"
     )
-    # 语义相似（同类话题）但内容矛盾 → ratio 应该 < 0.5
+    # Semantically similar (same topic) but contradictory content → ratio should be < 0.5
     assert r < 0.5
 
 
 def test_detect_conflict_fresh():
-    """向量距离 > 0.15 → action=fresh（直接跳过，不看文本）"""
-    # 这是纯逻辑：dist > 0.15 → continue → 最终返回 fresh
-    # 无需 mock，逻辑层面验证即可
+    """Vector distance > 0.15 → action=fresh (skipped directly, text not examined)"""
+    # This is pure logic: dist > 0.15 → continue → ultimately returns fresh
+    # No mock needed, verifying at the logic level is sufficient
     from main import detect_conflict
     assert callable(detect_conflict)
-    # 实际 mock 测试太复杂（需要 async/await mock），
-    # 此处验证函数可导入 + 逻辑分支覆盖已在上面文本测试中保证
+    # A real mock test would be too complex (needs async/await mocking);
+    # here we just verify the function is importable + the branch coverage is
+    # already guaranteed by the text tests above

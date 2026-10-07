@@ -1,8 +1,8 @@
 """
-test_recall.py — 长期记忆保持率测试
+test_recall.py — long-term memory retention test
 
-场景: 验证记忆随时间的检索精度
-不连真实 PG，用确定性逻辑验证
+Scenario: verify retrieval accuracy of memories over time
+Does not connect to a real PG; verified with deterministic logic
 """
 import pytest
 import sys
@@ -10,25 +10,25 @@ sys.path.insert(0, ".")
 
 
 def test_temporal_sql_decay_7days():
-    """7天内记忆: 权重 0.15"""
+    """Memory within 7 days: weight 0.15"""
     sql = "CASE WHEN m.created_at > NOW() - INTERVAL '7 days' THEN 0.15"
     assert "0.15" in sql
 
 
 def test_temporal_sql_decay_30days():
-    """30天内记忆: 权重 0.08"""
+    """Memory within 30 days: weight 0.08"""
     sql = "WHEN m.created_at > NOW() - INTERVAL '30 days' THEN 0.08"
     assert "0.08" in sql
 
 
 def test_temporal_sql_old():
-    """超过30天: 权重 0"""
+    """Beyond 30 days: weight 0"""
     sql = "ELSE 0 END"
     assert "ELSE 0" in sql or "ELSE 0 END" in sql
 
 
 def test_five_dimension_weights_sum():
-    """五维权重之和应接近 1.0"""
+    """Sum of the five dimension weights should be close to 1.0"""
     weights = {
         "semantic": 0.40,
         "bm25": 0.15,
@@ -41,13 +41,13 @@ def test_five_dimension_weights_sum():
 
 
 def test_architecture_has_memory_hierarchy():
-    """验证架构存在层级记忆结构"""
+    """Verify the architecture has a tiered memory structure"""
     with open("main.py", "r") as f:
         content = f.read()
-    
-    # TMT 层级
-    assert "L1" in content or "tier" in content, "应有记忆层级"
-    # 宫殿(三馆 v5.0 已切除, v7.8 起为宫殿体系)
-    assert "palace" in content or "summon" in content, "应有宫殿检索体系"
-    # 时间衰减
-    assert "INTERVAL" in content, "应有时间衰减机制"
+
+    # TMT tiers
+    assert "L1" in content or "tier" in content, "should have memory tiers"
+    # Palace (the three-hall model was removed in v5.0; palace system since v7.8)
+    assert "palace" in content or "summon" in content, "should have a palace retrieval system"
+    # Temporal decay
+    assert "INTERVAL" in content, "should have a temporal decay mechanism"

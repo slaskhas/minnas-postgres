@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """
-skill_tokenize.py — 技能描述 jieba 分词 → skill_keywords (v7.7.0 BM25 通道)
-对齐 wiki_tokenize 模式: 标题(技能名)权重 ×3, 描述 ×1, 过滤单字/停用词。
-用法:
-  PGDATABASE=xxx python3 skill_tokenize.py            # 增量
-  PGDATABASE=xxx python3 skill_tokenize.py --all      # 全量重建
+skill_tokenize.py — jieba-tokenizes skill descriptions → skill_keywords
+(v7.7.0 BM25 channel)
+Mirrors the wiki_tokenize pattern: title (skill name) weighted ×3,
+description ×1, filters single characters/stopwords.
+Usage:
+  PGDATABASE=xxx python3 skill_tokenize.py            # incremental
+  PGDATABASE=xxx python3 skill_tokenize.py --all      # full rebuild
 """
 import asyncio, os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -37,7 +39,7 @@ async def main(full_rebuild=False):
             "SELECT id, skill_name, description FROM skill_assets WHERE embedding IS NOT NULL")
         total = 0
         for r in rows:
-            # 技能名 ×3, 描述 ×1 (权重编码进 freq)
+            # Skill name ×3, description ×1 (weight encoded into freq)
             name_toks = tokenize(r["skill_name"].replace("-", " "))
             desc_toks = tokenize(r["description"])
             from collections import Counter
@@ -56,7 +58,7 @@ async def main(full_rebuild=False):
                     "VALUES ($1,$2,$3,$4) ON CONFLICT (skill_id, token) DO UPDATE SET freq=$3",
                     r["id"], t, f, "default")
             total += 1
-        print(f"[tokenize] 完成: {total} 技能, 关键词表已更新 (full={full_rebuild})")
+        print(f"[tokenize] done: {total} skills, keyword table updated (full={full_rebuild})")
     finally:
         await conn.close()
 

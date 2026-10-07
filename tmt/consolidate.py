@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-Reflector — Mnemosyne 定时反思引擎 v1.0
+Reflector — Mnemosyne scheduled reflection engine v1.0
 
-用法:
-  python3 reflector.py --mode light    # 每小时执行：热度衰减 + 冗余合并
-  python3 reflector.py --mode deep     # 每天凌晨执行：同上 + 实体提取
+Usage:
+  python3 reflector.py --mode light    # run hourly: heat decay + redundancy merge
+  python3 reflector.py --mode deep     # run nightly: same as above + entity extraction
 
-设计文档: 文件14 §6 Reflector 反思引擎
+Design doc: Document 14 §6 Reflector reflection engine
 """
 
 import argparse
@@ -19,13 +19,13 @@ from datetime import datetime, timezone
 import asyncpg
 import httpx
 
-# ── 配置 ──
+# ── Config ──
 API_BASE = "http://127.0.0.1:8010"
 PG_DSN = "postgresql://postgres@127.0.0.1:5432/mnemosyne"
-# v5.1 — 已迁移到豆包 doubao-embedding-vision-251215
+# v5.1 — migrated to Doubao doubao-embedding-vision-251215
 from core.embedding import get_embedding as _get_embedding
-SIM_THRESHOLD = 0.92  # 余弦相似度 > 此值判为冗余合并
-BATCH_SIZE = 200       # 每批处理的记忆数
+SIM_THRESHOLD = 0.92  # cosine similarity above this is judged redundant and merged
+BATCH_SIZE = 200       # number of memories processed per batch
 
 logging.basicConfig(
     level=logging.INFO,
@@ -35,15 +35,15 @@ logging.basicConfig(
 log = logging.getLogger("reflector")
 
 
-# ── 工具函数 ──
+# ── Utility functions ──
 
 async def get_embedding(text: str) -> list[float]:
-    """v5.1 — 豆包多模态 Embedding (via core.embedding)"""
+    """v5.1 — Doubao multimodal embedding (via core.embedding)"""
     return _get_embedding([text])[0]
 
 
 def cosine_sim(a_raw, b_raw) -> float:
-    """pgvector 类型返回为 JSON 数组字符串 \"[0.014, -0.042, …]"，需反序列化"""
+    """pgvector returns values as a JSON array string "[0.014, -0.042, …]", so it needs deserializing"""
     a = json.loads(a_raw) if isinstance(a_raw, (str, bytes)) else a_raw
     b = json.loads(b_raw) if isinstance(b_raw, (str, bytes)) else b_raw
     dot = sum(x * y for x, y in zip(a, b))
@@ -53,7 +53,7 @@ def cosine_sim(a_raw, b_raw) -> float:
 
 
 def parse_embedding(raw) -> list[float]:
-    """统一将 pgvector 返回值转为 float list"""
+    """Normalize a pgvector return value into a float list"""
     if isinstance(raw, (str, bytes)):
         return json.loads(raw)
     return raw
@@ -66,12 +66,12 @@ async def get_all_users(pool) -> list[str]:
     return [r["user_id"] for r in rows]
 
 
-# ── 冗余检测与合并 ──
+# ── Redundancy detection and merging ──
 
 async def detect_redundancy(pool, user_id: str) -> int:
     """
-    检测余弦相似度 > SIM_THRESHOLD 的记忆对并合并。
-    保留 heat_score 更高的那条，转移 entities，软删另一条。
+    Detect memory pairs with cosine similarity > SIM_THRESHOLD and merge them.
+    Keeps whichever has the higher heat_score, transfers its entities, soft-deletes the other.
     """
     rows = await pool.fetch(
         """SELECT id, content, heat_score
@@ -118,13 +118,13 @@ async def detect_redundancy(pool, user_id: str) -> int:
             if sim < SIM_THRESHOLD:
                 continue
 
-            # 决定保留哪条（高热获胜）
+            # Decide which one to keep (higher heat wins)
             keep_id = rows[i]["id"]
             del_id = rows[j]["id"]
             if rows[j]["heat_score"] > rows[i]["heat_score"]:
                 keep_id, del_id = del_id, keep_id
 
-            # 转移 entities（避免重复）
+            # Transfer entities (avoiding duplicates)
             await pool.execute(
                 """UPDATE memory_entities
                    SET memory_id = $1
@@ -135,7 +135,7 @@ async def detect_redundancy(pool, user_id: str) -> int:
                 keep_id,
                 del_id,
             )
-            # 软删冗余记忆
+            # Soft-delete the redundant memory
             await pool.execute(
                 "UPDATE memories SET is_deleted = TRUE WHERE id = $1",
                 del_id,
@@ -150,13 +150,13 @@ async def detect_redundancy(pool, user_id: str) -> int:
     return merged
 
 
-# ── 运行模式 ──
+# ── Run modes ──
 
 async def run_light(pool, users: list[str]):
-    """Light 模式：热度衰减 + 冗余合并"""
+    """Light mode: heat decay + redundancy merge"""
     for uid in users:
         log.info("[light] Processing user=%s", uid)
-        # 1. 调 reflect API（热度衰减 + 层级迁移）
+        # 1. Call the reflect API (heat decay + tier migration)
         try:
             async with httpx.AsyncClient(timeout=60) as client:
                 r = await client.post(
@@ -170,7 +170,7 @@ async def run_light(pool, users: list[str]):
         except Exception as e:
             log.error("  ├─ reflect API error: %s", e)
 
-        # 2. 冗余检测
+        # 2. Redundancy detection
         n = await detect_redundancy(pool, uid)
         if n:
             log.info("  └─ Merged %d redundant memories", n)
@@ -179,10 +179,10 @@ async def run_light(pool, users: list[str]):
 
 
 async def run_deep(pool, users: list[str]):
-    """Deep 模式：热度衰减 + 实体提取 + 冗余合并"""
+    """Deep mode: heat decay + entity extraction + redundancy merge"""
     for uid in users:
         log.info("[deep] Processing user=%s", uid)
-        # 1. 调 reflect(deep) API（热度衰减 + 实体提取）
+        # 1. Call the reflect(deep) API (heat decay + entity extraction)
         try:
             async with httpx.AsyncClient(timeout=120) as client:
                 r = await client.post(
@@ -196,7 +196,7 @@ async def run_deep(pool, users: list[str]):
         except Exception as e:
             log.error("  ├─ reflect API error: %s", e)
 
-        # 2. 冗余检测
+        # 2. Redundancy detection
         n = await detect_redundancy(pool, uid)
         if n:
             log.info("  └─ Merged %d redundant memories", n)
@@ -204,15 +204,15 @@ async def run_deep(pool, users: list[str]):
             log.info("  └─ No redundancy found")
 
 
-# ── 入口 ──
+# ── Entry point ──
 
 async def main():
-    parser = argparse.ArgumentParser(description="Mnemosyne Reflector — 定时反思引擎")
+    parser = argparse.ArgumentParser(description="Mnemosyne Reflector — scheduled reflection engine")
     parser.add_argument(
         "--mode",
         choices=["light", "deep"],
         default="light",
-        help="light=每小时(热度+冗余), deep=每日(含实体提取)",
+        help="light=hourly (heat+redundancy), deep=daily (includes entity extraction)",
     )
     args = parser.parse_args()
 

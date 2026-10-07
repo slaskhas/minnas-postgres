@@ -1,19 +1,20 @@
 """
-test_sql_integration.py — 真 SQL 集成测试 (v7.8 补齐, 2026-08-18)
+test_sql_integration.py — real SQL integration tests (added in v7.8, 2026-08-18)
 
-痛点: 原测试 190 个全 mock 单元测试, SQL 语法/逻辑错误(如 drawer_pipeline dedup
-JSON 拼接崩溃)永远测不出来。本文件连真实 PostgreSQL(mnemosyne_itest 库)执行生产 SQL。
+Pain point: the original 190 all-mock unit tests could never catch SQL syntax/logic errors
+(like the drawer_pipeline dedup JSON-concatenation crash). This file connects to a real
+PostgreSQL (the mnemosyne_itest database) and runs the production SQL.
 
-运行前提: 本地 PG 已建 mnemosyne_itest 库
-    psql -d mnemosyne_itest: CREATE EXTENSION vector + memories/memory_keywords 表
-无库时自动 skip。
+Prerequisite: a local PG with the mnemosyne_itest database already set up
+    psql -d mnemosyne_itest: CREATE EXTENSION vector + the memories/memory_keywords tables
+Auto-skips when the database is unavailable.
 
-覆盖:
-1. dedup 合并 SQL(修复后 jsonb_build_object 语法)端到端 + merged_from 追加链
-2. 旧拼接语法(修复前)必须报错 — 防回归(:: 优先级 > ||)
-3. 主搜索真 BM25 子查询(命中分数 + ANY 参数)
-4. BM25 无命中返回 0(不破坏向量排序)
-5. reflect 变化过滤(IS DISTINCT FROM 不更新未变行)
+Coverage:
+1. Dedup merge SQL (the fixed jsonb_build_object syntax) end-to-end + merged_from append chain
+2. The old concatenation syntax (pre-fix) must error — regression guard (:: precedence > ||)
+3. The main search's real BM25 subquery (hit score + ANY parameter)
+4. BM25 with no hits returns 0 (doesn't break vector ranking)
+5. reflect's change filter (IS DISTINCT FROM doesn't update unchanged rows)
 """
 import asyncio
 import json
@@ -29,7 +30,7 @@ ITEST_DSN = os.environ.get("MNEMOSYNE_ITEST_DSN", "postgresql:///mnemosyne_itest
 
 @asynccontextmanager
 async def _conn():
-    """每测试独立连接(同一事件循环内使用, 避免跨 loop 归属错误)"""
+    """A separate connection per test (used within the same event loop, to avoid cross-loop ownership errors)"""
     c = await asyncpg.connect(ITEST_DSN)
     try:
         yield c
@@ -38,14 +39,15 @@ async def _conn():
 
 
 def _run(coro):
-    """同步包装(项目无 pytest-asyncio, 与纯函数测试风格一致)"""
+    """Synchronous wrapper (the project has no pytest-asyncio; keeps the pure-function test style)"""
     return asyncio.run(coro)
 
 
 @pytest.fixture(scope="module")
 def pool():
-    """连接本地测试库; 连不上则 skip 全模块。
-    注意: 只用它做可用性检查 + 清表(同一 loop 内完成), 每个测试内部自建连接。
+    """Connects to the local test database; skips the whole module if it can't connect.
+    Note: only used for an availability check + truncating tables (done within the same loop);
+    each test opens its own connection internally.
     """
     async def _init():
         conn = await asyncpg.connect(ITEST_DSN)
@@ -57,12 +59,12 @@ def pool():
     try:
         _run(_init())
     except Exception as e:  # pragma: no cover
-        pytest.skip(f"本地集成测试库不可用: {e}")
+        pytest.skip(f"local integration test database unavailable: {e}")
     yield True
 
 
 def test_dedup_merge_sql_works(pool):
-    """修复后的合并 SQL: jsonb_build_object 构造 metadata, merged_from 追加, 软删"""
+    """The fixed merge SQL: builds metadata with jsonb_build_object, appends merged_from, soft-deletes"""
     async def _run_test():
         async with _conn() as conn:
             old_id = await conn.fetchval(
@@ -71,7 +73,7 @@ def test_dedup_merge_sql_works(pool):
             new_id = await conn.fetchval(
                 "INSERT INTO memories (content, category) VALUES ($1,'knowledge') RETURNING id",
                 "重新全面检查记忆宫殿使用情况的记忆")
-            # 合并到旧记忆(生产 SQL, 修复后)
+            # Merge into the old memory (production SQL, post-fix)
             await conn.execute("""
                 UPDATE memories SET
                   content = $1,
@@ -83,7 +85,7 @@ def test_dedup_merge_sql_works(pool):
                   updated_at = NOW()
                 WHERE id = $6
             """, "合并后的长内容", 0.9, 2, new_id, "[%d]" % new_id, old_id)
-            # 软删新记忆
+            # Soft-delete the new memory
             await conn.execute("""
                 UPDATE memories SET is_deleted = TRUE, forgotten_at = NOW(),
                   metadata = COALESCE(metadata,'{}'::jsonb) || jsonb_build_object('merged_into', $2::int)
@@ -91,14 +93,14 @@ def test_dedup_merge_sql_works(pool):
             """, new_id, old_id)
             old = await conn.fetchrow("SELECT metadata, is_deleted FROM memories WHERE id=$1", old_id)
             new = await conn.fetchrow("SELECT metadata, is_deleted FROM memories WHERE id=$1", new_id)
-            # asyncpg 读 jsonb 返回 str(技能坑: 需 json.loads)
+            # asyncpg returns jsonb as a str (a known gotcha: needs json.loads)
             old_md = json.loads(old["metadata"])
             new_md = json.loads(new["metadata"])
             assert old["is_deleted"] is False
             assert new["is_deleted"] is True
             assert new_md["merged_into"] == old_id
             assert old_md["merged_from"] == [new_id]
-            # 二次合并: merged_from 应追加而非覆盖(保留合并链)
+            # Second merge: merged_from should append rather than overwrite (preserve the merge chain)
             third = await conn.fetchval(
                 "INSERT INTO memories (content, category) VALUES ('第三条相似记忆','knowledge') RETURNING id")
             await conn.execute("""
@@ -112,12 +114,12 @@ def test_dedup_merge_sql_works(pool):
             """, "合并后的长内容", third, "[%d]" % third, old_id)
             old2 = await conn.fetchrow("SELECT metadata->'merged_from' AS mf FROM memories WHERE id=$1", old_id)
             mf = json.loads(old2["mf"]) if isinstance(old2["mf"], str) else old2["mf"]
-            assert mf == [new_id, third], f"merged_from 应追加保留合并链, 实际 {mf}"
+            assert mf == [new_id, third], f"merged_from should append to preserve the merge chain, got {mf}"
     _run(_run_test())
 
 
 def test_dedup_old_syntax_raises(pool):
-    """修复前的拼接语法 `'...' || x || ']}'::jsonb` 必须报错 — 防回归(:: 优先级 > ||)"""
+    """The pre-fix concatenation syntax `'...' || x || ']}'::jsonb` must error — regression guard (:: precedence > ||)"""
     async def _run_test():
         async with _conn() as conn:
             mid = await conn.fetchval(
@@ -127,12 +129,12 @@ def test_dedup_old_syntax_raises(pool):
                     "UPDATE memories SET metadata = COALESCE(metadata,'{}'::jsonb) || "
                     "'{\"merged_from\":[' || $1::text || ']}'::jsonb WHERE id = $2",
                     "[123]", mid)
-            assert "json" in str(exc.value).lower(), f"应报 JSON 语法错误, 实际: {exc.value}"
+            assert "json" in str(exc.value).lower(), f"should raise a JSON syntax error, got: {exc.value}"
     _run(_run_test())
 
 
 def test_bm25_keyword_score(pool):
-    """主搜索真 BM25 子查询: memory_keywords SUM(freq) 命中分数"""
+    """Main search's real BM25 subquery: memory_keywords SUM(freq) hit score"""
     async def _run_test():
         async with _conn() as conn:
             mid = await conn.fetchval(
@@ -140,22 +142,22 @@ def test_bm25_keyword_score(pool):
             await conn.executemany(
                 "INSERT INTO memory_keywords (memory_id, token, freq) VALUES ($1,$2,$3)",
                 [(mid, "代理", 2.0), (mid, "架构", 1.0), (mid, "xray", 1.0)])
-            # 主搜索 bm25_sql 原样(生产 SQL 子查询 + ANY tokens)
+            # The main search's bm25_sql verbatim (production SQL subquery + ANY tokens)
             score = await conn.fetchval(
                 "SELECT (SELECT LEAST(1.0, COALESCE(SUM(k.freq),0)/4.0) FROM memory_keywords k "
                 "WHERE k.memory_id = m.id AND k.token = ANY($2::text[])) "
                 "FROM memories m WHERE m.id = $1", mid, ["代理", "架构", "xray"])
-            assert score == 1.0, f"命中 3 token sum=4 → LEAST(1.0, 4/4)=1.0, 实际 {score}"
+            assert score == 1.0, f"3 tokens hit, sum=4 → LEAST(1.0, 4/4)=1.0, got {score}"
             score2 = await conn.fetchval(
                 "SELECT (SELECT LEAST(1.0, COALESCE(SUM(k.freq),0)/4.0) FROM memory_keywords k "
                 "WHERE k.memory_id = m.id AND k.token = ANY($2::text[])) "
                 "FROM memories m WHERE m.id = $1", mid, ["代理"])
-            assert score2 == 0.5, f"命中 1 token freq=2 → 2/4=0.5, 实际 {score2}"
+            assert score2 == 0.5, f"1 token hit, freq=2 → 2/4=0.5, got {score2}"
     _run(_run_test())
 
 
 def test_bm25_no_match_zero(pool):
-    """BM25 无命中返回 0(不破坏纯向量排序)"""
+    """BM25 with no hits returns 0 (doesn't break pure vector ranking)"""
     async def _run_test():
         async with _conn() as conn:
             mid = await conn.fetchval(
@@ -169,7 +171,7 @@ def test_bm25_no_match_zero(pool):
 
 
 def test_change_filter_noop(pool):
-    """reflect 变化过滤: IS DISTINCT FROM 相同值时不更新(避免全表重写)"""
+    """reflect's change filter: IS DISTINCT FROM skips updates when the value is unchanged (avoids a full-table rewrite)"""
     async def _run_test():
         async with _conn() as conn:
             await conn.fetchval(
@@ -188,5 +190,5 @@ def test_change_filter_noop(pool):
                       ELSE 'long'
                     END)
             """)
-            assert "0" in r, f"值未变不应更新, 实际: {r}"
+            assert "0" in r, f"unchanged value should not be updated, got: {r}"
     _run(_run_test())

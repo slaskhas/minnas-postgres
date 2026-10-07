@@ -1,32 +1,39 @@
 #!/usr/bin/env python3
 """
-core/rrf.py — Reciprocal Rank Fusion（秩融合），v8.0 S2-1
-========================================================
+core/rrf.py — Reciprocal Rank Fusion, v8.0 S2-1
+================================================
 
-为什么需要它
-------------
-v8.0 之前，主检索的融合方式是**单条 SQL 线性加权**：
-    0.45*向量 + 0.15*BM25 + 0.15*时间 + 0.15*可靠性 + 0.10*热度
-问题: 五路分数**量纲完全不同**（余弦距离 ∈[0,2] / BM25 无上界 / 时间 ∈{0,0.08,0.15}）
-      → 加权系数没有物理意义，只能靠拍脑袋调参。
+Why we need it
+--------------
+Before v8.0, the primary retrieval path fused signals via **a single SQL linear
+weighting**:
+    0.45*vector + 0.15*BM25 + 0.15*time + 0.15*reliability + 0.10*heat
+Problem: the five scores have **completely different units** (cosine distance
+∈[0,2] / BM25 unbounded / time ∈{0,0.08,0.15}) → the weighting coefficients have
+no physical meaning and can only be tuned by gut feeling.
 
-RRF 的做法是**只看排名，不看分数**：
+RRF's approach is to **only look at rank, never at the raw score**:
     score(d) = Σ_over_channels  1 / (k + rank_channel(d) + 1)
-量纲无关，且被搜索引擎业界长期验证（k=60 是通用默认）。
+It's unit-independent, and has been validated for a long time in the search-engine
+industry (k=60 is the universal default).
 
-与既有实现的关系
-----------------
-`wiki/wiki_bm25.py` 里已有一个 `rrf_fuse(vec_ranked, bm25_scores, graph_scores, k=60)`，
-它面向**向量距离 + 分数型通道 + 图谱加成**这一特定组合，已在 WIKI 检索路径验证有效。
-本模块是它的**秩列表泛化版**：输入是 N 个「已排好序的 id 列表」，输出统一融合分。
-两者公式一致（1/(k+rank+1), k=60）；本模块不依赖 asyncpg / 项目其它模块，**纯函数、可单测**。
+Relationship to the existing implementation
+--------------------------------------------
+`wiki/wiki_bm25.py` already has an `rrf_fuse(vec_ranked, bm25_scores, graph_scores, k=60)`
+aimed at the specific combination of **vector distance + score-based channels + graph
+boost**, already validated as effective on the WIKI retrieval path. This module is
+its **generalized, rank-list version**: the input is N "already-ranked id lists,"
+and the output is a unified fusion score. Both use the same formula
+(1/(k+rank+1), k=60); this module doesn't depend on asyncpg or any other project
+module — it's a **pure function, unit-testable**.
 
-命名空间注意（实测踩点）
-------------------------
-`memories.id` 与 `wiki_pages.id` 是**两套独立 id 空间**，数值会撞。
-所以调用方必须在 fuse **之前**给 id 加前缀（如 `m:123` / `w:45`），
-否则两个不相关的条目会被当成同一条互相加分。
-本模块不替调用方做这件事 —— 它只做纯秩融合；前缀由 `palace.summon_fused` 负责。
+Namespace caveat (hit in practice)
+-----------------------------------
+`memories.id` and `wiki_pages.id` are **two independent id spaces** whose values
+can collide. So callers must prefix the id **before** fusing (e.g. `m:123` / `w:45`),
+otherwise two unrelated entries would be treated as the same one and boost each
+other's score. This module doesn't do that for the caller — it only does the pure
+rank fusion; prefixing is `palace.summon_fused`'s responsibility.
 """
 from __future__ import annotations
 
@@ -38,24 +45,32 @@ def rrf_fuse_ranked(
     k: int = 60,
     weights: Mapping[str, float] | None = None,
 ) -> List[Tuple]:
-    """秩融合。
+    """Rank fusion.
 
-    ranked_lists : {通道名: [id, id, ...]}  —— 每个列表**已按该通道的好坏降序排列**
-    k            : RRF 平滑常数，默认 60（越大则头部优势越平缓）
-    weights      : 可选 {通道名: 权重}，缺省全部 1.0（等权）
+    ranked_lists : {channel_name: [id, id, ...]} — each list is **already sorted
+                   best-to-worst for that channel**
+    k            : RRF smoothing constant, default 60 (larger → the top-rank
+                   advantage flattens out more)
+    weights      : optional {channel_name: weight}, defaults to 1.0 for all
+                   (equal weight)
 
-    返回 : [(id, score, {通道: 该通道内 rank})] 按 score 降序。
-           第二项 score 为融合分；第三项 channels 用于**可解释性**：
-           回答“这条为什么被排上来” —— 是单通道高分，还是多通道共同命中。
+    Returns: [(id, score, {channel: rank within that channel})] sorted by score
+             descending. The second element, score, is the fused score; the third,
+             channels, is for **explainability** — answering "why did this item
+             rank where it did" — a single high-scoring channel, or multiple
+             channels hitting it together.
 
-    设计取舍（写进代码，不靠口头约定）:
-      - **只看排名**，不看原始分 → 量纲无关，无需归一化
-      - **多通道命中自动占优**：一条被 3 个通道同时命中的条目，
-        得分必然高于只在 1 个通道排第一的条目（k 足够大时）。
-        这正是我们想要的“共识优先”，且它是**数学结果**而非调参结果。
+    Design trade-offs (written into the code, not left as a verbal agreement):
+      - **Only rank matters**, not the raw score → unit-independent, no
+        normalization needed
+      - **Multi-channel hits automatically win out**: an item hit by 3 channels
+        at once will necessarily score higher than one that's merely first in a
+        single channel (when k is large enough). This is exactly the "consensus
+        wins" behavior we want, and it's a **mathematical consequence**, not a
+        tuning outcome.
     """
     if k < 1:
-        raise ValueError("k 必须 >= 1")
+        raise ValueError("k must be >= 1")
     weights = weights or {}
     scores: Dict = {}
     channels: Dict = {}
@@ -75,9 +90,9 @@ def rrf_fuse_ranked(
 
 
 def fuse_within_topk(fused: Iterable[Tuple], top_k: int) -> List[Tuple]:
-    """截断到 top_k（单独成函数，便于测试与复用）。"""
+    """Truncate to top_k (kept as its own function for testing and reuse)."""
     if top_k < 0:
-        raise ValueError("top_k 不能为负")
+        raise ValueError("top_k cannot be negative")
     out = []
     for i, row in enumerate(fused):
         if i >= top_k:

@@ -1,5 +1,5 @@
 """
-conftest.py — 共享 fixtures
+conftest.py — shared fixtures
 """
 import pytest
 from unittest.mock import AsyncMock, MagicMock

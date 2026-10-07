@@ -1,78 +1,77 @@
-# 贡献指南
+# Contributing Guide
 
-## 开发流程 (铁律)
+## Development workflow (iron rule)
 
 ```
-本地开发 → 验证 → 安全审计 → 文档更新 → git tag → push
+Local development → Verify → Security audit → Docs update → git tag → push
 ```
 
-## 红线
+## Red lines
 
-1. **绝不硬编码密钥** — API Key / Token / 密码
-2. **绝不泄漏环境信息** — 真实 IP / 域名 / 本地路径 / 用户名 / 内部代号（如生产环境代号）
-3. **push 前必须隐私扫描**（参考 `git-privacy-audit` 流程）
+1. **Never hardcode secrets** — API keys / tokens / passwords
+2. **Never leak environment info** — real IPs / domains / local paths / usernames / internal codenames (e.g. production environment codenames)
+3. **Privacy scan required before every push** (see the `git-privacy-audit` workflow)
 
-## 仓库结构规范（新文件必须遵守）
+## Repo layout conventions (new files must follow this)
 
 ```
 Mnemosyne-OS/
-  ├── main.py                 服务入口 + 核心路由（只放主逻辑）
-  ├── config.py               统一配置中心（环境变量）
-  ├── palace.py               宫殿核心（分类/档号/卡片/召唤）
-  ├── api/                    REST API 模块
-  ├── core/                   核心引擎（LLM/Embedding/Chunker/backends）
-  ├── tmt/                    蒸馏引擎（factextract/distill/router）
-  ├── wiki/                   WIKI 知识库模块（bm25/graph/extract/tokenize/dedupe/eval）
-  ├── security/               安全审计与净化
-  ├── integrations/           Hermes 集成（Memory Provider + MCP + SDK）
-  ├── sync/                   端云同步（SQLite ↔ PG）
-  ├── cron/                   定时脚本
-  ├── docs/                   文档（白皮书/设计/schema）
-  ├── deploy/                 systemd 部署模板
-  ├── tests/                  pytest 用例
-  └── scripts/                一次性运维脚本
+  ├── main.py                 Service entrypoint + core routes (main logic only)
+  ├── config.py               Unified config center (env vars)
+  ├── palace.py                Palace core (categorization/archive numbers/cards/recall)
+  ├── api/                    REST API modules
+  ├── core/                   Core engine (LLM/Embedding/Chunker/backends)
+  ├── tmt/                    Distillation engine (factextract/distill/router)
+  ├── wiki/                   WIKI knowledge-base module (bm25/graph/extract/tokenize/dedupe/eval)
+  ├── security/               Security audit & sanitization
+  ├── integrations/           Hermes integration (Memory Provider + MCP + SDK)
+  ├── sync/                   Edge-cloud sync (SQLite ↔ PG)
+  ├── cron/                   Scheduled scripts
+  ├── docs/                   Docs (whitepaper/design/schema)
+  ├── deploy/                 systemd deployment templates
+  ├── tests/                  pytest test cases
+  └── scripts/                One-off ops scripts
 ```
 
-**放置规则：**
-- 模块代码 → 对应子目录（wiki 相关必须放 `wiki/`，不散落根目录）
-- 运维独立脚本（reflector/drawer/perf_alert）→ 根目录（生产 crontab 绝对路径绑定）
-- 文档 → `docs/`，海报源文件 `docs/poster.html`
-- 新增模块先建目录再放文件，不堆积根目录
+**Placement rules:**
+- Module code → its matching subdirectory (wiki-related code must live in `wiki/`, not scattered at the repo root)
+- Standalone ops scripts (reflector/drawer/perf_alert) → repo root (production crontab binds to absolute paths)
+- Docs → `docs/`, poster source file `docs/poster.html`
+- New modules: create the directory first, then add files — don't pile things up at the repo root
 
-## 编辑发布规则（每次改动都遵守）
+## Editing & release rules (follow for every change)
 
-1. **版本号三处一致**：`VERSION` / README badge / CHANGELOG（改版本必须同步）
-2. **双语同步**：README 与 README_CN 同步更新，链接互指
-3. **文档表同步**：新增文档必须加入 README/README_CN 的 Documentation 表
-4. **CHANGELOG 记录**：每次变更在顶部新增条目（新增/重写/修复/移除/脱敏分类）
-5. **ROADMAP 对齐**：规划项完成时打勾并移到「已发布」区
-6. **生产环境同步**：改了 main.py / wiki/ 等运行时文件，必须 rsync 到生产服务器 + 重启 + echo 验证；改了 wiki_* 路径必须同步 crontab
-7. **测试**：`pytest tests/` 必须全绿（167+ 用例）
-8. **安全审计**：push 前全量扫描，零命中才允许推送
+1. **Version number consistent in three places**: `VERSION` / README badge / CHANGELOG (must be updated together when bumping)
+2. **Keep docs in sync**: when adding new documentation, add it to the Documentation table in README
+3. **CHANGELOG entries**: add a new entry at the top for every change (categorize as added/rewrite/fix/removed/redacted)
+4. **ROADMAP alignment**: check off planned items when done and move them to the "Released" section
+5. **Production sync**: changes to runtime files like main.py / wiki/ must be rsynced to the production server + restarted + verified with an echo check; changes to wiki_* paths must be synced to crontab
+6. **Tests**: `pytest tests/` must be fully green (167+ cases)
+7. **Security audit**: full scan before push, must be zero hits before pushing is allowed
 
-## 提交规范
+## Commit conventions
 
-- `feat:` 新功能
-- `fix:` 修复
-- `docs:` 文档
-- `chore:` 杂项
-- `release:` 版本发布
-- 提交信息含变更摘要 + 关键细节（参考 git log 历史风格）
+- `feat:` new feature
+- `fix:` bug fix
+- `docs:` documentation
+- `chore:` misc
+- `release:` version release
+- Commit message should include a summary of changes + key details (follow the style of existing git log history)
 
-## 版本管理
+## Version management
 
-- 语义化版本: MAJOR.MINOR.PATCH
-- VERSION 文件 + CHANGELOG.md + README badge 三处同步更新
-- Tag: `git tag -a vX.Y.Z -m "说明"`
+- Semantic versioning: MAJOR.MINOR.PATCH
+- VERSION file + CHANGELOG.md + README badge updated together in all three places
+- Tag: `git tag -a vX.Y.Z -m "description"`
 
-## 测试
+## Testing
 
 ```bash
-pytest tests/          # 167+ 用例，必须全绿
+pytest tests/          # 167+ cases, must be fully green
 ```
 
-## 安全
+## Security
 
-- 每次 push 前执行隐私扫描
-- GitHub Secret Scanning 已启用
-- 参考 AGENTS.md 了解更多
+- Run a privacy scan before every push
+- GitHub Secret Scanning is enabled
+- See AGENTS.md for more

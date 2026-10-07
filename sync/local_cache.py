@@ -1,7 +1,7 @@
 """
-端云增量同步 — WSL 本地 SQLite 缓存
-生产在线 → 直写生产
-生产离线 → 写入本地 SQLite，等恢复后推送
+Edge-to-cloud incremental sync — local SQLite cache on WSL
+Production online → write directly to production
+Production offline → write to local SQLite, push once it recovers
 """
 import sqlite3
 import json
@@ -12,7 +12,7 @@ DB_PATH = os.path.join(os.path.dirname(__file__), "local_cache.db")
 
 
 def init_db():
-    """初始化本地缓存表"""
+    """Initialize the local cache tables"""
     conn = sqlite3.connect(DB_PATH)
     conn.execute("""
         CREATE TABLE IF NOT EXISTS pending_memories (
@@ -43,7 +43,7 @@ def init_db():
 
 def store_memory(content: str, category: str = "fact", user_id: str = "default",
                  importance: float = 0.5, embedding: list = None) -> int:
-    """存入本地缓存，返回本地 ID"""
+    """Store in the local cache, returns the local ID"""
     init_db()
     conn = sqlite3.connect(DB_PATH)
     now = datetime.now(timezone.utc).isoformat()
@@ -60,7 +60,7 @@ def store_memory(content: str, category: str = "fact", user_id: str = "default",
 
 
 def get_pending_count() -> int:
-    """待推送数量"""
+    """Count of items pending push"""
     conn = sqlite3.connect(DB_PATH)
     row = conn.execute("SELECT count(*) FROM pending_memories WHERE synced=0").fetchone()
     conn.close()
@@ -68,7 +68,7 @@ def get_pending_count() -> int:
 
 
 def get_pending(batch_size: int = 50) -> list:
-    """获取待推送记忆"""
+    """Fetch memories pending push"""
     conn = sqlite3.connect(DB_PATH)
     rows = conn.execute(
         "SELECT id, content, category, user_id, importance, embedding_json, created_at "
@@ -84,7 +84,7 @@ def get_pending(batch_size: int = 50) -> list:
 
 
 def mark_synced(local_id: int):
-    """标记已推送"""
+    """Mark as pushed"""
     conn = sqlite3.connect(DB_PATH)
     now = datetime.now(timezone.utc).isoformat()
     conn.execute(
@@ -96,7 +96,7 @@ def mark_synced(local_id: int):
 
 
 def mark_failed(local_id: int, error: str):
-    """标记推送失败"""
+    """Mark push as failed"""
     conn = sqlite3.connect(DB_PATH)
     conn.execute(
         "UPDATE pending_memories SET error_msg=? WHERE id=?",
@@ -107,7 +107,7 @@ def mark_failed(local_id: int, error: str):
 
 
 def log_sync(action: str, count: int = 0, detail: str = ""):
-    """记录同步日志"""
+    """Log a sync entry"""
     conn = sqlite3.connect(DB_PATH)
     now = datetime.now(timezone.utc).isoformat()
     conn.execute(
@@ -119,7 +119,7 @@ def log_sync(action: str, count: int = 0, detail: str = ""):
 
 
 def get_stats() -> dict:
-    """获取本地缓存统计"""
+    """Fetch local cache stats"""
     conn = sqlite3.connect(DB_PATH)
     total = conn.execute("SELECT count(*) FROM pending_memories").fetchone()[0]
     pending = conn.execute("SELECT count(*) FROM pending_memories WHERE synced=0").fetchone()[0]

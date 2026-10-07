@@ -1,28 +1,28 @@
-"""v7.2 Bjork S/R 分离 — 单元测试 (无需 DB)
+"""v7.2 Bjork S/R separation — unit tests (no DB needed)
 
-覆盖: 指数衰减 / 访问重置 / 抽屉划分 / pin兜底 / 回退开关
+Coverage: exponential decay / access reset / drawer classification / pin floor / rollback switch
 """
 import pytest
 import sys, os, math
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
-# ── 与生产 main.py reflect S/R 逻辑同源的纯函数提取 ──
+# ── Pure functions extracted from the same logic as production main.py's reflect S/R ──
 def decay_R(R: float, days: float) -> float:
-    """R 指数衰减: R * 0.5^(days/30), 下限1"""
+    """R exponential decay: R * 0.5^(days/30), floor of 1"""
     if days <= 0:
         return R
     return max(1.0, R * (0.5 ** (days / 30.0)))
 
 
 def access_reset(S: float, R: float) -> tuple:
-    """命中后: R 重置为 S, S 微增 (Bjork 间隔重复)"""
+    """On a hit: R resets to S, S increases slightly (Bjork spaced repetition)"""
     new_S = min(10.0, S + 0.2)
     return round(new_S, 1), new_S
 
 
 def drawer_from_sr(S: float, R: float) -> str:
-    """Bjork 抽屉: S 决定长期价值(不衰减), R 决定当前可用性"""
+    """Bjork drawer: S determines long-term value (no decay), R determines current availability"""
     if S >= 7 and R >= 5: return "hot"
     if S >= 5 or R >= 3: return "normal"
     if S >= 3: return "cool"
@@ -80,14 +80,14 @@ class TestDrawerFromSR:
         assert drawer_from_sr(2, 1) == "frozen"
 
     def test_high_s_never_frozen(self):
-        """Bjork 核心: 高存储强度记忆永不冻结 (底蕴)"""
+        """Bjork core: memories with high storage strength never freeze (foundational depth)"""
         assert drawer_from_sr(7, 1) == "normal"  # S>=5 → normal
         assert drawer_from_sr(5, 1) == "normal"
 
 
 class TestPinProtection:
     def test_pin_floor_r5(self):
-        """pin 记忆 R 兜底 ≥5 → 永远 ≥normal"""
+        """Pinned memory's R floor ≥5 → always ≥normal"""
         r = max(5.0, decay_R(8, 365))
         assert drawer_from_sr(8, r) in ("hot", "normal")
         assert r >= 5.0

@@ -1,25 +1,25 @@
 ---
 name: Bug Report
-about: 报告一个 bug
+about: Report a bug
 title: "[BUG] "
 labels: bug
 assignees: gymaira1990-jpg
 ---
 
-## 描述
+## Description
 
-## 复现步骤
+## Steps to reproduce
 
 1.
 2.
 3.
 
-## 期望行为
+## Expected behavior
 
-## 实际行为
+## Actual behavior
 
-## 环境
-- Mnemosyne 版本:
-- 部署方式 (Docker/裸机/Hermes集成):
-- Python 版本:
-- PostgreSQL 版本:
+## Environment
+- Mnemosyne version:
+- Deployment method (Docker/bare metal/Hermes integration):
+- Python version:
+- PostgreSQL version:

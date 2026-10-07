@@ -1,44 +1,57 @@
 #!/usr/bin/env python3
 """
-core/layers.py — 记忆分层模型的**可执行规格**（v8.0 S3-1）
-==========================================================
+core/layers.py — the **executable spec** for the memory layering model (v8.0 S3-1)
+====================================================================================
 
-为什么要有代码
---------------
-2026-09-24 用户口述了记忆分型（会话/认知/技能/约束/事实/参考/工作），
-整理成 5 层 + 1 横切模型。但**规格写在文档里 = 没人执行** ——
-红队的原话质疑就是：「这会不会变成『文档写了、系统一行没变』的空转？」
+Why this code exists
+---------------------
+On 2026-09-24 the user dictated a memory taxonomy (session / cognition / skill /
+constraint / fact / reference / work), which was organized into a 5-layer + 1
+cross-cutting model. But **a spec written only in docs = nobody enforces it** —
+the red team's own challenge was: "won't this just become a case of 'the docs say
+so, but the system hasn't changed a line'?"
 
-所以本模块把分层做成**可运行判定**：给定一条待写记忆，回答
-「它落哪层 / 写规则是什么 / 冲突怎么办 / 载体在哪」。
-判据（可证伪）: 任何新写入都能被 `classify_layer()` 给出唯一答案 ——
-若某个 category 落不进任何层，或规则与该层声明矛盾，测试会红。
+So this module turns the layering into a **runnable judgment**: given a memory
+about to be written, it answers "which layer does it belong to / what's the write
+rule / how are conflicts handled / where does it live." Falsifiable criterion: any
+new write must get a unique answer from `classify_layer()` — if some category
+doesn't fit into any layer, or a rule contradicts that layer's declaration, the
+tests go red.
 
-模型（用户 2026-09-24 口述 → 归一化）
-------------------------------------
-轴只有一条: **允不允许存在矛盾**。
+The model (user dictated 2026-09-24 → normalized)
+---------------------------------------------------
+There is only one axis: **whether contradictions are allowed to coexist**.
 
-  族「只增不改」     L0 日志层   —— append-only，允许矛盾，只去噪不压缩
-  族「版本化·只认最新」 L1 认知层   —— 可更新，需来源，冲突 → 更新 + 留变更日志
-                      L2 技能层   —— 文件版本化，.archive 留旧源
-                      L3 约束层   —— 人工定稿，**禁止并存**，变更有记录
-                      L4 参考层   —— 版本化 + 指针回链
-  横切（不是一层）    产出物索引  —— 实体只有一份，指针可多处
+  Family "append-only, never edited"       L0 log layer         — append-only, contradictions allowed, dedup only, never compressed
+  Family "versioned, latest wins"          L1 cognition layer   — updatable, requires a source, conflict → update + keep a changelog
+                                            L2 skill layer       — file-versioned, old versions kept in .archive
+                                            L3 constraint layer  — human-finalized, **no coexistence allowed**, changes are recorded
+                                            L4 reference layer   — versioned + back-linking pointer
+  Cross-cutting (not a layer)              artifact index        — one copy per entity, pointers can be many
 
-关键事实（诚实标注）
---------------------
-- **L3 约束层的载体不在 Mnemosyne 库里** —— 它是 `SOUL.md` / `MEMORY.md` /
-  `config.yaml`（Hermes 侧，人工定稿）。库里的 `category` 10 类**没有**对应值。
-  这不是模型缺陷，而是分层模型与存储载体本来就分离的证据。
-- 「事实记忆」按用户原话（"技能、约束这些"）**并入 L2/L3**，不单列一层。
-- 认知层目前归入「只认最新」族并允许带置信度；**是否保留"认知演进史"是待拍板项**
-  （见提案 P-20260925-01 §7）—— 若拍板要保留，它将成为第三个族，本模块需相应扩展。
+Key facts (stated honestly)
+-----------------------------
+- **The L3 constraint layer's carrier is not inside the Mnemosyne store** — it's
+  `SOUL.md` / `MEMORY.md` / `config.yaml` (on the Hermes side, human-finalized).
+  None of the store's 10 `category` values map to it. This isn't a gap in the
+  model — it's evidence that the layering model and the storage carrier are
+  deliberately separate.
+- Per the user's own words ("things like skills, constraints"), "factual memory"
+  is **folded into L2/L3** rather than given its own layer.
+- The cognition layer currently belongs to the "latest wins" family and allows a
+  confidence score; **whether to retain a "cognitive evolution history" is still
+  undecided** (see proposal P-20260925-01 §7) — if decided to keep it, it would
+  become a third family, requiring this module to be extended accordingly.
 """
 from __future__ import annotations
 
 from typing import Optional
 
-# ── 层定义 ──────────────────────────────────────────────────────────────────
+# ── Layer definitions ──────────────────────────────────────────────────────────
+# NOTE: the Chinese string values below (name/family/carrier/write_policy/
+# conflict_policy, and ARTIFACT_INDEX) are functional data asserted on by exact
+# substring in tests/test_v8_layers.py and returned verbatim via the API — do not
+# translate them.
 LAYERS: dict[str, dict] = {
     "L0": {
         "name": "日志层",
@@ -70,7 +83,7 @@ LAYERS: dict[str, dict] = {
         "carrier": "SOUL.md / MEMORY.md / config.yaml（⚠️ 不在 Mnemosyne 库内）",
         "write_policy": "人工定稿；变更有记录",
         "conflict_policy": "**禁止并存** —— 不允许两条约束同时有效",
-        "categories": (),  # 库里没有对应 category，这是事实而非遗漏
+        "categories": (),  # no corresponding category in the store — this is a fact, not an oversight
     },
     "L4": {
         "name": "参考层",
@@ -92,25 +105,28 @@ ARTIFACT_INDEX = {
     },
 }
 
-# category → layer 反查表（由 LAYERS 生成，保证单一事实来源）
+# category → layer reverse lookup (generated from LAYERS, single source of truth)
 CATEGORY_TO_LAYER: dict[str, str] = {
     cat: lk for lk, spec in LAYERS.items() for cat in spec["categories"]
 }
 
-# 项目受控词表（docs/schema.sql chk_memories_category 的 10 类）
+# Project's controlled vocabulary (the 10 values in docs/schema.sql's chk_memories_category)
 KNOWN_CATEGORIES = ("knowledge", "pitfall", "reference", "project", "ops",
                     "deploy", "preference", "session", "worklog", "temp")
 
 
 def classify_layer(category: str, *, has_artifact: bool = False,
                    source: Optional[str] = None) -> dict:
-    """判定一条记忆落哪一层，并给出该层的写规则与冲突策略。
+    """Determine which layer a memory belongs to, and return that layer's write
+    rule and conflict policy.
 
-    category     : 受控词表里的 10 类之一（未知值 → 归一化为 knowledge，与 API 一致）
-    has_artifact : 是否伴随交付物/实体文件（决定是否挂产出物索引指针）
-    source       : 来源标记（L1 要求带来源）
+    category     : one of the 10 controlled-vocabulary values (unknown → normalized
+                   to knowledge, consistent with the API)
+    has_artifact : whether a deliverable/entity file accompanies it (decides whether
+                   to attach an artifact-index pointer)
+    source       : source marker (L1 requires a source)
 
-    返回: {layer, name, family, carrier, write_policy, conflict_policy,
+    Returns: {layer, name, family, carrier, write_policy, conflict_policy,
            artifact_pointer, why}
     """
     cat = (category or "").strip().lower()
@@ -140,10 +156,12 @@ def classify_layer(category: str, *, has_artifact: bool = False,
 
 
 def self_check() -> dict:
-    """规格自检：受控词表每类都必须落进某一层，且层内规则齐备。
+    """Spec self-check: every controlled-vocabulary category must fall into some
+    layer, and each layer's fields must be complete.
 
-    这是把"文档规格"变成"可证伪断言"的关键 —— 有人改了词表却忘了分层，
-    这里会红。
+    This is what turns a "documented spec" into a "falsifiable assertion" — if
+    someone changes the vocabulary but forgets to update the layering, this goes
+    red.
     """
     problems = []
     for cat in KNOWN_CATEGORIES:
@@ -153,7 +171,8 @@ def self_check() -> dict:
         for f in ("name", "family", "carrier", "write_policy", "conflict_policy"):
             if not spec.get(f):
                 problems.append(f"{lk} 缺字段 {f}")
-    # L3 不应有库内 category —— 若有人硬塞，说明模型与载体被混同了
+    # L3 should have no in-store category — if someone forces one in, it means
+    # the model and the carrier have been conflated
     if LAYERS["L3"]["categories"]:
         problems.append("L3 约束层不应映射库内 category（其载体在 Hermes 侧）")
     return {"ok": not problems, "problems": problems,

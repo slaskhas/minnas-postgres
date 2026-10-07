@@ -1,28 +1,35 @@
 #!/usr/bin/env python3
 """
-scripts/prod_smoke.py — 正式环境冒烟测试（P4 阶段门禁命令）
+scripts/prod_smoke.py — production smoke test (P4-stage gate command)
 ===========================================================
 
-为什么要有它
+Why this exists
 ------------
-2026-09-25：我在终端里手敲的 P4 验证，第一次**测法本身就是错的**
-（给 L1 用的测试内容与 L0 的只差 2 字符，被 detect_conflict 判为近重复，
- 于是"L1 首次应 stored"这条假失败）。手敲的测试既不可复现、也无法进闸门。
-所以把它固化成脚本：**每次部署后都能一键复验，且失败退出码非 0**。
+2026-09-25: the P4 verification I typed by hand in the terminal was, the first time,
+**wrong in its own test design** (the test content I used for L1 differed from the L0
+one by only 2 characters, so detect_conflict judged it a near-duplicate, producing a
+false failure of "L1 first write should be stored"). Hand-typed tests are neither
+reproducible nor enforceable as a gate.
+So this is codified as a script: **re-verifiable with one command after every
+deployment, with a non-zero exit code on failure**.
 
-覆盖（分层写入契约）
-  S1 L0 同来源重试      → duplicate 且 id 相同（幂等）
-  S2 L0 跨来源          → **各存一条**（L0 只增不改、允许矛盾；旧版会误杀）
-  S3 L1 首次            → stored
-  S4 L1 重复            → duplicate 且 id 相同
-  S5 落库 layer 标记正确（L0/L0/L1）
-  S6 测试件清场（软删）
+Coverage (layered-write contract)
+  S1 L0 same-source retry     → duplicate with the same id (idempotent)
+  S2 L0 cross-source          → **each stored separately** (L0 only appends, never
+                                  edits, and allows contradictions; the old version
+                                  would wrongly collapse these)
+  S3 L1 first write           → stored
+  S4 L1 duplicate             → duplicate with the same id
+  S5 stored layer tag correct (L0/L0/L1)
+  S6 test-artifact cleanup (soft delete)
 
-⚠️ 测试内容必须**互不相似**：S1/S2 与 S3 若只差几个字符，会被语义合并吃掉而假失败
-   （这不是 bug，是 detect_conflict 的正常行为 —— 但它会让测试骗人）。
+⚠️ Test content must be **mutually dissimilar**: if S1/S2 differ from S3 by only a few
+   characters, semantic merging will swallow them into a false failure
+   (this isn't a bug — it's detect_conflict's normal behavior — but it would make the
+   test lie to you).
 
-用法: python3 scripts/prod_smoke.py [BASE_URL]     默认 http://127.0.0.1:18010
-退出码: 0 全过 / 1 有不过 / 2 环境不可达
+Usage: python3 scripts/prod_smoke.py [BASE_URL]     defaults to http://127.0.0.1:18010
+Exit codes: 0 all passed / 1 some failed / 2 environment unreachable
 """
 from __future__ import annotations
 
@@ -52,12 +59,12 @@ def req(method: str, path: str, body=None, timeout: int = 45):
 def main() -> int:
     s, v = req("GET", "/", timeout=15)
     if s != 200 or not isinstance(v, dict):
-        print(f"❌ 服务不可达: {s} {v}")
+        print(f"❌ Service unreachable: {s} {v}")
         return 2
-    print(f"  服务自报: {json.dumps(v, ensure_ascii=False)}")
+    print(f"  Service self-reported: {json.dumps(v, ensure_ascii=False)}")
 
     ts = time.strftime("%H%M%S")
-    # 两段内容**刻意互不相似**，避免被语义合并干扰判据
+    # The two content strings are **deliberately dissimilar** to avoid semantic merging interfering with the checks
     c_l0 = (f"smoke-alpha-{ts}: 记录一条临时便签，用于验证日志层的跨来源保留行为与幂等重试语义")
     c_l1 = (f"smoke-beta-{ts}: 关于向量索引维护窗口的技术结论，属知识类，须版本化只认最新")
 
@@ -72,8 +79,8 @@ def main() -> int:
     _, b2 = req("POST", "/api/v1/memories", {"user_id": "default", "content": c_l1,
                                             "category": "knowledge"})
 
-    for tag, r in (("L0·同来源 第1发", a1), ("L0·同来源 第2发", a2), ("L0·跨来源 第1发", a3),
-                   ("L1·知识 第1发", b1), ("L1·知识 第2发", b2)):
+    for tag, r in (("L0·same-source #1", a1), ("L0·same-source #2", a2), ("L0·cross-source #1", a3),
+                   ("L1·knowledge #1", b1), ("L1·knowledge #2", b2)):
         print(f"    {tag:<14}: {json.dumps(r, ensure_ascii=False)}")
 
     def ok_id(x, y, status):
@@ -82,11 +89,11 @@ def main() -> int:
         return x.get("status") == status and x.get("id") is not None and x.get("id") == y.get("id")
 
     checks = [
-        ("S1 L0 同来源重试 → duplicate 同 id", ok_id(a2, a1, "duplicate")),
-        ("S2 L0 跨来源 → 各存一条（L0 允许矛盾）",
+        ("S1 L0 same-source retry → duplicate, same id", ok_id(a2, a1, "duplicate")),
+        ("S2 L0 cross-source → each stored separately (L0 allows contradictions)",
          isinstance(a3, dict) and a3.get("status") == "stored" and a3.get("id") != a1.get("id")),
-        ("S3 L1 首次 → stored", isinstance(b1, dict) and b1.get("status") == "stored"),
-        ("S4 L1 重复 → duplicate 同 id", ok_id(b2, b1, "duplicate")),
+        ("S3 L1 first write → stored", isinstance(b1, dict) and b1.get("status") == "stored"),
+        ("S4 L1 duplicate → duplicate, same id", ok_id(b2, b1, "duplicate")),
     ]
 
     ids = ([i for i in {x.get("id") for x in (a1, a3, b1)
@@ -101,25 +108,25 @@ def main() -> int:
         rows = [l.strip() for l in p.stdout.splitlines()
                 if l.strip() and not any(k in l for k in ("perl", "LANG", "LC_", "supported", "Falling"))]
         layers = [r.split("|")[-1] for r in rows]
-        print(f"    落库 layer: {rows}")
-        checks.append(("S5 落库 layer 标记 = L0/L0/L1", len(layers) == 3 and
+        print(f"    stored layer: {rows}")
+        checks.append(("S5 stored layer tag = L0/L0/L1", len(layers) == 3 and
                        layers.count("L0") == 2 and layers.count("L1") == 1))
 
-    # 清场（无论如何都清）
+    # Cleanup (always runs regardless of outcome)
     cleaned = 0
     for mid in ids:
         st, _ = req("DELETE", f"/api/v1/memories/{mid}?user_id=default")
         cleaned += 1 if st == 200 else 0
-    checks.append((f"S6 测试件清场（{cleaned}/{len(ids)}）", ids and cleaned == len(ids)))
+    checks.append((f"S6 test-artifact cleanup ({cleaned}/{len(ids)})", ids and cleaned == len(ids)))
 
     print()
     bad = [n for n, c in checks if not c]
     for n, c in checks:
         print(f"  {'✅' if c else '❌'} {n}")
     if bad:
-        print(f"\n  ══ 正式环境冒烟：未通过（{len(bad)} 项）══")
+        print(f"\n  ══ Production smoke test: FAILED ({len(bad)} item(s)) ══")
         return 1
-    print(f"\n  ══ 正式环境冒烟：全通过（{len(checks)}/{len(checks)}）══")
+    print(f"\n  ══ Production smoke test: all passed ({len(checks)}/{len(checks)}) ══")
     return 0
 
 

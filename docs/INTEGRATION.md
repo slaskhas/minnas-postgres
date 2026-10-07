@@ -89,7 +89,7 @@ mcp_servers:
 Since v8.1, the 15 Mnemosyne tools are also mounted directly in the core's uvicorn
 process (`main.py` mounts them automatically) — **no stdio subprocess, no SSH tunnel**.
 Any streamable-HTTP client can connect to `http://<host>:8010/mcp`.
-The stdio bridge is retained (existing Hermes configs / `mcp_adapt_test.py` still work);
+The stdio bridge is retained (existing stdio client configs / `mcp_adapt_test.py` still work);
 both share the same set of contract-tested handlers.
 
 ```bash

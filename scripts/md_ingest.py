@@ -1,21 +1,22 @@
 #!/usr/bin/env python3
-"""md_ingest — WIKI 全文快照导入管线 (v7.4)
+"""md_ingest — WIKI full-text snapshot ingestion pipeline (v7.4)
 
-设计: 本地源 = 权威真相; 线上 wiki_pages = 防损毁档案馆快照 (单向同步)
-- --sync   : 导入/更新本地 MD/txt/html → wiki_pages (hash 幂等, 漂移自动升级版本)
-- --verify : 校验线上快照 vs 本地源 (一致/漂移/源已丢失)
-- 用法:
+Design: the local source is the authoritative truth; the online wiki_pages table is a
+damage-resistant archival snapshot (one-way sync)
+- --sync   : import/update local MD/txt/html → wiki_pages (hash-idempotent, drift auto-bumps the version)
+- --verify : verify the online snapshot vs. the local source (consistent / drifted / source lost)
+- Usage:
     python3 md_ingest.py --sync items.json
     python3 md_ingest.py --verify items.json
-    python3 md_ingest.py --list-sources   # 列出线上全部来源
+    python3 md_ingest.py --list-sources   # list all online sources
 
-items.json 结构:
+items.json structure:
 [
   {"path": "/path/to/your/papers/xxx.md",
-   "title": "可选(默认取文件名)",
-   "url": "可选, 网站源URL",
+   "title": "optional (defaults to the filename)",
+   "url": "optional, source website URL",
    "type": "paper|article|novel|design|memo",
-   "tags": ["标签1", "标签2"]},
+   "tags": ["tag1", "tag2"]},
   ...
 ]
 """
@@ -67,10 +68,10 @@ def sync_item(item: dict) -> dict:
     path = item["path"]
     if not os.path.exists(path):
         return {"path": path, "status": "source-missing",
-                "msg": "本地源不存在, 线上快照仍可查证"}
+                "msg": "Local source does not exist; the online snapshot can still be verified"}
     content = read_text(path)
     if len(content.strip()) < 20:
-        return {"path": path, "status": "skipped-empty", "msg": f"内容过短({len(content)}字符)"}
+        return {"path": path, "status": "skipped-empty", "msg": f"Content too short ({len(content)} chars)"}
     h = file_hash(path)
     body = {
         "title": item.get("title") or title_from_path(path),
@@ -91,23 +92,23 @@ def sync_item(item: dict) -> dict:
 
 
 def verify_item(item: dict) -> dict:
-    """校验: 线上 content_hash vs 本地源 hash"""
+    """Verify: online content_hash vs. local source hash"""
     path = item["path"]
     online = api("GET", "/api/v1/wiki/by-source", params={"source_path": path, "user_id": USER_ID})
     if not online.get("found"):
-        return {"path": path, "status": "not-ingested", "msg": "线上无此来源快照"}
+        return {"path": path, "status": "not-ingested", "msg": "No online snapshot for this source"}
     if not os.path.exists(path):
         return {"path": path, "status": "source-lost",
                 "online_id": online["id"], "version": online["version"],
-                "msg": "本地源已丢失, 线上快照仍可查证 (source_lost 应标记)"}
+                "msg": "Local source is lost; the online snapshot can still be verified (should be marked source_lost)"}
     h = file_hash(path)
     online_hash = online.get("content_hash") or ""
     if online_hash and h == online_hash:
         return {"path": path, "status": "consistent", "online_id": online["id"],
-                "version": online["version"], "msg": "线上快照与本地源一致"}
+                "version": online["version"], "msg": "Online snapshot matches the local source"}
     return {"path": path, "status": "drifted", "online_id": online["id"],
             "version": online["version"],
-            "msg": "本地源已修改(线上旧), 重跑 --sync 以本地为准更新"}
+            "msg": "Local source has been modified (online copy is stale); re-run --sync to update from local"}
 
 
 def list_sources():
@@ -120,10 +121,10 @@ def list_sources():
 
 
 def main():
-    ap = argparse.ArgumentParser(description="WIKI 全文快照导入管线 v7.4")
-    ap.add_argument("--sync", metavar="items.json", help="导入/更新快照")
-    ap.add_argument("--verify", metavar="items.json", help="校验线上 vs 本地")
-    ap.add_argument("--list-sources", action="store_true", help="列出线上来源")
+    ap = argparse.ArgumentParser(description="WIKI full-text snapshot ingestion pipeline v7.4")
+    ap.add_argument("--sync", metavar="items.json", help="Import/update snapshots")
+    ap.add_argument("--verify", metavar="items.json", help="Verify online vs. local")
+    ap.add_argument("--list-sources", action="store_true", help="List online sources")
     args = ap.parse_args()
 
     if args.list_sources:
@@ -149,12 +150,12 @@ def main():
     for r in results:
         print(json.dumps(r, ensure_ascii=False))
 
-    # 汇总
+    # Summary
     stats = {}
     for r in results:
         s = r.get("status", "?")
         stats[s] = stats.get(s, 0) + 1
-    print("\n=== 汇总 ===")
+    print("\n=== Summary ===")
     for k, v in stats.items():
         print(f"  {k}: {v}")
 

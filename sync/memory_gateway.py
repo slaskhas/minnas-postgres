@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-记忆网关 — 智能路由 生产/本地
-用法:
+Memory gateway — smart routing between production and local
+Usage:
   python3 memory_gateway.py store --content "..." [--category fact] [--user default]
   python3 memory_gateway.py status
   python3 memory_gateway.py push [--batch 50]
@@ -24,7 +24,7 @@ TIMEOUT = 10
 
 def store_to_gz(content: str, category: str = "fact", user_id: str = "default",
                 importance: float = 0.5) -> dict:
-    """尝试写入 生产 Mnemosyne"""
+    """Try writing to production Mnemosyne"""
     payload = {
         "content": content,
         "category": category,
@@ -48,15 +48,15 @@ def store_to_gz(content: str, category: str = "fact", user_id: str = "default",
 
 def smart_store(content: str, category: str = "fact", user_id: str = "default",
                 importance: float = 0.5) -> dict:
-    """智能存储：先生产 → 失败则本地 SQLite"""
+    """Smart store: try production first → fall back to local SQLite on failure"""
     init_db()
     
-    # 先试生产
+    # Try production first
     result = store_to_gz(content, category, user_id, importance)
     if result["ok"]:
         return result
     
-    # 生产不可用，存本地
+    # Production unavailable, store locally
     local_id = store_memory(content, category, user_id, importance)
     pending = get_stats()["pending"]
     return {
@@ -70,21 +70,21 @@ def smart_store(content: str, category: str = "fact", user_id: str = "default",
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="记忆网关 — 生产/本地双写")
+    parser = argparse.ArgumentParser(description="Memory gateway — dual-write to production/local")
     sub = parser.add_subparsers(dest="cmd")
     
-    store_p = sub.add_parser("store", help="存储记忆")
-    store_p.add_argument("--content", required=True, help="记忆内容")
+    store_p = sub.add_parser("store", help="Store a memory")
+    store_p.add_argument("--content", required=True, help="Memory content")
     store_p.add_argument("--category", default="fact")
     store_p.add_argument("--user", default="default")
     store_p.add_argument("--importance", type=float, default=0.5)
     
-    sub.add_parser("status", help="查看本地缓存状态")
+    sub.add_parser("status", help="View local cache status")
     
-    push_p = sub.add_parser("push", help="推送本地缓存到生产")
+    push_p = sub.add_parser("push", help="Push the local cache to production")
     push_p.add_argument("--batch", type=int, default=50)
     
-    sub.add_parser("check", help="检查生产连通性")
+    sub.add_parser("check", help="Check production connectivity")
     
     args = parser.parse_args()
     

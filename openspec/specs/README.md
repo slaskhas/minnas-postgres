@@ -1,14 +1,14 @@
-# specs/ · 当前真相
+# specs/ · Current Truth
 
-存放**系统现在做什么**的规格，按领域切分。
+Holds the specs for **what the system does now**, split by domain.
 
-写法（一条 Requirement = 一个可验证的行为）：
+Format (one Requirement = one verifiable behavior):
 
 ```markdown
-## Requirement: <能力名>
-系统 SHALL <具体行为>。
-**验收**：<怎么判断做到了 —— 可测试、可观测>
+## Requirement: <Capability name>
+The system SHALL <specific behavior>.
+**Acceptance**: <how to tell it's done — testable, observable>
 ```
 
-建立时机：**第一次动到这个领域时**。改完把 `changes/<name>/specs/delta.md` 的 ADDED/MODIFIED
-合进来，把 REMOVED 删掉。
+When to establish: **the first time this domain is touched**. After the change, merge
+the ADDED/MODIFIED items from `changes/<name>/specs/delta.md` in, and delete the REMOVED ones.

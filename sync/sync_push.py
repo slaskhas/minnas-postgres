@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """
-端云同步推送脚本
-从 WSL 本地 SQLite 读取待推送记忆 → 发送到 生产 Mnemosyne API
-用法: python3 sync_push.py [--batch 50]
+Edge-to-cloud sync push script
+Reads pending memories from local SQLite on WSL → sends them to the
+production Mnemosyne API
+Usage: python3 sync_push.py [--batch 50]
 """
 import sys
 import os
@@ -15,7 +16,7 @@ from datetime import datetime, timezone
 sys.path.insert(0, os.path.dirname(__file__))
 from local_cache import get_pending, mark_synced, mark_failed, log_sync, get_stats, init_db
 
-GZ_API = "http://127.0.0.1:18010"  # SSH 隧道
+GZ_API = "http://127.0.0.1:18010"  # SSH tunnel
 HEALTH_ENDPOINT = f"{GZ_API}/api/v1/echo"
 MEMORY_ENDPOINT = f"{GZ_API}/api/v1/memories"
 TIMEOUT = 15
@@ -23,7 +24,7 @@ RETRY = 2
 
 
 def check_gz_online() -> bool:
-    """检查 生产是否可达"""
+    """Check whether production is reachable"""
     try:
         r = httpx.get(HEALTH_ENDPOINT, timeout=5)
         return r.status_code == 200
@@ -32,7 +33,7 @@ def check_gz_online() -> bool:
 
 
 def push_one(memory: dict) -> bool:
-    """推送单条记忆到生产"""
+    """Push a single memory to production"""
     payload = {
         "content": memory["content"],
         "category": memory.get("category", "fact"),
@@ -62,7 +63,7 @@ def push_one(memory: dict) -> bool:
 
 
 def push_batch(batch_size: int = 50, dry_run: bool = False) -> dict:
-    """批量推送到生产"""
+    """Push a batch to production"""
     init_db()
     
     if not check_gz_online():
@@ -92,9 +93,9 @@ def push_batch(batch_size: int = 50, dry_run: bool = False) -> dict:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="本地→生产 记忆同步推送")
-    parser.add_argument("--batch", type=int, default=50, help="单批推送数量")
-    parser.add_argument("--dry-run", action="store_true", help="仅预览不推送")
+    parser = argparse.ArgumentParser(description="Local→production memory sync push")
+    parser.add_argument("--batch", type=int, default=50, help="Number of items to push per batch")
+    parser.add_argument("--dry-run", action="store_true", help="Preview only, don't push")
     args = parser.parse_args()
     
     print(f"[{datetime.now(timezone.utc).strftime('%H:%M:%S')}] Sync push...", flush=True)

@@ -46,7 +46,7 @@ git clone https://github.com/gymaira1990-jpg/Mnemosyne-OS.git
 | Document | Contents |
 |---|---|
 | [PROJECT.md](PROJECT.md) | What it is / why / where it stands ← **read first when taking over** |
-| [README.md](README.md) · [README_CN.md](README_CN.md) | Product overview (EN / CN) |
+| [README.md](README.md) | Product overview |
 | [INSTALL.md](INSTALL.md) | Per-environment installation |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Architecture overview |
 | [docs/INTEGRATION.md](docs/INTEGRATION.md) | Integration (REST / SDK / Hermes Provider + hooks) |

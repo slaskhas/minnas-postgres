@@ -1,6 +1,6 @@
 """
-Mnemosyne v5.0 — 安全 API 路由
-审计 + 哈希净化端点
+Mnemosyne v5.0 — security API routes
+Audit + hash-purification endpoints
 """
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -17,7 +17,7 @@ class DeleteRequest(BaseModel):
 
 @router.post("/audit/run")
 async def run_audit(tenant_id: str = "default", limit: int = 5):
-    """运行异构审计"""
+    """Run a heterogeneous audit"""
     from security.audit import schedule_audit
     async with pool.acquire() as conn:
         results = await schedule_audit(conn, tenant_id, limit)
@@ -26,7 +26,7 @@ async def run_audit(tenant_id: str = "default", limit: int = 5):
 
 @router.post("/purify")
 async def purify_memory(req: DeleteRequest):
-    """哈希净化一条记忆 (不可逆删除)"""
+    """Hash-purify a memory (irreversible deletion)"""
     from security.purifier import soft_delete_memory
     async with pool.acquire() as conn:
         result = await soft_delete_memory(conn, req.memory_id, req.reason)
@@ -35,7 +35,7 @@ async def purify_memory(req: DeleteRequest):
 
 @router.get("/fossils")
 async def list_fossils(tenant_id: str = "default", limit: int = 20):
-    """列出化石节点"""
+    """List fossil nodes"""
     from security.purifier import get_fossil_nodes
     async with pool.acquire() as conn:
         fossils = await get_fossil_nodes(conn, tenant_id, limit)
@@ -44,7 +44,7 @@ async def list_fossils(tenant_id: str = "default", limit: int = 20):
 
 @router.get("/costs")
 async def get_costs():
-    """查询成本统计"""
+    """Query cost stats"""
     from core.llm import get_cost_stats, get_cache_stats
     return {
         "costs": get_cost_stats(),

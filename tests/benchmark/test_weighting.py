@@ -1,7 +1,7 @@
 """
-test_weighting.py — 热度 + 可信度加权效果
+test_weighting.py — heat + reliability weighting effect
 
-场景: 验证高质量记忆在搜索结果中排位更靠前
+Scenario: verify higher-quality memories rank higher in search results
 """
 import pytest
 import sys
@@ -11,11 +11,11 @@ from tmt.router import compute_parent_heat
 
 
 def test_high_reliability_matters():
-    """高 reliability 记忆 → 搜索权重更高"""
-    # reliability 在五维搜索中占 0.15 权重
-    # 0.9 reliability → 加分 0.135
-    # 0.5 reliability → 加分 0.075
-    # 相差 6%
+    """High-reliability memory → higher search weight"""
+    # reliability carries a 0.15 weight in the five-dimension search
+    # 0.9 reliability → +0.135
+    # 0.5 reliability → +0.075
+    # 6% difference
     boost_high = 0.9 * 0.15
     boost_low = 0.5 * 0.15
     assert boost_high > boost_low
@@ -23,15 +23,15 @@ def test_high_reliability_matters():
 
 
 def test_high_heat_matters():
-    """高 heat 记忆 → 搜索权重更高"""
+    """High-heat memory → higher search weight"""
     boost_high = 0.9 * 0.15
     boost_low = 0.1 * 0.15
     assert boost_high > boost_low
 
 
 def test_parent_heat_aggregates_children():
-    """父节点热度正确聚合子节点"""
-    # 高热度子节点 → 高父节点热度
+    """Parent-node heat correctly aggregates child nodes"""
+    # High-heat children → high parent heat
     high_children = [0.9, 0.9, 0.9]
     low_children = [0.1, 0.1, 0.1]
     
@@ -43,17 +43,17 @@ def test_parent_heat_aggregates_children():
 
 
 def test_heat_boundaries():
-    """热度值范围在 0-1 之间"""
+    """Heat value stays within the 0-1 range"""
     result = compute_parent_heat([0.5, 0.5, 0.5])
     assert 0.0 <= result <= 1.0, f"heat {result} out of bounds"
 
 
 def test_reliability_heat_synergy():
-    """高 reliability + 高 heat = 搜索时综合得分最高"""
+    """High reliability + high heat = highest combined search score"""
     with open("main.py", "r") as f:
         content = f.read()
-    
-    # 验证五维搜索使用 reliability 和 heat
-    assert "m.reliability" in content, "搜索应包含 reliability"
-    assert "m.heat_score" in content, "搜索应包含 heat_score"
-    assert "0.10 * m.reliability" in content, "reliability 权重 0.10"
+
+    # Verify the five-dimension search uses reliability and heat
+    assert "m.reliability" in content, "search should include reliability"
+    assert "m.heat_score" in content, "search should include heat_score"
+    assert "0.10 * m.reliability" in content, "reliability weight should be 0.10"

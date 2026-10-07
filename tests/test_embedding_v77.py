@@ -1,6 +1,6 @@
-"""v7.7.0 Embedding 深度优化 — 纯逻辑测试 (mock API, 不真实调用)
+"""v7.7.0 embedding deep optimization — pure logic tests (mocked API, no real calls)
 
-覆盖: 缓存命中 / 批量切块 / 重试退避 / 并发 / LRU 裁剪 / 空输入 / 维度校验
+Coverage: cache hits / batch chunking / retry backoff / concurrency / LRU eviction / empty input / dimension validation
 """
 import sys
 sys.path.insert(0, ".")
@@ -13,32 +13,32 @@ import core.embedding as emb
 class TestCache:
     def setup_method(self):
         emb._cache.clear()
-        emb._cache_loaded = True  # 跳过磁盘加载
+        emb._cache_loaded = True  # skip disk loading
 
     def test_cache_hit_no_api_call(self):
-        """同文本二次调用 → 不再打 API"""
+        """Calling the same text twice → no second API call"""
         fake = MagicMock(return_value=[0.1] * 3)
         with patch.object(emb, "_call_openai_single", fake):
             emb.get_embedding(["hello"])
             emb.get_embedding(["hello"])
-        assert fake.call_count == 1  # 只打了一次
+        assert fake.call_count == 1  # called only once
 
     def test_partial_cache_miss(self):
         fake = MagicMock(return_value=[0.1] * 3)
         with patch.object(emb, "_call_openai_single", fake):
             emb.get_embedding(["a", "b"])
-            emb.get_embedding(["b", "c"])  # b 命中, c 新
-        assert fake.call_count == 3  # a,b,c 三条各打一次 (并发逐条)
+            emb.get_embedding(["b", "c"])  # b hits the cache, c is new
+        assert fake.call_count == 3  # a, b, c each called once (concurrent, one at a time)
 
     def test_many_texts_concurrent(self):
-        """多文本 → 并发取回, 结果顺序与原顺序一致"""
+        """Multiple texts → fetched concurrently, result order matches the original order"""
         n = 30
         texts = [f"t{i}" for i in range(n)]
-        fake = MagicMock(side_effect=lambda t: [float(t[1:])] * 3)  # 按文本编号返回
+        fake = MagicMock(side_effect=lambda t: [float(t[1:])] * 3)  # returns based on the text's number
         with patch.object(emb, "_call_openai_single", fake):
             out = emb.get_embedding(texts)
         assert len(out) == n
-        # 顺序一致: 第 i 条向量首位 = i
+        # Order is preserved: the i-th vector's first element = i
         for i, vec in enumerate(out):
             assert vec[0] == float(i)
 
@@ -46,7 +46,7 @@ class TestCache:
         assert emb.get_embedding([]) == []
 
     def test_lru_cutoff(self):
-        """超过 CACHE_SIZE 自动裁剪"""
+        """Automatically evicted once over CACHE_SIZE"""
         fake = MagicMock(return_value=[0.1] * 3)
         with patch.object(emb, "_call_openai_single", fake):
             for i in range(emb.CACHE_SIZE + 50):
@@ -60,7 +60,7 @@ class TestRetry:
         emb._cache_loaded = True
 
     class FakeResp:
-        """真实 context manager 响应 (MagicMock __enter__ 会返回新对象, 不可靠)"""
+        """A real context-manager response (MagicMock's __enter__ returns a new object each time, which is unreliable)"""
         def __init__(self, payload: bytes):
             self._payload = payload
 
@@ -74,7 +74,7 @@ class TestRetry:
             return False
 
     def test_retry_then_success(self):
-        """_call_openai_single 前两次 HTTP 失败, 第三次成功 → 返回结果"""
+        """_call_openai_single: the first two HTTP calls fail, the third succeeds → returns a result"""
         calls = {"n": 0}
 
         def flaky_urlopen(req, timeout=0):
@@ -104,8 +104,9 @@ class TestRetry:
                 pass
 
     def test_dimension_mismatch_raises_without_retry(self):
-        """返回维度与 EMBED_DIM 不符 (如 Ollama 对超原生维度的 dimensions 静默降级)
-        → 立即抛 EmbeddingDimensionError, 不重试 (重试对配置错误无意义)"""
+        """Returned dimension doesn't match EMBED_DIM (e.g. Ollama silently downgrading
+        `dimensions` beyond the model's native size) → immediately raise
+        EmbeddingDimensionError, no retry (retrying makes no sense for a config error)"""
         calls = {"n": 0}
 
         def wrong_dim_urlopen(req, timeout=0):
@@ -121,4 +122,4 @@ class TestRetry:
                 assert False, "should raise EmbeddingDimensionError"
             except emb.EmbeddingDimensionError:
                 pass
-        assert calls["n"] == 1  # 不可重试的配置错误, 只应打一次
+        assert calls["n"] == 1  # non-retryable config error, should only be called once

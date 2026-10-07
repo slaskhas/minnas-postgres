@@ -1,7 +1,7 @@
-"""v7.7.0 程序性记忆翼 — skill_sync 纯函数测试 (不依赖 DB)
+"""v7.7.0 procedural memory wing — skill_sync pure function tests (no DB dependency)
 
-覆盖: frontmatter 解析 / state 映射 / 目录扫描合并 / 去重 / 变更检测
-对齐现有范式: 生产逻辑同源复制 (见 skill_sync.py)
+Coverage: frontmatter parsing / state mapping / directory scan merge / dedup / change detection
+Aligned with the existing pattern: copied from the same logic as production (see skill_sync.py)
 """
 import sys
 sys.path.insert(0, ".")
@@ -24,7 +24,7 @@ class TestFrontmatter:
     def test_template_garbage(self):
         md = '---\nname: y\ndescription: Use when 使用 y 技能处理相关任务\n---\n'
         n, d = parse_frontmatter(md)
-        assert d == ""  # 模板化描述应过滤
+        assert d == ""  # templated descriptions should be filtered out
 
     def test_no_frontmatter(self):
         n, d = parse_frontmatter("plain text")
@@ -45,12 +45,12 @@ class TestStateMapping:
 
 class TestBuildItems:
     def test_active_and_archive(self, tmp_path):
-        # active 技能
+        # active skill
         sk = tmp_path / "skills"
         (sk / "devops" / "skill-a").mkdir(parents=True)
         (sk / "devops" / "skill-a" / "SKILL.md").write_text(
             "---\nname: skill-a\ndescription: Use when 网络排查\n---\n", encoding="utf-8")
-        # 归档技能
+        # archived skill
         arch = sk / ".archive"
         (arch / "skill-b").mkdir(parents=True)
         (arch / "skill-b" / "SKILL.md").write_text(
@@ -60,7 +60,7 @@ class TestBuildItems:
         by_name = {i["skill_name"]: i for i in items}
         assert by_name["skill-a"]["state"] == "active"
         assert by_name["skill-a"]["use_count"] == 5
-        assert by_name["skill-b"]["state"] == "archived"  # 归档目录强制 archived
+        assert by_name["skill-b"]["state"] == "archived"  # the archive directory forces archived
         assert by_name["skill-b"]["use_count"] == 0
 
     def test_dedup_active_wins(self):

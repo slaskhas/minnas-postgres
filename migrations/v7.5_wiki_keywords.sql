@@ -1,4 +1,4 @@
--- v7.5 检索优化 P0a: wiki 关键词索引表 (jieba 分词, 双通道 BM25)
+-- v7.5 retrieval optimization P0a: wiki keyword index table (jieba tokenization, dual-channel BM25)
 CREATE TABLE IF NOT EXISTS public.wiki_keywords (
     id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     page_id bigint NOT NULL REFERENCES public.wiki_pages(id) ON DELETE CASCADE,

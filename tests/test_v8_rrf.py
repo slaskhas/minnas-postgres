@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
 """
-v8.0 S2-1 · RRF 秩融合纯函数测试（无需数据库）
+v8.0 S2-1 · RRF rank-fusion pure function tests (no database needed)
 
-覆盖:
-  R1 基本融合与降序
-  R2 多通道共识优先（这是 RRF 的核心价值，必须是**数学结果**而非调参）
-  R3 k 参数效应
-  R4 权重
-  R5 top_k 截断
-  R6 非法入参被拒（反证）
-  R7 空输入不炸
-  R8 命名空间隔离（memories/wiki 两套 id 空间）
+Coverage:
+  R1 basic fusion and descending order
+  R2 multi-channel consensus wins (this is RRF's core value, must be a **mathematical
+     result**, not a tuning knob)
+  R3 k parameter effect
+  R4 weights
+  R5 top_k truncation
+  R6 invalid arguments rejected (regression guard)
+  R7 empty input doesn't blow up
+  R8 namespace isolation (two separate id spaces: memories/wiki)
 """
 import pytest
 
@@ -24,9 +25,10 @@ def test_r1_basic_desc_order():
 
 
 def test_r2_multichannel_consensus_wins():
-    """只在 1 个通道排第 1 的，应当**输给**在 3 个通道都靠前的条目。
+    """An item ranked 1st in only one channel should **lose** to one that ranks near the
+    top across all three channels.
 
-    这是 RRF 存在的理由 —— 若这条挂掉，说明融合没有意义。
+    This is the whole reason RRF exists — if this test fails, fusion has no point.
     """
     fused = rrf_fuse_ranked({
         "vec":    ["solo_first", "shared"],
@@ -34,20 +36,20 @@ def test_r2_multichannel_consensus_wins():
         "time":   ["shared", "another"],
     })
     order = [i for i, _s, _c in fused]
-    assert order[0] == "shared", f"共识条目应排第一，实际: {order}"
+    assert order[0] == "shared", f"the consensus item should rank first, got: {order}"
     shared = next(t for t in fused if t[0] == "shared")
-    assert set(shared[2].keys()) == {"vec", "bm25", "time"}, "应记录三个通道的命中"
+    assert set(shared[2].keys()) == {"vec", "bm25", "time"}, "hits from all three channels should be recorded"
 
 
 def test_r3_k_controls_flatness():
-    """k 越大头部优势越平缓：第 1 名与第 2 名的差距应随 k 单调收窄。"""
+    """Larger k flattens the top-of-list advantage: the gap between rank 1 and rank 2 should monotonically narrow as k grows."""
     lists = {"a": ["p", "q"]}
     gaps = []
     for k in (1, 10, 60, 1000):
         f = rrf_fuse_ranked(lists, k=k)
         gaps.append(round(f[0][1] - f[1][1], 12))
-    assert gaps == sorted(gaps, reverse=True), f"差距应随 k 递减: {gaps}"
-    assert gaps[0] > gaps[-1], "k 的效应必须真实存在"
+    assert gaps == sorted(gaps, reverse=True), f"the gap should shrink as k grows: {gaps}"
+    assert gaps[0] > gaps[-1], "k's effect must actually exist"
 
 
 def test_r4_weights_shift_ranking():
@@ -55,9 +57,9 @@ def test_r4_weights_shift_ranking():
     equal = [i for i, _s, _c in rrf_fuse_ranked(lists)]
     assert equal == sorted(equal) or equal in (["x", "y"], ["y", "x"])
     biased = [i for i, _s, _c in rrf_fuse_ranked(lists, weights={"b": 5.0, "a": 1.0})]
-    assert biased[0] == "y", "加权后应改变排序"
+    assert biased[0] == "y", "weighting should change the ranking"
     zeroed = [i for i, _s, _c in rrf_fuse_ranked(lists, weights={"b": 0.0})]
-    assert zeroed == ["x"], "权重 0 的通道应完全不参与"
+    assert zeroed == ["x"], "a channel with weight 0 should not participate at all"
 
 
 def test_r5_topk_truncation():
@@ -68,7 +70,7 @@ def test_r5_topk_truncation():
 
 
 def test_r6_invalid_args_rejected():
-    """反证：故意传非法值，必须被拒 —— 而不是静默算出错误结果。"""
+    """Regression guard: deliberately passing an invalid value must be rejected — not silently produce a wrong result."""
     with pytest.raises(ValueError):
         rrf_fuse_ranked({"a": ["x"]}, k=0)
     with pytest.raises(ValueError):
@@ -84,14 +86,16 @@ def test_r7_empty_input_is_safe():
 
 
 def test_r8_namespace_isolation():
-    """两套 id 空间：不加前缀会让 memories#1 与 wiki#1 互相加分（错误合并）。
+    """Two separate id spaces: without a prefix, memories#1 and wiki#1 would boost each
+    other's score (an incorrect merge).
 
-    这条锁住 palace._ns 的存在理由 —— 若有人图省事去掉前缀，此处会红。
+    This test locks in the reason palace._ns exists — if someone removes the prefix for
+    convenience, this will fail.
     """
     from palace import _ns
     assert _ns("wiki", 1) == "w:1"
     assert _ns("resonate", 1) == "m:1"
     assert _ns("summon", 1) == "m:1"
-    # 同一数值在 memory / wiki 通道里是**不同**条目
+    # The same numeric value is **a different item** in the memory vs. wiki channel
     fused = rrf_fuse_ranked({"resonate": [_ns("resonate", 1)], "wiki": [_ns("wiki", 1)]})
-    assert len(fused) == 2, "数值相同但命名空间不同，必须算两条"
+    assert len(fused) == 2, "same value but different namespace must count as two items"

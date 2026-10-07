@@ -1,117 +1,117 @@
-# Mnemosyne OS v5.2 · 产品白皮书
+# Mnemosyne OS v5.2 · Product Whitepaper
 
-**版本**: v5.2.0  
-**更新**: 2026-06-25  
-**定位**: 认知型记忆操作系统 · 个人AI长期记忆基建  
-**网站**: [GitHub](https://github.com/gymaira1990-jpg/Mnemosyne-OS)
+**Version**: v5.2.0
+**Updated**: 2026-06-25
+**Positioning**: Cognitive memory operating system · personal AI long-term memory infrastructure
+**Site**: [GitHub](https://github.com/gymaira1990-jpg/Mnemosyne-OS)
 
 ---
 
-## 实现状态
+## Implementation status
 
-| 模块 | 状态 | 说明 |
+| Module | Status | Notes |
 |------|:---:|------|
-| PostgreSQL + pgvector + AGE | ✅ 运行中 | GZ 7×24，1024d 向量 |
-| TMT 5级记忆蒸馏 | ✅ 运行中 | L1碎片→L2会话→L3日报→L4周报→L5画像 |
-| 三馆闭环 | ✅ 运行中 | 研究馆→工程馆→档案馆 |
-| RAG 智能切块 | ✅ 运行中 | 330条记忆→765块 |
-| AGE 知识图谱 | ✅ 运行中 | Cypher 图查询 |
-| 端云增量同步 | ✅ 运行中 | WSL↔GZ，每10min推送 |
-| 会话自动归档 | ✅ 运行中 | Hermes对话→宫殿，每30min |
-| 项目记忆绑定 | ✅ 运行中 | 9项目注册，关键词自动标签 |
-| 豆包+DeepSeek驱动 | ✅ 运行中 | 可换模型，环境变量切换 |
-| Qwen3 Reranker | ✅ 运行中 | GZ:11436 本地精排 |
-| Docker部署 | 📝 规划中 | |
-| 集群/分片 | 📝 远期 | |
-| Redis缓存 | 📝 远期 | |
-| 多模态记忆 | 📝 远期 | |
+| PostgreSQL + pgvector + AGE | ✅ Running | GZ 7×24, 1024d vectors |
+| TMT 5-tier memory distillation | ✅ Running | L1 fragment → L2 session → L3 daily → L4 weekly → L5 profile |
+| Three-hall pipeline | ✅ Running | Research hall → Engineering hall → Archive hall |
+| RAG smart chunking | ✅ Running | 330 memories → 765 chunks |
+| AGE knowledge graph | ✅ Running | Cypher graph queries |
+| Edge-cloud incremental sync | ✅ Running | WSL↔GZ, pushed every 10 min |
+| Automatic session archival | ✅ Running | Hermes conversations → palace, every 30 min |
+| Project memory binding | ✅ Running | 9 projects registered, automatic keyword tagging |
+| Doubao + DeepSeek driven | ✅ Running | Model-swappable via environment variable |
+| Qwen3 Reranker | ✅ Running | GZ:11436 local reranking |
+| Docker deployment | 📝 Planned | |
+| Clustering/sharding | 📝 Long-term | |
+| Redis cache | 📝 Long-term | |
+| Multimodal memory | 📝 Long-term | |
 
 ---
 
-## 1. 这是什么
+## 1. What this is
 
-Mnemosyne OS 是一只猫为他的 AI 管家建造的记忆系统。不是向量数据库的外挂，而是一个会自己整理、提炼、发现规律的记忆 OS。
+Mnemosyne OS is a memory system a cat built for its AI butler. It's not a bolt-on vector database — it's a memory OS that organizes, distills, and discovers patterns on its own.
 
-每次对话结束，系统自动把碎片蒸馏成会话→日报→周报→画像。知识在三馆里流转成熟。断网时自动缓存本地，恢复后静默推回云端。未来换上自己训练的模型，这座宫殿就是模型的原生记忆皮层。
+After every conversation, the system automatically distills fragments into sessions → daily digests → weekly digests → a profile. Knowledge matures as it flows through the three halls. When offline, it caches locally and silently pushes back to the cloud once reconnected. Once a self-trained model is plugged in, this palace becomes that model's native memory cortex.
 
 ---
 
-## 2. 核心架构
+## 2. Core architecture
 
 ```
-L5 画像 —— 你是谁，偏好什么
-L4 周报 —— 这周发生了什么
-L3 日报 —— 今天的收获
-L2 会话 —— 一次对话的脉络
-L1 碎片 —— 具体记忆
+L5 Profile  — who you are, what you prefer
+L4 Weekly   — what happened this week
+L3 Daily    — today's takeaways
+L2 Session  — the thread of one conversation
+L1 Fragment — a specific memory
 
-🏛️ 三馆流转    🔍 五维修搜索    🔗 知识图谱    ✂️ RAG切块    ☁️ 端云双活
+🏛️ Three-hall flow    🔍 5-dimension search    🔗 Knowledge graph    ✂️ RAG chunking    ☁️ Edge-cloud dual-active
 ```
 
-### 2.1 TMT 时间记忆树
+### 2.1 TMT temporal memory tree
 
-5级蒸馏管道，基于时间维度组织记忆。记忆不是平铺的——碎片自然汇聚成会话，会话沉淀为日报，日报提炼为周报，最终形成用户画像。热度衰减机制让不重要的记忆自然降温，高频记忆自动浮现。
+A 5-tier distillation pipeline organizing memory along the time dimension. Memories aren't flat — fragments naturally converge into sessions, sessions settle into daily digests, daily digests distill into weekly digests, eventually forming a user profile. A heat-decay mechanism lets unimportant memories cool off naturally while frequently-used memories surface automatically.
 
-### 2.2 三馆闭环
+### 2.2 Three-hall pipeline
 
-知识像酿酒一样流转：研究馆（待验证）→ 工程馆（踩坑记录）→ 档案馆（已沉淀真理）。三道闸机保证质量：入馆闸过滤噪音，方案闸校验可行性，归档闸验证成果。
+Knowledge flows like brewing wine: Research hall (unverified) → Engineering hall (lessons learned) → Archive hall (settled truth). Three gates ensure quality: an intake gate filters noise, a proposal gate validates feasibility, an archival gate verifies outcomes.
 
-### 2.3 五维修搜索
+### 2.3 5-dimension search
 
-向量语义 + BM25关键词 + 时间衰减 + 可信度 + 热度，五条线索同时搜。Chunk级精准检索把长记忆切成小块，找到最相关的片段。
+Vector semantics + BM25 keywords + time decay + reliability + heat — five signals searched simultaneously. Chunk-level precision retrieval splits long memories into small pieces to find the most relevant fragment.
 
-### 2.4 知识图谱
+### 2.4 Knowledge graph
 
-Apache AGE Cypher 图引擎。记忆中的实体（项目名、技术名、人名）自动提取为图节点，关系构成知识网络。不是孤立的记忆卡片，而是一张网。
+Apache AGE Cypher graph engine. Entities in memories (project names, tech names, people) are automatically extracted as graph nodes, with relationships forming a knowledge network. Not isolated memory cards, but a web.
 
-### 2.5 端云同步
+### 2.5 Edge-cloud sync
 
-WSL 笔记本离线时，记忆自动缓存到本地 SQLite。恢复连接后每 10 分钟静默推回 GZ 云端。GZ 是唯一真相源，WSL 只是离线缓冲。
+When the WSL laptop is offline, memories are automatically cached to local SQLite. Once reconnected, they're silently pushed back to the GZ cloud every 10 minutes. GZ is the single source of truth; WSL is just an offline buffer.
 
 ---
 
-## 3. 技术栈
+## 3. Tech stack
 
-| 组件 | 技术 | 说明 |
+| Component | Technology | Notes |
 |------|------|------|
-| 数据库 | PostgreSQL 16 + pgvector 0.8 | 1024维向量 |
-| 图谱 | Apache AGE 1.6.0 | Cypher 图查询 |
-| 向量化 | 豆包 Embedding-Vision | 1024d，可换 |
-| LLM | 豆包 Seed-2.0 + DeepSeek V4 | 分级调度 |
-| Reranker | Qwen3-Embed 0.6B | GZ:11436 本地 |
-| 框架 | FastAPI + asyncpg | Python |
-| 部署 | GZ 腾讯云 7×24 | systemd |
+| Database | PostgreSQL 16 + pgvector 0.8 | 1024-dim vectors |
+| Graph | Apache AGE 1.6.0 | Cypher graph queries |
+| Embedding | Doubao Embedding-Vision | 1024d, swappable |
+| LLM | Doubao Seed-2.0 + DeepSeek V4 | Tiered dispatch |
+| Reranker | Qwen3-Embed 0.6B | GZ:11436, local |
+| Framework | FastAPI + asyncpg | Python |
+| Deployment | GZ Tencent Cloud 7×24 | systemd |
 
 ---
 
-## 4. API 概览
+## 4. API overview
 
-所有端点以 `http://127.0.0.1:8010` 为基准。
+All endpoints are relative to `http://127.0.0.1:8010`.
 
-### 记忆
-- `POST /api/v1/memories` — 存入记忆
-- `POST /api/v1/memories/search` — 五维修搜索
-- `POST /api/v1/memories/search-chunks` — Chunk级精准搜索
-- `POST /api/v1/memories/chunk-all` — 批量RAG切块
-- `GET /api/v1/memories/chunks/stats` — Chunk统计
+### Memories
+- `POST /api/v1/memories` — store a memory
+- `POST /api/v1/memories/search` — 5-dimension search
+- `POST /api/v1/memories/search-chunks` — chunk-level precision search
+- `POST /api/v1/memories/chunk-all` — bulk RAG chunking
+- `GET /api/v1/memories/chunks/stats` — chunk statistics
 
-### TMT蒸馏
+### TMT distillation
 - `POST /api/v1/tmt/consolidate/session` — L1→L2
 - `POST /api/v1/tmt/consolidate/daily` — L2→L3
 - `POST /api/v1/tmt/consolidate/weekly` — L3→L4
 - `POST /api/v1/tmt/consolidate/monthly` — L4→L5
-- `GET /api/v1/tmt/tree/{user_id}` — 查看记忆树
+- `GET /api/v1/tmt/tree/{user_id}` — view the memory tree
 
-### 会话归档
-- `POST /api/v1/sessions/archive` — 完整对话入宫
+### Session archival
+- `POST /api/v1/sessions/archive` — ingest a full conversation into the palace
 
-### 项目
-- `POST /api/v1/projects/register` — 注册工作区项目
-- `GET /api/v1/projects/` — 列出项目
-- `GET /api/v1/projects/by-name/{name}` — 查项目记忆
+### Projects
+- `POST /api/v1/projects/register` — register a workspace project
+- `GET /api/v1/projects/` — list projects
+- `GET /api/v1/projects/by-name/{name}` — look up a project's memories
 
-### 图谱
-- `POST /api/v1/graph/search` — 知识图谱搜索
+### Graph
+- `POST /api/v1/graph/search` — knowledge graph search
 
 ---
 
@@ -120,30 +120,30 @@ WSL 笔记本离线时，记忆自动缓存到本地 SQLite。恢复连接后每
 ```python
 from integrations.sdk import MnemosyneHermesMemory
 m = MnemosyneHermesMemory(endpoint="http://127.0.0.1:18010")
-m.add("这条要记住", category="笔记")
-m.get_relevant("那个怎么用来着")
+m.add("remember this", category="note")
+m.get_relevant("how do I use that thing again")
 ```
 
 Hermes Agent: `skill_view("mnemosyne-os-usage")`
 
 ---
 
-## 6. 部署
+## 6. Deployment
 
-当前运行在 GZ 腾讯云 (Ubuntu 24.04, PostgreSQL 16)，systemd 常驻，7×24。
+Currently running on GZ Tencent Cloud (Ubuntu 24.04, PostgreSQL 16), resident under systemd, 7×24.
 
 ```bash
-# GZ 启动
+# GZ startup
 sudo systemctl start mnemosyne
 
-# WSL 同步 (cron自动)
+# WSL sync (automatic via cron)
 python3 sync/memory_gateway.py push
 
-# 会话归档 (cron自动)
+# Session archival (automatic via cron)
 python3 scripts/archive_session.py --auto
 ```
 
-环境变量驱动，换模型只需改 `.env`：
+Environment-variable driven — swapping models only requires editing `.env`:
 ```bash
 EMBEDDING_MODEL=your-model
 LLM_MODEL_LITE=your-model
@@ -152,21 +152,21 @@ LLM_MODEL_PRO=your-deep-model
 
 ---
 
-## 7. 未来
+## 7. Future
 
-- [x] AGE 知识图谱
-- [x] 三馆闭环
-- [x] TMT 5级蒸馏
-- [x] RAG 智能切块
-- [x] 端云同步
-- [x] 会话归档
-- [x] 项目记忆绑定
-- [ ] 自训练模型接入 — 宫殿成为原生记忆皮层
-- [ ] 多模态记忆 — 图片视频音频
-- [ ] Docker 一键部署
-- [ ] Obsidian 人用仪表盘
+- [x] AGE knowledge graph
+- [x] Three-hall pipeline
+- [x] TMT 5-tier distillation
+- [x] RAG smart chunking
+- [x] Edge-cloud sync
+- [x] Session archival
+- [x] Project memory binding
+- [ ] Self-trained model integration — the palace becomes a native memory cortex
+- [ ] Multimodal memory — images, video, audio
+- [ ] One-click Docker deployment
+- [ ] Obsidian human-facing dashboard
 
 ---
 
-*「记忆不是用来存的，是用来活的。」*  
+*"Memory isn't meant to be stored — it's meant to be lived."*
 🐾 G-CAT & Hermes Agent · MIT · 2026

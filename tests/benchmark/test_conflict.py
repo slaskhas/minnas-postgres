@@ -1,7 +1,7 @@
 """
-test_conflict.py — 矛盾检测准确率测试
+test_conflict.py — conflict-detection accuracy test
 
-场景: 验证 detect_conflict 的 merge/conflict/fresh 分类
+Scenario: verify detect_conflict's merge/conflict/fresh classification
 """
 import pytest
 import sys
@@ -11,7 +11,7 @@ from main import text_diff_ratio
 
 
 def test_merge_identical():
-    """完全相同文本 → ratio > 0.85 → merge"""
+    """Identical text → ratio > 0.85 → merge"""
     r = text_diff_ratio(
         "pgvector HNSW index is faster than IVFFlat",
         "pgvector HNSW index is faster than IVFFlat"
@@ -20,7 +20,7 @@ def test_merge_identical():
 
 
 def test_merge_near_identical():
-    """几乎相同文本 → ratio > 0.85 → merge"""
+    """Near-identical text → ratio > 0.85 → merge"""
     r = text_diff_ratio(
         "HNSW index has better recall than IVFFlat",
         "HNSW index has better recall than IVFFlat in most cases"
@@ -29,28 +29,28 @@ def test_merge_near_identical():
 
 
 def test_fresh_different():
-    """完全不同话题 → ratio < 0.5 → fresh (可能)"""
+    """Completely different topic → ratio < 0.5 → fresh (likely)"""
     r1 = text_diff_ratio(
         "HNSW is the best index for vector search",
         "The weather in Beijing is sunny today"
     )
-    # 完全不同，ratio 应该很低
+    # Completely different, ratio should be very low
     assert r1 < 0.5, f"different texts got ratio={r1:.3f}"
 
 
 def test_conflict_contradiction():
-    """语义相似 + 内容矛盾 → ratio < 0.5"""
+    """Semantically similar + contradictory content → ratio < 0.5"""
     r = text_diff_ratio(
         "HNSW is the best index for all scenarios",
         "IVFFlat is actually better for low-dimensional data"
     )
-    # 主题相关但不完全相同，ratio 应该在中间范围
+    # Related topic but not identical, ratio should be in the middle range
     assert r < 0.5, f"contradicting texts got ratio={r:.3f}"
 
 
 def test_boundary_085():
-    """边界测试: 恰好 0.85 的 case"""
-    # ratio 应该 = 0.85 左右（取决于实现细节）
+    """Boundary test: the exact 0.85 case"""
+    # ratio should be around 0.85 (depends on implementation details)
     r = text_diff_ratio("a" * 85 + "b" * 15, "a" * 85 + "c" * 15)
-    # 85% 匹配 → ratio 应该 ≥ 0.85
+    # 85% match → ratio should be ≥ 0.85
     assert r >= 0.8, f"boundary case got ratio={r:.3f}"

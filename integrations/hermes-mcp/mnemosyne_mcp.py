@@ -5,13 +5,15 @@ Mnemosyne MCP Server — bridging the agent to the memory palace
 Connects to the Mnemosyne REST API and exposes memory store/retrieve tools via
 MCP. Two transports share the *same* handlers:
 
-  * **stdio** — the classic form. Launched as a subprocess (Hermes config, or the
-    slask client over the SSH tunnel localhost:18010 → core 8010). Entered via
+  * **stdio** — the classic form: a generic stdio-to-HTTP bridge, launched as a
+    subprocess by any MCP client's stdio config (e.g. the slask client), optionally
+    over an SSH tunnel (localhost:18010 → core 8010). Entered via
     `python3 integrations/hermes-mcp/mnemosyne_mcp.py` (see `__main__`).
   * **streamable HTTP** — the in-process merge (v8.1). `main.py` mounts the 15
-    tools at `/mcp` inside the core FastAPI process. Handlers reach the core over
-    loopback REST via `set_base_url()`, so the *same* contract-tested
-    `_dispatch`/`_call` serve both transports.
+    tools at `/mcp` inside the core FastAPI process. Handlers reach the core via
+    `set_asgi_app()` — an in-process ASGI transport (no real socket, same
+    Starlette routing + Pydantic validation as a real HTTP call) — so the *same*
+    contract-tested `_dispatch`/`_call` serve both transports.
 
 Contract iron rules (bitten once before, see tests/test_mcp_bridge_contract.py):
   * Parameter positions follow the server — feedback/delete/restore `user_id`, and
@@ -24,14 +26,14 @@ Contract iron rules (bitten once before, see tests/test_mcp_bridge_contract.py):
     = always falls back to the default value) is more dangerous than an error.
 
 How to start
-  * Hermes (stdio):
+  * Any stdio-capable MCP client:
       mcp_servers:
         mnemosyne:
           command: "python3"
-          args: ["/path/to/hermes/tools/mnemosyne_mcp.py"]
+          args: ["/path/to/integrations/hermes-mcp/mnemosyne_mcp.py"]
   * In-process HTTP (v8.1): nothing to do — `main.py` mounts `/mcp` itself when
-    the `mcp` SDK is installed. Point handlers at the core's own loopback
-    address via `set_base_url("http://<host>:<port>")` before mounting.
+    the `mcp` SDK is installed, calling `set_asgi_app(app)` with its own FastAPI
+    app object before mounting (no loopback socket needed).
 """
 from __future__ import annotations
 
@@ -43,10 +45,10 @@ from typing import Any, Optional
 
 
 # ── Mnemosyne API address ──────────────────────────────
-# Defaults to the local SSH-tunnel endpoint (the pre-v8.1 stdio default). When
-# mounted in-process by `main.py`, `set_base_url()` repoints it at the core's
-# own listen address so handlers reach the core over loopback (direct uvicorn,
-# no Nginx auth layer).
+# Defaults to the local SSH-tunnel endpoint (the stdio transport's real-network
+# case). When mounted in-process by `main.py`, `set_asgi_app()` repoints the
+# bridge at the core's own FastAPI app object via an in-process ASGI transport
+# instead (no socket, no Nginx auth layer — same as today's loopback).
 MNEMOSYNE_URL = os.getenv("MNEMOSYNE_URL", "http://127.0.0.1:18010")
 API_BASE = f"{MNEMOSYNE_URL}/api/v1"
 
@@ -62,49 +64,81 @@ except ImportError:
 
 
 # ── HTTP client ────────────────────────────────────────
-import time as _time
+import asyncio
+
+_transport: Optional["httpx.AsyncBaseTransport"] = None  # None => real network (stdio)
 
 
-def _mk_client():
-    """Fresh client per call, to avoid the connection pool caching dead connections."""
-    return httpx.Client(timeout=30, base_url=MNEMOSYNE_URL,
-                        limits=httpx.Limits(max_keepalive_connections=2))
+def _mk_client() -> "httpx.AsyncClient":
+    """Fresh client per call/reconnect, to avoid the connection pool caching dead
+    connections. Respects whichever transport mode is active (see set_base_url /
+    set_asgi_app below) so `_call` never needs to know which one is in effect."""
+    if _transport is not None:
+        return httpx.AsyncClient(timeout=30, base_url=MNEMOSYNE_URL, transport=_transport)
+    return httpx.AsyncClient(timeout=30, base_url=MNEMOSYNE_URL,
+                              limits=httpx.Limits(max_keepalive_connections=2))
 
 
 http = _mk_client()
 
 
 def set_base_url(url: str) -> None:
-    """Point the bridge at a new Mnemosyne REST base.
+    """Point the bridge at a new Mnemosyne REST base over real network HTTP.
 
     The stdio default (`MNEMOSYNE_URL` env / `http://127.0.0.1:18010`) is the
-    SSH-tunnel endpoint. When this module is mounted in-process by `main.py`,
-    call this with the core's *own* listen address (`http://<host>:<port>`) so
-    handlers reach the core over loopback. It recomputes `API_BASE` and rebuilds
-    the `httpx` client, because `_call` resolves absolute URLs from `API_BASE`.
+    SSH-tunnel endpoint; this is also the function the stdio transport uses.
+    It recomputes `API_BASE` and rebuilds the `httpx` client (clearing any
+    previously configured in-process ASGI transport), because `_call` resolves
+    absolute URLs from `API_BASE`.
     """
-    global MNEMOSYNE_URL, API_BASE, http
+    global MNEMOSYNE_URL, API_BASE, http, _transport
     MNEMOSYNE_URL = url
     API_BASE = f"{MNEMOSYNE_URL}/api/v1"
+    _transport = None
     http = _mk_client()
 
 
-def _call(method: str, path: str, **kwargs) -> dict:
+def set_asgi_app(app, internal_base_url: str = "http://mcp-internal") -> None:
+    """Point the bridge at the core's own FastAPI app object, in-process.
+
+    Used only by the in-process `/mcp` mount (`main.py`'s `_mcp_lifespan`): the
+    bridge's calls to the core's own REST handlers are routed through
+    `httpx.ASGITransport(app=app)` — same Starlette routing + Pydantic request
+    validation as a real HTTP call, but no socket. `internal_base_url` is just a
+    well-formed placeholder origin (ASGITransport never resolves it over
+    DNS/TCP; Starlette routes on path, not Host header) so `_call`'s
+    `f"{API_BASE}{path}"` string-join keeps working unchanged.
+
+    `raise_app_exceptions=False` makes an unhandled exception in a handler
+    surface as a plain 500 Response (as a real ASGI server would produce)
+    rather than propagating the raw Python exception into `_call` — keeping
+    `_call`'s existing `raise_for_status()` / `{"error","detail"}` handling
+    identical between the stdio (real HTTP) and in-process (ASGI) transports.
+    """
+    global MNEMOSYNE_URL, API_BASE, http, _transport
+    MNEMOSYNE_URL = internal_base_url
+    API_BASE = f"{MNEMOSYNE_URL}/api/v1"
+    _transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
+    http = _mk_client()
+
+
+async def _call(method: str, path: str, **kwargs) -> dict:
     """Call the Mnemosyne REST API with exponential backoff reconnect."""
     global http
     max_retries = 3
     for attempt in range(max_retries):
         try:
-            r = http.request(method, f"{API_BASE}{path}", **kwargs)
+            r = await http.request(method, f"{API_BASE}{path}", **kwargs)
             r.raise_for_status()
             return r.json()
         except (httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout) as e:
             # Connection failed: backoff retry + rebuild client (discard a possibly corrupt pool)
+            # Unreachable under the in-process ASGI transport (no real socket) — real-network only.
             if attempt < max_retries - 1:
                 wait = 2 ** attempt  # 1s -> 2s -> 4s
-                _time.sleep(wait)
+                await asyncio.sleep(wait)
                 try:
-                    http.close()
+                    await http.aclose()
                 except Exception:
                     pass
                 http = _mk_client()
@@ -240,21 +274,20 @@ async def list_tools(ctx, params) -> types.ListToolsResult:
                 "properties": {
                     "query": {"type": "string", "description": "Search terms"},
                     "user_id": {"type": "string", "description": "User ID (actual DB uses default)", "default": "default"},
-                    "limit": {"type": "integer", "description": "Number of results to return", "default": 10},
+                    "limit": {"type": "integer", "description": "Graph traversal hops (kept as 'limit' for backward compatibility)", "default": 2},
                 },
                 "required": ["query"],
             },
         ),
         types.Tool(
             name="extract_entities",
-            description="Automatically extract entities from text and store them in the knowledge graph.",
+            description="Extract entities from the user's existing stored memories that don't yet have linked entities (operates on already-stored memories, not arbitrary free text).",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "text": {"type": "string", "description": "Text to extract entities from"},
                     "user_id": {"type": "string", "description": "User ID (actual DB uses default)", "default": "default"},
+                    "max_memories": {"type": "integer", "description": "Max number of unlinked memories to scan", "default": 50},
                 },
-                "required": ["text"],
             },
         ),
         # ── Wiki ──
@@ -319,7 +352,7 @@ async def _dispatch(name: str, arguments: dict) -> list[types.TextContent]:
 
     try:
         if name == "store_memory":
-            data = _call("POST", "/memories", json={
+            data = await _call("POST", "/memories", json={
                 "user_id": user_id,
                 "content": arguments["content"],
                 "category": arguments.get("category", "fact"),
@@ -328,7 +361,7 @@ async def _dispatch(name: str, arguments: dict) -> list[types.TextContent]:
             return [types.TextContent(type="text", text=json.dumps(data, ensure_ascii=False))]
 
         elif name == "search_memories":
-            data = _call("POST", "/memories/search", json={
+            data = await _call("POST", "/memories/search", json={
                 "user_id": user_id,
                 "query": arguments["query"],
                 "top_k": arguments.get("top_k", 5),
@@ -338,7 +371,7 @@ async def _dispatch(name: str, arguments: dict) -> list[types.TextContent]:
             return [types.TextContent(type="text", text=json.dumps(data, ensure_ascii=False))]
 
         elif name == "dialectic_search":
-            data = _call("POST", "/dialectic", json={
+            data = await _call("POST", "/dialectic", json={
                 "user_id": user_id,
                 "query": arguments["query"],
                 "max_memories": arguments.get("max_results", 3),
@@ -349,49 +382,58 @@ async def _dispatch(name: str, arguments: dict) -> list[types.TextContent]:
             params = {"user_id": user_id, "limit": arguments.get("limit", 10)}
             if arguments.get("min_heat"):
                 params["min_heat"] = arguments["min_heat"]
-            data = _call("GET", "/memories/heat-top", params=params)
+            data = await _call("GET", "/memories/heat-top", params=params)
             return [types.TextContent(type="text", text=json.dumps(data, ensure_ascii=False))]
 
         elif name == "get_memory_stats":
-            data = _call("GET", "/memories/stats", params={"user_id": user_id})
+            data = await _call("GET", "/memories/stats", params={"user_id": user_id})
             return [types.TextContent(type="text", text=json.dumps(data, ensure_ascii=False))]
 
         elif name == "feedback_memory":
             # API requires query params (user_id + feedback); JSON body gives 422 (observed 2026-09-12)
-            data = _call("POST", f"/memories/{arguments['memory_id']}/feedback",
+            data = await _call("POST", f"/memories/{arguments['memory_id']}/feedback",
                          params={"user_id": user_id, "feedback": arguments["feedback"]})
             return [types.TextContent(type="text", text=json.dumps(data, ensure_ascii=False))]
 
         elif name == "get_memory_traces":
-            data = _call("GET", f"/memories/{arguments['memory_id']}/traces")
+            data = await _call("GET", f"/memories/{arguments['memory_id']}/traces")
             return [types.TextContent(type="text", text=json.dumps(data, ensure_ascii=False))]
 
         elif name == "delete_memory":
             # user_id is a required query param; missing = 422 (observed 2026-09-12)
-            data = _call("DELETE", f"/memories/{arguments['memory_id']}", params={"user_id": user_id})
+            data = await _call("DELETE", f"/memories/{arguments['memory_id']}", params={"user_id": user_id})
             return [types.TextContent(type="text", text=json.dumps(data, ensure_ascii=False))]
 
         elif name == "restore_memory":
-            data = _call("POST", f"/memories/{arguments['memory_id']}/restore", params={"user_id": user_id})
+            data = await _call("POST", f"/memories/{arguments['memory_id']}/restore", params={"user_id": user_id})
             return [types.TextContent(type="text", text=json.dumps(data, ensure_ascii=False))]
 
         elif name == "search_graph":
-            data = _call("POST", "/graph/search", json={
+            # main.py's graph_search takes query/user_id/max_hops as query params
+            # (bare scalar args, no Pydantic body) — json= here 422s. Keep the
+            # tool's public arg name `limit` for backward compat; only the wire
+            # name changes (mirrors dialectic_search's max_results mapping above).
+            data = await _call("POST", "/graph/search", params={
                 "user_id": user_id,
                 "query": arguments["query"],
-                "limit": arguments.get("limit", 10),
+                "max_hops": arguments.get("limit", 2),
             })
             return [types.TextContent(type="text", text=json.dumps(data, ensure_ascii=False))]
 
         elif name == "extract_entities":
-            data = _call("POST", "/extract-entities", json={
-                "text": arguments["text"],
+            # main.py's extract_entities takes user_id/max_memories as query params
+            # and extracts from the user's own unlinked stored memories — it does
+            # not accept free text. A stale `text` arg from an old client is
+            # accepted-but-ignored (the MCP SDK doesn't validate `arguments`
+            # against inputSchema before calling us).
+            data = await _call("POST", "/extract-entities", params={
                 "user_id": user_id,
+                "max_memories": arguments.get("max_memories", 50),
             })
             return [types.TextContent(type="text", text=json.dumps(data, ensure_ascii=False))]
 
         elif name == "create_wiki_page":
-            data = _call("POST", "/wiki", json={
+            data = await _call("POST", "/wiki", json={
                 "title": arguments["title"],
                 "content": arguments["content"],
                 "user_id": user_id,
@@ -399,7 +441,7 @@ async def _dispatch(name: str, arguments: dict) -> list[types.TextContent]:
             return [types.TextContent(type="text", text=json.dumps(data, ensure_ascii=False))]
 
         elif name == "search_wiki":
-            data = _call("POST", "/wiki/search", json={
+            data = await _call("POST", "/wiki/search", json={
                 "query": arguments["query"],
                 "user_id": user_id,
                 "limit": arguments.get("limit", 5),
@@ -407,14 +449,14 @@ async def _dispatch(name: str, arguments: dict) -> list[types.TextContent]:
             return [types.TextContent(type="text", text=json.dumps(data, ensure_ascii=False))]
 
         elif name == "store_belief":
-            data = _call("POST", "/beliefs", json={
+            data = await _call("POST", "/beliefs", json={
                 "user_id": user_id,
                 "content": arguments["content"],
             })
             return [types.TextContent(type="text", text=json.dumps(data, ensure_ascii=False))]
 
         elif name == "search_beliefs":
-            data = _call("POST", "/beliefs/search", json={
+            data = await _call("POST", "/beliefs/search", json={
                 "user_id": user_id,
                 "query": arguments["query"],
                 "top_k": arguments.get("top_k", 5),

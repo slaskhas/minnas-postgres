@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """
-Mnemosyne v7.1 抽屉周报 (drawer_report.py)
-每周生成双抽屉健康报告: 分布/遗忘候选top/合并统计/建议
-用法: venv/bin/python drawer_report.py
-输出: /tmp/drawer_report_YYYYMMDD.json + 打印摘要
+Mnemosyne v7.1 drawer weekly report (drawer_report.py)
+Generates a weekly dual-drawer health report: distribution / top forgetting
+candidates / merge stats / recommendations
+Usage: venv/bin/python drawer_report.py
+Output: /tmp/drawer_report_YYYYMMDD.json + a printed summary
 """
 import asyncio
 import json
@@ -57,7 +58,7 @@ async def main():
               AND COALESCE(metadata->>'is_garbage','false')='true'
         """)
 
-        # 存储水位 (空间感知预警)
+        # Storage watermark (disk-space-aware warning)
         import shutil
         du = shutil.disk_usage("/")
         disk_pct = round(du.used / du.total * 100, 1)
@@ -79,14 +80,14 @@ async def main():
             "denoised_total": denoised or 0,
             "pinned_total": pinned or 0,
             "storage": {"disk_usage_pct": disk_pct, "level": storage_level,
-                        "message": "空间充足" if storage_level == "low" else ("⚠️ 警戒水位, 建议人工处理: POST /drawers/authorize" if storage_level == "warning" else "🚨 高水位, 必须人工处理")},
+                        "message": "Space OK" if storage_level == "low" else ("⚠️ Warning watermark, manual handling recommended: POST /drawers/authorize" if storage_level == "warning" else "🚨 Critical watermark, manual handling required")},
             "health": "✅" if (forget and len(forget) > 50) else "📋",
         }
         fname = f"/tmp/drawer_report_{datetime.now().strftime('%Y%m%d')}.json"
         with open(fname, "w") as f:
             json.dump(report, f, ensure_ascii=False, indent=2)
         print(json.dumps(report, ensure_ascii=False))
-        print(f"报告已存: {fname}")
+        print(f"Report saved: {fname}")
     finally:
         await pool.close()
 

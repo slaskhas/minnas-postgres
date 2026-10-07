@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""palace.py — 魔法记忆宫殿核心模块 v7.0
-设计: 记忆宫殿法空间编码(翼/房间/书架/书卷) + 档案学著录(档号)
-功能:
-  1. 分类树: 翼/房间/书架 定义 + 归类
-  2. 档号生成: K·NET·PROXY·2026-0007
-  3. 存量归类: 按 category/内容 自动分类
-  4. 著录卡片: 题名/摘要/标签/保管期限 (tome_cards)
-  5. 生命周期: 永久/长期/短期 分级
+"""palace.py — Magic Memory Palace core module v7.0
+Design: memory-palace spatial encoding (wing/room/shelf/tome) + archival
+cataloguing (archive number)
+Features:
+  1. Classification tree: wing/room/shelf definitions + classification
+  2. Archive number generation: K·NET·PROXY·2026-0007
+  3. Backfill classification: auto-classify by category/content
+  4. Tome cards: title/summary/tags/retention (tome_cards)
+  5. Lifecycle: permanent/long/short tiers
 """
 import os
 import sys
@@ -14,7 +15,8 @@ import re
 import json
 from datetime import datetime
 
-# ── 翼 (Wing) 定义 — 对标中图法大类, 贴合个人知识体系 ──
+# ── Wing definitions — modeled on Chinese Library Classification major
+# categories, adapted to a personal knowledge system ──
 WINGS = {
     "K": {"name": "知识", "rooms": ["arch", "memory", "ai", "tools"]},
     "N": {"name": "网络", "rooms": ["proxy", "domain", "dns", "server"]},
@@ -27,7 +29,7 @@ WINGS = {
     "M": {"name": "元", "rooms": ["meta", "config", "roadmap", "decision"]},
 }
 
-# 大类 → 翼 映射 (从现有 category)
+# Category → wing mapping (from existing category)
 CATEGORY_TO_WING = {
     "knowledge": "K", "reference": "K", "wiki": "K",
     "session": "M", "worklog": "O", "chat": "M",
@@ -35,7 +37,8 @@ CATEGORY_TO_WING = {
     "deploy": "D", "fact": "K",
 }
 
-# 房间关键词 → 房间 (从内容嗅探) — v7.0.1 扩充, 提高归类准确率
+# Room keywords → room (sniffed from content) — expanded in v7.0.1 to improve
+# classification accuracy
 ROOM_KEYWORDS = [
     ("proxy", ["xray", "代理", "proxy", "2081", "2082", "1080", "clash", "分流", "geosite"]),
     ("deploy", ["部署", "deploy", "发布", "rsync", "scp", "systemd", "重启", "升级"]),
@@ -61,28 +64,28 @@ ROOM_KEYWORDS = [
 
 
 def classify(content: str, category: str = "") -> dict:
-    """对一条记忆做分类: 返回 {wing, room, shelf}"""
-    # 1. 翼: 优先从 category 映射
+    """Classify one memory: returns {wing, room, shelf}"""
+    # 1. Wing: prefer mapping from category
     wing = CATEGORY_TO_WING.get(category, "")
-    # 2. 房间: 从内容关键词嗅探
+    # 2. Room: sniffed from content keywords
     room = ""
     text = (content or "").lower()
     for r, kws in ROOM_KEYWORDS:
         if any(k in text for k in kws):
             room = r
             break
-    # 3. 兜底: 无映射则入知识翼·未归类
+    # 3. Fallback: no mapping → Knowledge wing · unfiled
     if not wing:
         wing = "K"
     if not room:
         room = "unfiled"
-    # 4. shelf: 从标签/关键词生成 (简单版: 取第一个房间关键词)
+    # 4. Shelf: generated from tags/keywords (simple version: take the first room keyword)
     shelf = ""
     return {"wing": wing, "room": room, "shelf": shelf}
 
 
 def gen_archive_no(wing: str, room: str, shelf: str, year: int = 0, seq: int = 0) -> str:
-    """生成档号: K·NET·PROXY·2026-0007"""
+    """Generate archive number: K·NET·PROXY·2026-0007"""
     if not year:
         year = datetime.now().year
     return f"{wing}·{room.upper()}·{shelf.upper() + '·' if shelf else ''}{year}-{seq:04d}"
@@ -128,13 +131,14 @@ CREATE INDEX IF NOT EXISTS idx_tome_tags ON tome_cards USING GIN(tags);
 
 
 async def init_palace(pool) -> dict:
-    """宫殿初始化: 建表 + 存量记忆自动归类建档 (幂等, 可重复跑)
-    返回: {tables: [...], classified: N, cards: N}
+    """Palace init: create tables + auto-classify and catalogue backfill
+    memories (idempotent, safe to re-run)
+    Returns: {tables: [...], classified: N, cards: N}
     """
     import asyncpg
     result = {"tables": [], "classified": 0, "cards": 0}
     async with pool.acquire() as conn:
-        # 1. 建表
+        # 1. Create tables
         for name, sql in [
             ("archive_taxonomy", build_taxonomy_table_sql()),
             ("archive_no_col", add_archive_no_column_sql()),
@@ -146,7 +150,8 @@ async def init_palace(pool) -> dict:
             except Exception as e:
                 result["tables"].append(f"{name}(err:{e})")
 
-        # 2. 存量归类: 无档号的记忆 → 分类 + 生成档号 + 建卡片
+        # 2. Backfill classification: memories without an archive number →
+        # classify + generate archive number + create card
         rows = await conn.fetch(
             "SELECT id, content, category FROM memories "
             "WHERE user_id=$1 AND is_deleted=FALSE AND (archive_no IS NULL OR archive_no='') "
@@ -155,13 +160,14 @@ async def init_palace(pool) -> dict:
         )
         for r in rows:
             cls = classify(r["content"] or "", r["category"] or "")
-            # 生成档号: 翼·房·年-流水 (用 id 作流水, 保证唯一)
+            # Generate archive number: wing·room·year-sequence (id used as the
+            # sequence to guarantee uniqueness)
             archive_no = f"{cls['wing']}·{cls['room'].upper()}·{datetime.now().year}-{r['id']:04d}"
             try:
                 await conn.execute(
                     "UPDATE mnemosyne.memories SET archive_no=$1 WHERE id=$2 AND archive_no IS NULL",
                     archive_no, r["id"])
-                # 著录卡片
+                # Tome card
                 title = (r["content"] or "")[:30].replace("\n", " ")
                 summary = (r["content"] or "")[:120].replace("\n", " ")
                 await conn.execute(
@@ -176,17 +182,17 @@ async def init_palace(pool) -> dict:
     return result
 
 
-# ── 三通道召唤 (中药柜亮灯) ──
+# ── Three-channel summon (apothecary-cabinet lookup) ──
 async def summon(pool, query: str, user_id: str = "default", top_k: int = 5) -> dict:
-    """三通道召回:
-    ① 点名(精确): 档号/题名/标签 直命中
-    ② 引导(范围): 分类树翼/房 缩小
-    ③ 共鸣(语义): 向量相似兜底
-    返回按通道分组的命中
+    """Three-channel recall:
+    ① Call (exact): direct hit on archive number/title/tags
+    ② Guide (scoped): narrowed by classification-tree wing/room
+    ③ Resonate (semantic): vector-similarity fallback
+    Returns hits grouped by channel
     """
     result = {"query": query, "summon": [], "guide": [], "resonate": []}
 
-    # ① 点名: 档号/题名/标签 ILIKE
+    # ① Call: archive number/title/tags ILIKE
     async with pool.acquire() as conn:
         rows = await conn.fetch(
             "SELECT m.id, m.content, c.archive_no, c.title, c.wing, c.room, c.tags, m.heat_score "
@@ -199,7 +205,7 @@ async def summon(pool, query: str, user_id: str = "default", top_k: int = 5) -> 
                              "title": r["title"], "wing": r["wing"], "room": r["room"],
                              "tags": r["tags"], "heat": r["heat_score"]} for r in rows]
 
-        # ② 引导: 分类树匹配 (query 含翼/房关键词)
+        # ② Guide: classification-tree match (query contains wing/room keywords)
         cls = classify(query, "")
         if cls["room"] != "unfiled":
             rows = await conn.fetch(
@@ -211,7 +217,7 @@ async def summon(pool, query: str, user_id: str = "default", top_k: int = 5) -> 
             result["guide"] = [{"id": r["id"], "content": r["content"][:120], "archive_no": r["archive_no"],
                                 "title": r["title"], "room": r["room"], "tags": r["tags"]} for r in rows]
 
-    # ③ 共鸣: 向量检索 (需 embedding; 失败则跳过)
+    # ③ Resonate: vector search (needs embedding; skipped on failure)
     try:
         from core.embedding import get_embedding_async
         vec = (await get_embedding_async([query]))[0]
@@ -229,7 +235,8 @@ async def summon(pool, query: str, user_id: str = "default", top_k: int = 5) -> 
     except Exception:
         pass
 
-    # ④ 文库 (v7.5): 顺带查 WIKI 知识库 — 论文/方案全文快照
+    # ④ Archive (v7.5): also query the WIKI knowledge base — full-text snapshots
+    # of papers/proposals
     try:
         from core.embedding import get_embedding_async as _ge
         w_vec = (await _ge([query]))[0]
@@ -248,17 +255,20 @@ async def summon(pool, query: str, user_id: str = "default", top_k: int = 5) -> 
     return result
 
 
-# ── v8.0 S2-1: 四通道 RRF 融合召回（与 summon 并存，由调用方 A/B 选择） ──
+# ── v8.0 S2-1: four-channel RRF-fused recall (coexists with summon(); caller
+# picks via A/B) ──
 async def _summon_channels(pool, query: str, user_id: str, limit: int) -> dict:
-    """取四通道候选（各 limit 条），保留每通道自己的排序。
+    """Fetch candidates from all four channels (`limit` each), keeping each
+    channel's own ordering.
 
-    与 summon() 的 SQL 一致，只把 LIMIT 参数化到 candidate_k —— 好让融合有足够候选。
-    返回结构与 summon() 相同，便于调用方复用。
+    Same SQL as summon(), just with LIMIT parameterized to candidate_k — so
+    fusion has enough candidates to work with.
+    Return shape matches summon(), so callers can reuse it.
     """
     out = {"summon": [], "guide": [], "resonate": [], "wiki": []}
 
     async with pool.acquire() as conn:
-        # ① 点名: 档号/题名/标签/内容 ILIKE（按热度降序）
+        # ① Call: archive number/title/tags/content ILIKE (descending by heat)
         rows = await conn.fetch(
             "SELECT m.id, m.content, c.archive_no, c.title, c.wing, c.room, c.tags, m.heat_score "
             "FROM memories m JOIN tome_cards c ON c.memory_id = m.id "
@@ -270,7 +280,7 @@ async def _summon_channels(pool, query: str, user_id: str, limit: int) -> dict:
                           "title": r["title"], "wing": r["wing"], "room": r["room"],
                           "tags": r["tags"], "heat": r["heat_score"]} for r in rows]
 
-        # ② 引导: 分类树匹配（按热度降序）
+        # ② Guide: classification-tree match (descending by heat)
         cls = classify(query, "")
         if cls["room"] != "unfiled":
             rows = await conn.fetch(
@@ -283,7 +293,7 @@ async def _summon_channels(pool, query: str, user_id: str, limit: int) -> dict:
                              "title": r["title"], "wing": r["wing"], "room": r["room"],
                              "tags": r["tags"]} for r in rows]
 
-    # ③ 共鸣: 向量近邻（距离升序）
+    # ③ Resonate: vector nearest-neighbors (ascending by distance)
     try:
         from core.embedding import get_embedding_async
         vec = (await get_embedding_async([query]))[0]
@@ -301,7 +311,8 @@ async def _summon_channels(pool, query: str, user_id: str, limit: int) -> dict:
     except Exception:
         pass
 
-    # ④ 文库: WIKI 向量（距离升序）—— 注意 wiki id 与 memory id 是两套空间
+    # ④ Archive: WIKI vectors (ascending by distance) — note wiki id and
+    # memory id are two separate id spaces
     try:
         from core.embedding import get_embedding_async as _ge
         w_vec = (await _ge([query]))[0]
@@ -321,44 +332,53 @@ async def _summon_channels(pool, query: str, user_id: str, limit: int) -> dict:
 
 
 def _ns(channel: str, item_id) -> str:
-    """命名空间前缀：memories 通道 m: / wiki 通道 w:（两套 id 空间，数值会撞）。"""
+    """Namespace prefix: memories channel m: / wiki channel w: (two id spaces
+    whose numeric values would otherwise collide)."""
     return f"{'w' if channel == 'wiki' else 'm'}:{item_id}"
 
 
 async def summon_fused(pool, query: str, user_id: str = "default", top_k: int = 5,
                        candidate_k: int = 50, k_rrf: int = 60) -> dict:
-    """四通道 **RRF 融合** 召回（v8.0 S2-1）。
+    """Four-channel **RRF-fused** recall (v8.0 S2-1).
 
-    解决什么
+    What this solves
+    -----------------
+    Status quo (measured in `palace.py:180-250`): each channel returns its own
+    `LIMIT top_k` directly — no fusion, no unified cutoff, so callers get four
+    separate blobs of results they can't compare, and **can't tell which hits
+    are multi-channel consensus**.
+
+    Approach
     --------
-    现状（实测 `palace.py:180-250`）: 四通道各自 `LIMIT top_k` 直接返回 ——
-    不融合、无统一截断，调用方拿到四坨结果无法比较，**更看不出哪条是多通道共识**。
+    Each channel first takes `candidate_k` (default 50) candidates → RRF fusion
+    (rank-only, dimensionless) → unified cutoff at `top_k`. Items hit by
+    multiple channels naturally rank higher (a mathematical result, not a
+    tuned parameter).
 
-    做法
-    ----
-    各通道先取 `candidate_k`（默认 50）候选 → RRF 融合（只按排名，量纲无关）
-    → 统一截断 `top_k`。多通道共同命中的条目自动排前（数学结果，不是调参）。
+    Compatibility
+    -------------
+    **Does not change the original `summon()`** — old and new coexist, and the
+    caller picks via the `fused` flag. So default behavior is unchanged until
+    the eval numbers are in (R3 principle: measure before changing).
 
-    兼容性
-    ------
-    **不改动原 `summon()`** —— 新旧并存，由调用方按 `fused` 开关选择。
-    这样在评测数字出来之前，默认行为零变化（R3 原则：先量后改）。
-
-    返回
-    ----
-    {"query", "fused": [{id, kind, score, channels, item}], "channels": {原始四通道}}
-    其中 `channels` 字段回答“这条为什么排上来”，是融合可解释性的载体。
+    Returns
+    -------
+    {"query", "fused": [{id, kind, score, channels, item}], "channels": {the
+    original four channels}}
+    The `channels` field answers "why did this item rank here" — the carrier
+    of fusion explainability.
     """
     from core.rrf import rrf_fuse_ranked, fuse_within_topk
 
     raw = await _summon_channels(pool, query, user_id, candidate_k)
 
     ranked = {ch: [item["id"] for item in items] for ch, items in raw.items() if items}
-    # fuse 前打命名空间前缀，避免 memories/wiki 两套 id 空间互撞
+    # Apply the namespace prefix before fusing, to avoid memories/wiki id
+    # spaces colliding
     prefixed = {ch: [_ns(ch, i) for i in ids] for ch, ids in ranked.items()}
     fused = rrf_fuse_ranked(prefixed, k=k_rrf)
 
-    # 回填条目内容（用带前缀的 key 反查）
+    # Backfill item content (reverse lookup via the prefixed key)
     lookup = {}
     for ch, items in raw.items():
         for item in items:
@@ -376,7 +396,7 @@ async def summon_fused(pool, query: str, user_id: str = "default", top_k: int = 
             "meta": {"candidate_k": candidate_k, "k_rrf": k_rrf, "top_k": top_k}}
 
 
-# ── 卡片精炼 (资料室: 题名/摘要/标签 生成) ──
+# ── Card refinement (reading room: title/summary/tags generation) ──
 def refine_prompt(content: str) -> str:
     return f"""你是记忆宫殿的图书管理员。给一条记忆生成著录卡片。
 要求:
@@ -391,7 +411,7 @@ def refine_prompt(content: str) -> str:
 
 
 async def refine_cards(pool, limit: int = 20) -> dict:
-    """批量精炼著录卡片 (LLM 生成题名/摘要/标签), 只处理 created_by='backfill' 的"""
+    """Batch-refine tome cards (LLM generates title/summary/tags); only processes rows with created_by='backfill'"""
     import json
     from core.llm import call_llm_json
     done, failed = 0, 0
@@ -404,7 +424,7 @@ async def refine_cards(pool, limit: int = 20) -> dict:
         for r in rows:
             try:
                 res = call_llm_json(refine_prompt(r["content"] or ""))
-                # json_mode 时 content 已是提取好的 JSON 字符串
+                # In json_mode, content is already the extracted JSON string
                 raw = res.get("content", "") if isinstance(res, dict) else ""
                 if not raw:
                     failed += 1
@@ -424,20 +444,24 @@ async def refine_cards(pool, limit: int = 20) -> dict:
     return {"refined": done, "failed": failed}
 
 
-# ── 资料室: 事实提取管道 (对话→facts→建档) ──
+# ── Reading room: fact-extraction pipeline (conversation → facts → catalogued) ──
 async def extract_facts_pipeline(pool, batch: int = 20) -> dict:
-    """从 session/worklog 提取事实 → 入 memories(preference/knowledge) → 自动建档
-    复用 tmt/factextract.py 逻辑, 幂等 (metadata fact_extracted 标记)
+    """Extract facts from session/worklog → write to memories
+    (preference/knowledge) → auto-catalogue
+    Reuses tmt/factextract.py logic; idempotent (marked via metadata
+    fact_extracted)
     """
     from tmt import factextract
     from tmt.distill import load_env  # noqa: F401
     processed, facts_created = 0, 0
     try:
-        # 显式 public schema, 消除 search_path 歧义 (ag_catalog 优先时 memories 可能解析异常)
+        # Explicit public schema, to remove search_path ambiguity (memories
+        # can resolve incorrectly when ag_catalog takes priority)
         candidates = await factextract.find_candidates(pool, batch)
         for c in candidates:
             if factextract.is_skip(c["content"] or ""):
-                # 短内容不值得提取, 但标记已处理 (防止无限 pending)
+                # Content too short to be worth extracting, but mark it
+                # processed anyway (avoid it staying pending forever)
                 async with pool.acquire() as conn:
                     await conn.execute(
                         "UPDATE mnemosyne.memories SET metadata = COALESCE(metadata,'{}'::jsonb) || '{\"fact_extracted\":true}'::jsonb "
@@ -451,7 +475,9 @@ async def extract_facts_pipeline(pool, batch: int = 20) -> dict:
                     nid = await factextract.insert_fact(pool, c["id"], c["category"] or "", f, ftype)
                     if nid:
                         facts_created += 1
-                        # 新事实自动建档 (分类+档号+卡片) — 直接用 insert 返回的 id, 无竞态
+                        # Auto-catalogue the new fact (classify + archive
+                        # number + card) — uses the id returned by the
+                        # insert directly, no race condition
                         cls = classify(f, ftype)
                         archive_no = f"F·{cls['room'].upper()}·{datetime.now().year}-{nid % 100000:05d}"
                         try:
@@ -465,7 +491,7 @@ async def extract_facts_pipeline(pool, batch: int = 20) -> dict:
                                     nid, f[:30], f[:120], archive_no, cls["wing"], cls["room"], cls["shelf"], [ftype])
                         except Exception:
                             pass
-            # 标记已提取 (无论有无事实)
+            # Mark as extracted (regardless of whether any facts were found)
             async with pool.acquire() as conn:
                 await conn.execute(
                     "UPDATE mnemosyne.memories SET metadata = COALESCE(metadata,'{}'::jsonb) || '{\"fact_extracted\":true}'::jsonb "
@@ -476,21 +502,22 @@ async def extract_facts_pipeline(pool, batch: int = 20) -> dict:
     return {"processed": processed, "facts_created": facts_created}
 
 
-# ── 永恒分级生命周期 ──
+# ── Eternal-tier lifecycle ──
 RETENTION_RULES = {
-    "permanent": {"decay": 0.0, "keep_days": None},   # 永久: 不衰减, 不清理
-    "long":      {"decay": 0.999, "keep_days": None},  # 长期: 极慢衰减, 不自动清
-    "short":     {"decay": 0.98, "keep_days": 90},     # 短期: 快衰减, 90天自动撤架
+    "permanent": {"decay": 0.0, "keep_days": None},   # Permanent: no decay, never purged
+    "long":      {"decay": 0.999, "keep_days": None},  # Long: very slow decay, not auto-purged
+    "short":     {"decay": 0.98, "keep_days": 90},     # Short: fast decay, auto-retired after 90 days
 }
 
 async def apply_lifecycle(pool, user_id: str = "default") -> dict:
-    """永恒分级: 按保管期限调整热度 + 短期过期自动软删
-    返回: {expired: N, degraded: N}
+    """Eternal tiering: adjust heat by retention tier + auto-soft-delete
+    expired short-tier items
+    Returns: {expired: N, degraded: N}
     """
     import json
     expired, degraded = 0, 0
     async with pool.acquire() as conn:
-        # 1. 短期: 超过 keep_days 自动软删 (撤架)
+        # 1. Short: auto-soft-delete (retire) once past keep_days
         rows = await conn.fetch(
             "SELECT c.memory_id, m.created_at FROM tome_cards c "
             "JOIN memories m ON m.id = c.memory_id "
@@ -501,7 +528,8 @@ async def apply_lifecycle(pool, user_id: str = "default") -> dict:
                 await conn.execute(
                     "UPDATE mnemosyne.memories SET is_deleted=TRUE, forgotten_at=NOW() WHERE id=$1", r["memory_id"])
                 expired += 1
-        # 2. 永久/长期: 热度保护 (permanent 不衰减, 已由 decay=0 表达; 这里给永久卷热度下限)
+        # 2. Permanent/long: heat protection (permanent already has no decay,
+        # expressed via decay=0; this just gives permanent items a heat floor)
         await conn.execute(
             "UPDATE mnemosyne.memories SET heat_score = GREATEST(heat_score, 0.8) "
             "WHERE id IN (SELECT memory_id FROM tome_cards WHERE retention='permanent') "
@@ -512,14 +540,14 @@ async def apply_lifecycle(pool, user_id: str = "default") -> dict:
 
 
 if __name__ == "__main__":
-    # 自测
+    # Self-test
     tests = [
         ("在生产服务器部署xray代理，2081端口，systemd服务", "ops"),
         ("用户喜欢红果短剧风格的AI美女图", "preference"),
         ("密钥在保险柜GITHUB/KEY.txt，line3细粒度PAT", "ops"),
         ("mnemosyne蒸馏链修复，双底座DeepSeek", "worklog"),
     ]
-    print("=== 分类自测 ===")
+    print("=== Classification self-test ===")
     for content, cat in tests:
         r = classify(content, cat)
         print(f"  [{cat}] {content[:30]}... → {r}")

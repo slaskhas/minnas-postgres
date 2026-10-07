@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
-"""wiki_eval — WIKI 检索质量定期评测 (v7.5 P2)
+"""wiki_eval — periodic WIKI retrieval quality evaluation (v7.5 P2)
 
-固定 20 条真实查询评测集, 对比三档: 纯向量 / 向量+BM25 / 全通道(+图谱)。
-输出 precision@3 报告 + 变化告警 (防止检索漂移)。
-生产 cron: 每周一 7am 跑一次, 结果写入 /tmp/wiki_eval_report.txt
+A fixed set of 20 real queries, compared across three tiers: pure vector /
+vector+BM25 / full channel (+graph).
+Outputs a precision@3 report + a drift alert (guards against retrieval
+regressions).
+Production cron: runs once every Monday at 7am, writes results to
+/tmp/wiki_eval_report.txt
 
-用法: venv/bin/python wiki_eval.py
+Usage: venv/bin/python wiki_eval.py
 """
 import asyncio
 import json
@@ -22,7 +25,10 @@ import asyncpg  # noqa: E402
 USER_ID = "default"
 REPORT_FILE = "/tmp/wiki_eval_report.txt"
 
-# 评测集: (query, [期望 page_id], 期望 source_type 可空)
+# Evaluation set: (query, [expected page_id], expected source_type optional)
+# NOTE: queries are real Chinese search terms matched against this deployment's
+# actual wiki content/page IDs — kept in Chinese intentionally, this is
+# functional test data, not a comment.
 EVAL_SET = [
     ("浑天芯算 正二十面体 光电混合 类脑", [51]),
     ("石匠逻辑 劈叉 概念裂变 双星认知", [49]),
@@ -44,22 +50,22 @@ EVAL_SET = [
     ("Mnemosyne 记忆系统 整体方案", [68]),
     ("小镇 像素风 交互前端", [108]),
     ("抽屉 级联压缩 引擎", [83]),
-    # v7.5.1 扩充 (专家评审 P1: 样本量不足): 长尾/跨域/边界查询
+    # v7.5.1 addition (expert review P1: insufficient sample size): long-tail/cross-domain/edge-case queries
     ("Hermes 记忆系统 适配体检", [69]),
     ("大手术 交接单 重构方案", [74, 73]),
     ("医学AI 临床医生 科研 Agent", [52, 61]),
     ("城市 生态 固碳 碳汇", [67]),
     ("诺亚 前端 三栏工作台", [104]),
-    ("记忆 备份 守则 分级", []),  # 边界: 无强命中, 测兜底
-    ("论文 发布 zenodo", [57, 60]),  # 跨域: 论文发布场景
+    ("记忆 备份 守则 分级", []),  # edge case: no strong hit expected, tests the fallback
+    ("论文 发布 zenodo", [57, 60]),  # cross-domain: paper-publishing scenario
     ("API 路由 智能决策", [111]),
     ("对话 角色 分层 配置", [110]),
-    ("evolve 蒸馏 五阶段", [84, 86]),  # 术语: 蒸馏管道
+    ("evolve 蒸馏 五阶段", [84, 86]),  # terminology: distillation pipeline
 ]
 
 
 async def search(conn, query: str, hybrid: bool, graph: bool, top_k: int = 5) -> list:
-    """模拟 search_wiki 的 SQL 查询 (纯函数版, 不调 API)"""
+    """Simulates search_wiki's SQL query (pure-function version, doesn't call the API)"""
     from core.embedding import get_embedding_async
     vec = (await get_embedding_async([query]))[0]
     q_str = "[" + ",".join(str(x) for x in vec) + "]"
@@ -103,7 +109,7 @@ def hit_rate(ids: list, expected: list) -> bool:
 
 
 def first_rank(ids: list, expected: list) -> int:
-    """第一个命中排位 (1-based), 未命中返回 4 (top3 外)"""
+    """Rank of the first hit (1-based); returns 4 (outside top3) if there's no hit"""
     for i, pid in enumerate(ids[:3]):
         if pid in expected:
             return i + 1
@@ -111,7 +117,7 @@ def first_rank(ids: list, expected: list) -> int:
 
 
 def recall_at3(ids: list, expected: list) -> float:
-    """recall@3: 期望集合被命中的比例 (多文档查询适用)"""
+    """recall@3: the fraction of the expected set that was hit (applies to multi-document queries)"""
     if not expected:
         return 0.0
     hit = sum(1 for e in expected if e in ids[:3])
@@ -128,7 +134,7 @@ async def main():
                 "vec_bm25": lambda q: search(conn, q, True, False),
                 "vec_bm25_graph": lambda q: search(conn, q, True, True),
             }
-            # v7.5 扩充: precision@3 + recall@3 + MRR
+            # v7.5 addition: precision@3 + recall@3 + MRR
             results = {}
             for mode, fn in modes.items():
                 prec_hits = 0
@@ -148,23 +154,23 @@ async def main():
         await pool.close()
 
     lines = [
-        f"WIKI 检索评测 {time.strftime('%Y-%m-%d %H:%M')} ({n} 查询)",
-        f"  纯向量:        {results['pure_vec']}",
-        f"  向量+BM25:     {results['vec_bm25']}",
-        f"  全通道(+图谱): {results['vec_bm25_graph']}",
-        f"  结论: {'稳定 ✅' if results['vec_bm25']['precision@3'] >= 85 else '⚠️ 需关注: BM25 precision@3 低于85%'}",
+        f"WIKI retrieval evaluation {time.strftime('%Y-%m-%d %H:%M')} ({n} queries)",
+        f"  pure vector:        {results['pure_vec']}",
+        f"  vector+BM25:        {results['vec_bm25']}",
+        f"  full channel(+graph): {results['vec_bm25_graph']}",
+        f"  verdict: {'stable ✅' if results['vec_bm25']['precision@3'] >= 85 else '⚠️ needs attention: BM25 precision@3 below 85%'}",
     ]
     report = "\n".join(lines)
     print(report)
 
-    # 对比上次 (兼容旧格式)
+    # compare against the previous run (backwards-compatible with the old format)
     prev = {}
     if os.path.exists(REPORT_FILE):
         with open(REPORT_FILE, "r", encoding="utf-8") as f:
             for line in f:
                 if "precision" in line or "%" in line:
                     prev_line = line.strip()
-        # 简化: 只对比 vec_bm25 precision
+        # simplified: only compares vec_bm25 precision
         cur_p = results["vec_bm25"]["precision@3"]
 
     with open(REPORT_FILE, "w", encoding="utf-8") as f:

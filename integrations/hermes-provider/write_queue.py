@@ -1,10 +1,11 @@
-"""持久写队列 — crash-safe 记忆写入缓冲
+"""Persistent write queue — crash-safe memory-write buffer.
 
-参考：RetainDB _WriteQueue 模式
-用途：Hermes sync_turn → SQLite 队列 → 后台逐条发送 → Mnemosyne API
-特性：WSL 断电不丢数据，重启自动回放，熔断器防重复轰炸
+Reference: RetainDB's _WriteQueue pattern
+Purpose: Hermes sync_turn → SQLite queue → background item-by-item send → Mnemosyne API
+Features: no data lost on WSL power loss, auto-replay on restart, circuit breaker
+prevents repeated bombardment.
 
-队列表:
+Queue table:
   pending(id PK, user_content, assistant_content, category,
           status, attempts, last_error, created_at)
 """
@@ -21,14 +22,14 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 _DB_PATH = Path.home() / ".hermes" / "mnemosyne_queue.db"
-_POLL_INTERVAL = 2.0  # 消费间隔秒数
+_POLL_INTERVAL = 2.0  # consumer polling interval in seconds
 _MAX_RETRIES = 3
 _CIRCUIT_BREAK_THRESHOLD = 5
 _CIRCUIT_RESET_SECONDS = 120
 
 
 class WriteQueue:
-    """SQLite 持久化写入队列（线程安全）"""
+    """SQLite-backed persistent write queue (thread-safe)."""
 
     def __init__(self, db_path: Optional[Path] = None):
         self._db_path = db_path or _DB_PATH
@@ -37,12 +38,12 @@ class WriteQueue:
         self._lock = threading.Lock()
         self._init_db()
 
-        # 熔断器状态
+        # Circuit-breaker state
         self._fail_count = 0
         self._circuit_open_until = 0.0
         self._circuit_lock = threading.Lock()
 
-    # ── 连接管理 ──
+    # ── Connection management ──
 
     def _get_conn(self) -> sqlite3.Connection:
         if not hasattr(self._local, "conn") or self._local.conn is None:
@@ -73,11 +74,11 @@ class WriteQueue:
             """)
             conn.commit()
 
-    # ── 写入队列 ──
+    # ── Enqueue ──
 
     def enqueue(self, user_content: str, assistant_content: str,
                 category: str = "chat", source: str = "hermes-sync") -> int:
-        """写入队列（立即持久化，crash-safe）"""
+        """Write to the queue (persisted immediately, crash-safe)."""
         with self._lock:
             conn = self._get_conn()
             cur = conn.execute(
@@ -87,10 +88,10 @@ class WriteQueue:
             conn.commit()
             return cur.lastrowid
 
-    # ── 消费队列（由后台线程调用）──
+    # ── Dequeue (called by the background thread) ──
 
     def dequeue(self, batch_size: int = 5) -> list[dict]:
-        """取出待发送的条目"""
+        """Fetch entries awaiting delivery."""
         with self._lock:
             conn = self._get_conn()
             rows = conn.execute(
@@ -106,14 +107,14 @@ class WriteQueue:
             ]
 
     def mark_done(self, item_id: int):
-        """发送成功，删除队列条目"""
+        """Delivery succeeded — delete the queue entry."""
         with self._lock:
             conn = self._get_conn()
             conn.execute("DELETE FROM pending WHERE id=?", (item_id,))
             conn.commit()
 
     def mark_failed(self, item_id: int, error: str):
-        """发送失败，标记重试"""
+        """Delivery failed — mark for retry."""
         with self._lock:
             conn = self._get_conn()
             conn.execute(
@@ -123,7 +124,7 @@ class WriteQueue:
             )
             conn.commit()
 
-    # ── 统计 ──
+    # ── Stats ──
 
     def pending_count(self) -> int:
         with self._lock:
@@ -132,7 +133,7 @@ class WriteQueue:
             return r[0] if r else 0
 
     def replay_pending(self) -> list[dict]:
-        """重启时回放所有待发送条目"""
+        """Replay all pending entries on restart."""
         with self._lock:
             conn = self._get_conn()
             rows = conn.execute(
@@ -141,7 +142,7 @@ class WriteQueue:
             ).fetchall()
             return [{"id": r[0], "user_content": r[1], "assistant_content": r[2]} for r in rows]
 
-    # ── 熔断器 ──
+    # ── Circuit breaker ──
 
     def is_circuit_open(self) -> bool:
         with self._circuit_lock:
@@ -150,7 +151,7 @@ class WriteQueue:
             if time.time() > self._circuit_open_until:
                 self._circuit_open_until = 0
                 self._fail_count = 0
-                logger.info("熔断器 HALF_OPEN → 恢复试探")
+                logger.info("Circuit breaker HALF_OPEN → resuming trial requests")
                 return False
             return True
 
@@ -164,11 +165,11 @@ class WriteQueue:
             self._fail_count += 1
             if self._fail_count >= _CIRCUIT_BREAK_THRESHOLD:
                 self._circuit_open_until = time.time() + _CIRCUIT_RESET_SECONDS
-                logger.warning("熔断器 OPEN — 暂停 %ds (fail_count=%d)",
+                logger.warning("Circuit breaker OPEN — pausing %ds (fail_count=%d)",
                                _CIRCUIT_RESET_SECONDS, self._fail_count)
 
 
-# ── 全局单例 ──
+# ── Global singleton ──
 _queue: Optional[WriteQueue] = None
 
 

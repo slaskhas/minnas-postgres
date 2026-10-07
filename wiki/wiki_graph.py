@@ -1,23 +1,24 @@
 #!/usr/bin/env python3
-"""wiki_graph — WIKI 图谱扩展检索通道 (v7.5 P1)
+"""wiki_graph — WIKI graph-expansion retrieval channel (v7.5 P1)
 
-设计: 实体锚定 + 1跳 RELATED_TO
-1. 查询 → jieba 分词 → entities 表匹配 (name ILIKE) → 候选实体 id
-2. 沿 AGE RELATED_TO 边 1 跳 → 关联实体 id
-3. 关联实体 → wiki_entities 表 → 出现在哪些 wiki 页面 (加分)
-4. 返回 {page_id: graph_score, related_entities: [...]}
+Design: entity anchoring + 1-hop RELATED_TO
+1. Query → jieba tokenization → match against entities table (name ILIKE) → candidate entity ids
+2. Follow AGE RELATED_TO edges 1 hop → related entity ids
+3. Related entities → wiki_entities table → which wiki pages they appear on (score boost)
+4. Returns {page_id: graph_score, related_entities: [...]}
 
-与向量/BM25 通道 RRF 融合 (search_wiki 调用)。
+Fused with the vector/BM25 channels via RRF (called from search_wiki).
 """
 import asyncio
 import math
 
 
 async def graph_expand(conn, query: str, user_id: str = "default", top_k: int = 10) -> dict:
-    """图谱扩展: 返回 {page_scores: {page_id: score}, entities: [name,...]}"""
+    """Graph expansion: returns {page_scores: {page_id: score}, entities: [name,...]}"""
     try:
         import jieba
-        # 加载专业词典 (v7.5 专家评审 P1: 术语分词) — jieba 全局单例, 只加载一次
+        # Load the domain dictionary (v7.5 expert review P1: terminology tokenization)
+        # — jieba is a global singleton, only loaded once
         import os as _os
         _dict_path = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "wiki_dict.txt")
         if _os.path.exists(_dict_path):
@@ -25,7 +26,7 @@ async def graph_expand(conn, query: str, user_id: str = "default", top_k: int = 
     except ImportError:
         return {"page_scores": {}, "entities": []}
 
-    # 1. 查询分词 → entities 表匹配 (优先匹配有 wiki 关联的实体)
+    # 1. Tokenize the query → match against the entities table (prefer entities with a wiki association)
     tokens = [t.strip() for t in jieba.cut(query) if len(t.strip()) >= 2]
     if not tokens:
         return {"page_scores": {}, "entities": []}
@@ -33,7 +34,8 @@ async def graph_expand(conn, query: str, user_id: str = "default", top_k: int = 
     anchor_entities = []
     seen_ids = set()
     for tok in tokens[:6]:
-        # 只取 2-12 字的实体名 (过滤超长全名), 且优先有 wiki 关联的
+        # Only take entity names 2-12 characters long (filters out overly long full
+        # names), preferring those with a wiki association
         rows = await conn.fetch(
             "SELECT DISTINCT e.id, e.name FROM entities e "
             "JOIN wiki_entities we ON we.entity_id = e.id "
@@ -52,9 +54,9 @@ async def graph_expand(conn, query: str, user_id: str = "default", top_k: int = 
     anchor_ids = [e["id"] for e in anchor_entities]
     entities_found = [e["name"] for e in anchor_entities]
 
-    # 2. (v7.8: AGE RELATED_TO 1跳已随 AGE 切除 — 仅用锚定实体)
+    # 2. (v7.8: the AGE RELATED_TO 1-hop was removed along with AGE — anchor entities only now)
 
-    # 3. 关联实体 → wiki_entities 找页面
+    # 3. Related entities → look up pages via wiki_entities
     all_ids = list(anchor_ids)
     page_scores = {}
     if all_ids:
@@ -65,7 +67,7 @@ async def graph_expand(conn, query: str, user_id: str = "default", top_k: int = 
         )
         total = sum(r["n"] for r in rows) or 1
         for r in rows:
-            # 归一化: 页面关联实体数 / 总关联数
+            # normalize: page's associated-entity count / total associations
             page_scores[r["wiki_page_id"]] = round(r["n"] / total, 4)
 
     return {"page_scores": page_scores, "entities": entities_found[:10]}

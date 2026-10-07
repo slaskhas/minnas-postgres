@@ -1,66 +1,89 @@
-# change: archive-quality-v784 — 归档质量：收尾汇报不再被切 + 汇报卡入库
+# change: archive-quality-v784 — archival quality: closing reports no longer truncated + report cards get stored
 
-- **状态**：已实现（测试全绿），**待发布**（未 tag / 未推送 / 未部署）
-- **日期**：2026-09-24
-- **目标版本**：v7.8.4
-- **影响面**：采集端（Hermes → Mnemosyne 归档链路）。**不动服务端** `main.py` 的检索/存储行为。
+- **Status**: implemented (tests all green), **pending release** (not tagged / not pushed / not deployed)
+- **Date**: 2026-09-24
+- **Target version**: v7.8.4
+- **Blast radius**: the collection side (Hermes → Mnemosyne archival pipeline). **Does not touch** `main.py`'s server-side retrieval/storage behavior.
 
-## 为什么（触发）
+## Why (trigger)
 
-用户问「生产服务器上那个几百兆的文件是什么」，全线查不到 —— 后果是两次误判（先说"我没说过"，再纠正错归属日期）。
+The user asked "what is that few-hundred-MB file on the production server," and it couldn't be found
+anywhere — resulting in two misjudgments (first "I never said that," then a correction with the wrong
+attributed date).
 
-实测根因（写入前先取证，不猜）：
+Root cause, measured (gathered evidence before writing anything, no guessing):
 
-| 事实 | 证据 |
+| Fact | Evidence |
 |---|---|
-| 原话**一条没少** | `~/.hermes/state.db` 296 会话 / 42,565 条消息 |
-| 语义层**查不到** | `archive_session.py` 对每条消息一刀切 `content[:2000] + "(截断)"`，而收尾汇报常 >2000 字 |
-| 切掉的恰是精华 | 交付物**绝对路径 / URL / 哈希 / 实测数字**都在汇报后半段 |
-| 工具证据**全丢** | 归档只取 `content`，`tool_calls` 不入库（本机 17,486 条消息带工具调用） |
-| 小任务**无痕** | `auto_mode()` 里 `message_count < 5: continue` |
-| 生产有、仓库无 | 部署副本 2026-09-04 的 `_detect_project` 接线未回库（漂移） |
+| **Not a single word** of the original text was lost | `~/.hermes/state.db` has 296 sessions / 42,565 messages |
+| But it's **unfindable** at the semantic layer | `archive_session.py` truncates every message uniformly to `content[:2000] + "(truncated)"`, while closing reports are often >2000 characters |
+| What got cut was exactly the valuable part | deliverable **absolute paths / URLs / hashes / measured numbers** all live in the back half of the report |
+| Tool evidence was **lost entirely** | archival only kept `content`; `tool_calls` was never stored (this machine has 17,486 messages with tool calls) |
+| Small tasks leave **no trace** | `auto_mode()` has `message_count < 5: continue` |
+| Present in production, absent in the repo | the deployed copy's `_detect_project` wiring (from 2026-09-04) was never merged back (drift) |
 
-与 (v7.8.2)「语义等价 ≠ 可用」同源：**改了粒度而消费端没跟上，不报错、只失真**。
+Same root cause as (v7.8.2)'s "semantically equivalent ≠ usable": **the granularity changed but the
+consumer didn't keep up — it doesn't error, it just silently loses fidelity.**
 
 ## MODIFIED
 
 `scripts/archive_session.py`
-- 分级截断：收尾汇报（会话最后一条有正文的 AI 消息）与用户消息**全文保留**；过程消息压缩到 `LIMIT_PROCESS=1200`；总预算 `MAX_TOTAL=120000` 超限时**只压缩过程消息**，汇报永不裁剪（预算不低于旧版实际入档量级）。
-- 证据签名：带 `tool_calls` 的消息附 `⟪工具: terminal×3, read_file×2⟫`（上限 `TOOL_SIG_MAX=5` 种，容错坏 JSON）。
-- 短会话：`message_count < SHORT_SESSION(5)` 不再跳过，入库并打 `[短]` 前缀；`--skip-short` 还原旧行为。
-- 标题：`_compose_title()` 把 `[项目]` / `[短]` 合成**单个**标签（`[短·relife]`），且**幂等**（重复处理不叠加）。
-- 回库：部署副本已验证的 `_detect_project` 接线并入（命中关键词 ≥2 才打项目前缀）。
+- Tiered truncation: the closing report (the session's last AI message with a body) and user messages
+  are **kept in full**; intermediate process messages are compressed to `LIMIT_PROCESS=1200`; when the
+  total budget `MAX_TOTAL=120000` is exceeded, **only process messages are compressed** — the closing
+  report is never trimmed (the budget is no lower than what the old version actually archived).
+- Evidence signature: messages carrying `tool_calls` get a `⟪tools: terminal×3, read_file×2⟫` tag (capped
+  at `TOOL_SIG_MAX=5` kinds, tolerant of malformed JSON).
+- Short sessions: `message_count < SHORT_SESSION(5)` is no longer skipped — it's stored with a `[short]`
+  prefix; `--skip-short` restores the old behavior.
+- Titles: `_compose_title()` merges `[project]` / `[short]` into a **single** tag (`[short·relife]`), and
+  is **idempotent** (reprocessing doesn't stack tags).
+- Backport: merged in the already-verified `_detect_project` wiring from the deployed copy (requires ≥2
+  keyword hits before tagging a project prefix).
 
 ## ADDED
 
-`scripts/report_card.py` — 汇报卡抽取器
-- 信号：路径（Win/Unix）· URL · 哈希（≥16 hex）· 实测数字 · 收尾语 · 校验语；命中 **≥2 类**才认作交付级汇报。
-- 落点：`~/.hermes/reports/cards.jsonl`（一行一卡，含 session/msg_id/时间/信号统计/路径/URL/哈希/数字/原文摘录）。
-- 入宫：`POST /api/v1/memories`，`category=worklog`（**capabilities 受控词表内**；自造值会被服务端静默归一化为 `knowledge`）。
-- 幂等：卡片指纹（session+msg_id+原文）入 `.index.json`，重复跑不重复入库。
-- `--dry-run` 不写任何东西。
+`scripts/report_card.py` — report-card extractor
+- Signals: paths (Win/Unix) · URLs · hashes (≥16 hex) · measured numbers · closing phrases ·
+  verification phrases; **≥2 signal classes** must hit before it's treated as a delivery-grade report.
+- Output: `~/.hermes/reports/cards.jsonl` (one card per line, containing session/msg_id/timestamp/signal
+  counts/paths/URLs/hashes/numbers/excerpt).
+- Ingestion: `POST /api/v1/memories`, `category=worklog` (**within capabilities' controlled vocabulary**;
+  made-up values are silently normalized to `knowledge` server-side).
+- Idempotent: card fingerprints (session+msg_id+text) are stored in `.index.json`, reruns don't
+  double-insert.
+- `--dry-run` writes nothing.
 
-`tests/test_archive_quality_v784.py` — 29 例契约测试（不依赖数据库/网络）
+`tests/test_archive_quality_v784.py` — 29 contract tests (no DB/network dependency)
 
 ## REMOVED
 
-无（`--skip-short` 保留旧行为开关）。
+None (`--skip-short` is kept as a toggle for the old behavior).
 
-## 实现中实测踩到并修掉的坑（写在这里，别重犯）
+## Pitfalls hit and fixed during implementation (recorded here so they don't happen again)
 
-1. **宽松阈值会污染记忆**：初始 `>=2 类信号` 在最近 3 场抽出 **66 张**卡。→ 默认改为「每场会话只取收尾汇报」(final 模式)，实测 3 张。
-2. **`role='tool'` 的工具回显会被当成交付汇报**：工具输出里全是路径/哈希/数字。→ SQL 收紧为 `role='assistant'`。
-3. **diff/日志噪声被当路径**：`/path/a.py\n+++ b/a.py` 整段被匹配。→ 路径正则排除反斜杠/加号/反引号，片段上限 `MAX_SIG_LEN=160`。
-4. **汇报不在最后一句**：会话常以「好的，就这样吧」收尾。→ final 模式向前回看 `FINAL_LOOKBACK=3` 条。
-5. **让位计数语义错**（迭代次数 4227 而非消息数）+ 净减量少算后缀 → 循环多跑。→ 改为集合计数 + 含后缀净减量。
+1. **A loose threshold pollutes memory**: the initial ">=2 signal classes" rule pulled **66 cards** out of
+   the last 3 sessions. → Changed the default to "only take the closing report per session" (final mode),
+   measured at 3 cards.
+2. **Tool-output echoes with `role='tool'` were being mistaken for delivery reports**: tool output is full
+   of paths/hashes/numbers. → Tightened the SQL to `role='assistant'`.
+3. **Diff/log noise was being matched as paths**: `/path/a.py\n+++ b/a.py` got matched whole. → The path
+   regex now excludes backslashes/plus signs/backticks, with a `MAX_SIG_LEN=160` cap per fragment.
+4. **The report isn't always the last line**: sessions often close with something like "okay, that's it."
+   → final mode now looks back `FINAL_LOOKBACK=3` messages.
+5. **Wrong semantics for the yield-count** (iteration count 4227 instead of message count) + the
+   net-reduction undercounted suffixes → the loop ran more times than needed. → Switched to set-based
+   counting + net reduction including suffixes.
 
-## 不变量（回归护栏）
+## Invariants (regression guardrails)
 
-- 会话归档推送形态不变：`POST /api/v1/sessions/archive`，json body，四字段 `user_id/session_id/title/content`。
-- `category` 只许取受控词表 10 类。
-- 服务端代码零改动；本变更只影响"喂给记忆宫殿的内容质量"。
+- Session-archival push shape is unchanged: `POST /api/v1/sessions/archive`, JSON body, four fields
+  `user_id/session_id/title/content`.
+- `category` may only take one of the controlled vocabulary's 10 values.
+- Zero changes to server-side code; this change only affects "the quality of content fed into the memory
+  palace."
 
-## 验证
+## Verification
 
 ```
 $ .venv/bin/python -m pytest tests/test_archive_quality_v784.py -q
@@ -69,34 +92,42 @@ $ .venv/bin/python -m pytest tests/ -q
 228 passed, 6 skipped
 ```
 
-生产链路端到端验证（真写入 + 回读）：
+End-to-end production pipeline verification (real write + read back):
 
 ```
 $ report_card.py --last 3 --push     → pushed: 3
 $ GET /api/v1/memories?user_id=default&category=worklog&limit=5
-  #20077 [汇报卡] 交付物路径: C:\Users\<user>\Desktop\…\公众号版_AI小镇第一批居民_双击看.html
+  #20077 [report card] deliverable path: C:\Users\<user>\Desktop\…\example-deliverable_double-click-to-view.html
                URL: https://your-site.example.com/news/example-page.html
 ```
-→ 语义层从此可回答「上次交付了什么、在哪儿」。
+→ The semantic layer can now answer "what was delivered last time, and where."
 
-真数据干跑（本机会话 `20260924_043847_cafcc2`，155 条消息）：
+Dry run against real data (local session `20260924_043847_cafcc2`, 155 messages):
 
-| 指标 | 旧版 | 新版 |
+| Metric | Old version | New version |
 |---|---|---|
-| 收尾汇报入档 | 前 2000 字 | **5,924 字全文** |
-| 过程消息 | 每条 ≤2000 | 每条 ≤1200 |
-| 工具证据 | 无 | `⟪工具: …⟫` 签名 |
-| 入档总量 | 125,782 字符 | 99,041 字符（更少但更有价值） |
+| Closing report archived | first 2000 chars | **5,924 chars, in full** |
+| Process messages | ≤2000 each | ≤1200 each |
+| Tool evidence | none | `⟪tools: …⟫` signature |
+| Total archived size | 125,782 characters | 99,041 characters (less, but more valuable) |
 
-汇报卡实测（最近 3 场）：宽松阈值 **66 张**（会污染记忆）→ 默认 final 模式 **3 张**（每场 1 张）。
+Report-card measurement (last 3 sessions): loose threshold produced **66 cards** (pollutes memory) →
+default final mode produces **3 cards** (one per session).
 
-隐私门禁自检（`privacy.yml` 同款扫描）：域名 / 真实用户名 零输出。
+Privacy gate self-check (same scan as `privacy.yml`): zero output for domains / real usernames.
 
-## 发布门禁（未走）
+## Release gate (not yet run)
 
-## 执行状态（2026-09-24 收尾更新）
+## Execution status (updated 2026-09-24, closing)
 
-- ✅ **已执行**：commit `ee5c4d1` · tag `v7.8.4` · push 公开仓库 · Release 已建（非草稿、非预发布）
-- ✅ **生产侧**：**不参与运行**的脚本副本已同步（带备份、零重启，服务启动时间未变）；**服务端版本串按规留 7.8.3** —— 未部署就不报新版本，避免"文档写了、实际没跑"的假发布（见 `PROGRESS.md` 待部署说明）
-- ⏳ **未执行**（已挂记忆体 8.0 议题池，非本补丁范围）：存量内部代号脱敏批（约 20 处 + 历史快照）
-发布顺序遵既有约定：**先部署验稳 → 才 tag/Release**（避免"文档写了、实际没发布"）。
+- ✅ **Executed**: commit `ee5c4d1` · tag `v7.8.4` · pushed to the public repo · Release created (not
+  draft, not prerelease)
+- ✅ **Production side**: the (non-running) script copy has been synced (with backup, zero restart, service
+  uptime unaffected); **the server-side version string intentionally stays at 7.8.3** — no new version is
+  reported until it's actually deployed, avoiding a false release where "the doc says it but it never
+  actually ran" (see the pending-deploy note in `PROGRESS.md`)
+- ⏳ **Not yet executed** (filed under the memory-8.0 agenda pool, out of scope for this patch): bulk
+  de-identification of historical internal codenames (~20 occurrences + historical snapshots)
+
+Release order follows the existing convention: **deploy and verify stability first → only then tag/Release**
+(avoiding "the doc says it but it was never actually released").

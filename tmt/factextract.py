@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
-"""tmt/factextract.py — 事实提取管道 v6.4
-设计来源: LongMemEval 归因结论 (#6293) — 补上"个人信息 facts"维度
-从 session/worklog 提取用户事实(个人信息/偏好/事件/安排/能力) → preference/knowledge
+"""tmt/factextract.py — Fact extraction pipeline v6.4
+Design origin: LongMemEval attribution findings (#6293) — fills in the missing
+"personal-info facts" dimension
+Extracts user facts (personal info/preferences/events/schedule/skills) from
+session/worklog memories → preference/knowledge
 
-教训吸收:
-- 短文本逐条提取 (豆包 lite 长会话漏深处答案)
-- 非 json 模式 (豆包 json_mode 长 prompt >2500 字符返回空)
-- tier3 lite 够用 (提取是简单任务)
-- 只提取不编造, ANN 去重闸机, 热度 0.65, 溯源 metadata, 失败重捞
+Lessons absorbed:
+- extract line-by-line from short text (Doubao lite misses deep answers in long sessions)
+- non-JSON mode (Doubao json_mode returns empty for prompts >2500 chars)
+- tier3 lite is sufficient (extraction is a simple task)
+- only extract, never fabricate; ANN dedup gate; heat 0.65; metadata provenance; retry on failure
 
-用法: venv/bin/python tmt/factextract.py [--batch N] [--dry-run]
+Usage: venv/bin/python tmt/factextract.py [--batch N] [--dry-run]
 """
 import argparse
 import asyncio
@@ -21,7 +23,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# 先加载 .env 再 import core (key 在 import 时读取)
+# Load .env before importing core (keys are read at import time)
 from tmt.distill import load_env, get_pool, dedup_check, get_embedding, utcnow, EXCLUDE_WORDS
 
 load_env()
@@ -31,17 +33,21 @@ from core.llm import call_llm  # noqa: E402
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
 log = logging.getLogger("factextract")
 
-MIN_LEN = 80          # 最小候选长度 (短文本提取)
-MAX_FACTS = 5         # 每条最多事实数
-HEAT_INIT = 0.65      # 功能记忆初始热度
+MIN_LEN = 80          # minimum candidate length (extracting from short text)
+MAX_FACTS = 5         # max facts per memory
+HEAT_INIT = 0.65      # initial heat for functional memories
 DEDUP_THRESHOLD = 0.92
 
-# 偏好/个人信息 → preference; 其他事实 → knowledge
+# preference/personal info → preference; other facts → knowledge
+# (kept in Chinese — matched against Chinese memory content; do not translate)
 PREF_KEYWORDS = ("喜欢", "爱好", "想要", "希望", "居住", "住在", "工作", "职业",
                  "毕业", "家人", "宠物", "生日", "习惯", "不爱", "讨厌", "最近在",
                  "计划", "打算", "预约", "每周", "每天")
 
 
+# NOTE: the prompt text below is sent to the LLM and instructs it to respond in
+# Chinese (matching the memory content's language) — left untranslated
+# intentionally, this is functional prompt data, not a comment.
 def extract_prompt(content: str) -> str:
     return f"""从下面的内容中提取关于用户的事实。
 事实类型: 个人信息(毕业/职业/居住/家人/宠物/年龄)、偏好(喜欢/不喜欢/习惯)、事件(做过的具体事/经历)、安排(计划/预约/任务)、能力(技能)。
@@ -59,7 +65,9 @@ def extract_prompt(content: str) -> str:
 
 
 def parse_facts(text: str) -> list[str]:
-    """解析 "- fact" 行格式 (非 json)"""
+    """Parse "- fact" line format (non-JSON). NOTE: the literal strings matched
+    below ("无"/"没有"/etc., and the "从"/"规则" prefixes) are the actual tokens the
+    Chinese-language prompt produces — left as-is, this is functional data."""
     facts = []
     for line in text.splitlines():
         line = line.strip()
@@ -74,14 +82,14 @@ def parse_facts(text: str) -> list[str]:
 
 
 def classify_fact(fact: str) -> str:
-    """偏好/个人信息 → preference, 其他 → knowledge"""
+    """preference/personal info → preference, everything else → knowledge"""
     if any(k in fact for k in PREF_KEYWORDS):
         return "preference"
     return "knowledge"
 
 
 def is_skip(content: str) -> bool:
-    """跳过过短/寒暄 (EXCLUDE_WORDS 是寒暄排除词)"""
+    """Skip content that's too short or pure small talk (EXCLUDE_WORDS is the small-talk exclusion list)"""
     if len(content) < MIN_LEN:
         return True
     if any(s in content for s in EXCLUDE_WORDS):
@@ -90,11 +98,11 @@ def is_skip(content: str) -> bool:
 
 
 async def extract_facts(content: str) -> tuple[list[str], str]:
-    """非 json 提取 (tier3 lite)。返回 (facts, status): status in ('ok','no_facts','fail')"""
+    """Non-JSON extraction (tier3 lite). Returns (facts, status): status in ('ok','no_facts','fail')"""
     r = call_llm(extract_prompt(content), tier=3, temperature=0.1)
     txt = (r.get("content") or "").strip()
     if not txt:
-        # 超时/空 → 重试一次
+        # timeout/empty → retry once
         r = call_llm(extract_prompt(content), tier=3, temperature=0.1)
         txt = (r.get("content") or "").strip()
     if not txt:
@@ -109,13 +117,13 @@ async def find_candidates(pool, batch: int) -> list[dict]:
         "SELECT id, content, category FROM mnemosyne.memories "
         "WHERE user_id='default' AND category IN ('session','worklog') AND is_deleted=FALSE "
         "AND metadata->>'fact_extracted' IS NULL "
-        "AND length(content) >= 80 "   # v7.0.1: 只取值得提取的长内容
+        "AND length(content) >= 80 "   # v7.0.1: only take long content worth extracting from
         "ORDER BY created_at ASC LIMIT $1", batch)
     return [dict(r) for r in rows]
 
 
 async def insert_fact(pool, src_id: int, src_category: str, fact: str, ftype: str) -> int:
-    """事实入库 (preference/knowledge, 热度 0.65, 溯源)。返回新记忆 id, 失败返回 None"""
+    """Write a fact to the DB (preference/knowledge, heat 0.65, provenance). Returns the new memory id, or None on failure"""
     vec = await get_embedding(fact)
     vec_str = "[" + ",".join(str(x) for x in vec) + "]"
     metadata = json.dumps({
@@ -135,7 +143,7 @@ async def insert_fact(pool, src_id: int, src_category: str, fact: str, ftype: st
 async def run(batch: int, dry_run: bool) -> None:
     pool = await get_pool()
     cands = await find_candidates(pool, batch)
-    log.info("候选 %d 条 (dry_run=%s)", len(cands), dry_run)
+    log.info("%d candidates (dry_run=%s)", len(cands), dry_run)
 
     stats = {"extracted": 0, "facts": 0, "dedup": 0, "fail": 0, "skip": 0, "no_facts": 0}
     in_batch: list[str] = []
@@ -144,7 +152,7 @@ async def run(batch: int, dry_run: bool) -> None:
         if is_skip(c["content"]):
             stats["skip"] += 1
             continue
-        log.info("[%d/%d] 提取 #%d (%s): %.40s...", i, len(cands), c["id"], c["category"], c["content"])
+        log.info("[%d/%d] Extracting #%d (%s): %.40s...", i, len(cands), c["id"], c["category"], c["content"])
         facts, status = await extract_facts(c["content"])
         if status == "fail":
             stats["fail"] += 1
@@ -174,7 +182,7 @@ async def run(batch: int, dry_run: bool) -> None:
                                     ensure_ascii=False))
         stats["extracted"] += 1
 
-    log.info("═══ 事实提取结果: 处理 %d 条 → %d facts / %d 去重 / %d 跳过 / %d 无事实 / %d 失败 ═══",
+    log.info("═══ Fact extraction result: processed %d → %d facts / %d dedup / %d skipped / %d no_facts / %d failed ═══",
              stats["extracted"], stats["facts"], stats["dedup"], stats["skip"], stats["no_facts"], stats["fail"])
     await pool.close()
 

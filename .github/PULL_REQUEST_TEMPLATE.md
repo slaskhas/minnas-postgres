@@ -1,19 +1,19 @@
-## 变更类型
-- [ ] feat: 新功能
-- [ ] fix: 修复
-- [ ] docs: 文档
-- [ ] chore: 杂项
+## Type of change
+- [ ] feat: new feature
+- [ ] fix: bug fix
+- [ ] docs: documentation
+- [ ] chore: misc
 
-## 描述
+## Description
 
-## 安全检查
-- [ ] 无硬编码密钥/令牌
-- [ ] 无真实IP/域名泄露
-- [ ] 无本地文件路径
-- [ ] .gitignore 已更新
+## Security checklist
+- [ ] No hardcoded secrets/tokens
+- [ ] No real IP/domain leaks
+- [ ] No local file paths
+- [ ] .gitignore updated
 
-## 关联 Issue
+## Related issue
 Closes #
 
-## 版本影响
-<!-- 是否需要 bump VERSION？ -->
+## Version impact
+<!-- Does VERSION need to be bumped? -->

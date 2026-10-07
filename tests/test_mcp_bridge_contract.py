@@ -1,12 +1,15 @@
-"""MCP 桥契约测试 — 入参形态 (user_id / feedback 必须走 query, 缺失即 422)
+"""MCP bridge contract test — inbound parameter shape (user_id / feedback must go via query, missing → 422)
 
-背景 (2026-09-12 生产实测): feedback_memory / delete_memory / restore_memory 三个工具
-**必报 422** —— 桥把 feedback 发成 JSON body 且完全没传 user_id, 而服务端 REST 要求它们
-都是 query 参数。用户侧看到的是"工具坏了"; 而同类错误若发生在**响应字段**上(如读 `heat`
-而服务端返回 `heat_score`)则**连报错都没有**, 静默取默认值 —— 所以两边都锁契约。
+Background (observed in production, 2026-09-12): the feedback_memory / delete_memory / restore_memory
+tools **must report 422** — the bridge sent feedback as a JSON body with no user_id at all, while
+the server's REST API requires both as query parameters. From the user's side it just looks like
+"the tool is broken"; whereas the same class of mismatch on a **response field** (e.g. reading `heat`
+when the server returns `heat_score`) **doesn't even error** — it silently falls back to a default.
+Hence both directions are locked down by contract tests.
 
-本测试锁死 outbound 请求形态, 不依赖数据库/网络 (monkeypatch 掉 _call)。
-mcp SDK 仅 Hermes 侧安装, 最小安装下自动 skip, 不影响服务端测试套件。
+This test suite locks down the outbound request shape; no DB/network dependency (monkeypatches `_call`).
+The mcp SDK is only installed where the stdio-to-HTTP bridge runs, so this auto-skips on a minimal
+install without affecting the server-side test suite.
 """
 import asyncio
 import importlib.util
@@ -20,7 +23,7 @@ BRIDGE = (Path(__file__).resolve().parents[1]
 
 @pytest.fixture(scope="module")
 def bridge():
-    pytest.importorskip("mcp")      # 最小安装(无 Hermes)下跳过
+    pytest.importorskip("mcp")      # skipped on a minimal install (no mcp SDK)
     pytest.importorskip("httpx")
     spec = importlib.util.spec_from_file_location("mnes_bridge", BRIDGE)
     assert spec is not None and spec.loader is not None
@@ -31,10 +34,10 @@ def bridge():
 
 @pytest.fixture
 def calls(bridge, monkeypatch):
-    """拦截 _call, 记录 (method, path, kwargs)。"""
+    """Intercepts _call and records (method, path, kwargs)."""
     seen = []
 
-    def fake_call(method, path, **kwargs):
+    async def fake_call(method, path, **kwargs):
         seen.append({"method": method, "path": path, "kwargs": kwargs})
         return {"status": "ok"}
 
@@ -47,7 +50,7 @@ def _dispatch(bridge, name, arguments=None):
 
 
 class TestQueryParamContract:
-    """三个"必填 query 参数"的 handler —— 漏传即 422。"""
+    """The three handlers with "required query params" — omitting one gives 422."""
 
     def test_feedback_uses_query_params_not_body(self, bridge, calls):
         _dispatch(bridge, "feedback_memory", {"memory_id": "42", "feedback": "positive"})
@@ -55,7 +58,7 @@ class TestQueryParamContract:
         assert (req["method"], req["path"]) == ("POST", "/memories/42/feedback")
         assert req["kwargs"]["params"]["user_id"] == "default"
         assert req["kwargs"]["params"]["feedback"] == "positive"
-        assert "json" not in req["kwargs"], "feedback 发 JSON body 会被服务端 422"
+        assert "json" not in req["kwargs"], "sending feedback as a JSON body would get a 422 from the server"
 
     def test_feedback_honours_caller_user_id(self, bridge, calls):
         _dispatch(bridge, "feedback_memory",
@@ -76,7 +79,7 @@ class TestQueryParamContract:
 
 
 class TestBodyContractRegression:
-    """回归: 别把 query 修过头 —— 需要 body 的端点仍走 json。"""
+    """Regression: don't over-correct toward query params — endpoints that need a body still use json."""
 
     def test_store_memory_uses_json_body(self, bridge, calls):
         _dispatch(bridge, "store_memory", {"content": "契约测试", "category": "knowledge"})
@@ -91,3 +94,39 @@ class TestBodyContractRegression:
         req = calls[-1]
         assert req["path"] == "/memories/search"
         assert req["kwargs"]["json"]["query"] == "契约"
+
+
+class TestSearchGraphContract:
+    """search_graph's REST handler (main.py graph_search) takes bare query params
+    (query/user_id/max_hops), not a JSON body — json= 422s."""
+
+    def test_search_graph_uses_query_params(self, bridge, calls):
+        _dispatch(bridge, "search_graph", {"query": "widgets", "limit": 5})
+        req = calls[-1]
+        assert (req["method"], req["path"]) == ("POST", "/graph/search")
+        assert req["kwargs"]["params"] == {"user_id": "default", "query": "widgets", "max_hops": 5}
+        assert "json" not in req["kwargs"]
+
+    def test_search_graph_default_max_hops(self, bridge, calls):
+        _dispatch(bridge, "search_graph", {"query": "widgets"})
+        assert calls[-1]["kwargs"]["params"]["max_hops"] == 2
+
+
+class TestExtractEntitiesContract:
+    """extract_entities's REST handler (main.py extract_entities) takes query params
+    (user_id/max_memories) and scans the user's own unlinked stored memories — it
+    does not accept free text."""
+
+    def test_extract_entities_uses_query_params(self, bridge, calls):
+        _dispatch(bridge, "extract_entities", {"max_memories": 25})
+        req = calls[-1]
+        assert (req["method"], req["path"]) == ("POST", "/extract-entities")
+        assert req["kwargs"]["params"] == {"user_id": "default", "max_memories": 25}
+        assert "json" not in req["kwargs"]
+
+    def test_extract_entities_ignores_stale_text_arg(self, bridge, calls):
+        """Old callers still sending `text` (pre-fix schema) must not break."""
+        _dispatch(bridge, "extract_entities", {"text": "ignored now"})
+        req = calls[-1]
+        assert "text" not in req["kwargs"].get("params", {})
+        assert "json" not in req["kwargs"]

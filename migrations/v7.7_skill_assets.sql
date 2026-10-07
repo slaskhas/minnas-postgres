@@ -1,6 +1,6 @@
--- v7.7.0 程序性记忆翼: skill_assets + skill_keywords
--- 对齐 curator state 值域: active / stale / archived (绝不 DELETE, 只流转)
--- embedding 与 memories 同规格 vector(1536)
+-- v7.7.0 procedural-memory wing: skill_assets + skill_keywords
+-- Aligned with the curator state domain: active / stale / archived (never DELETE, only transition state)
+-- embedding has the same spec as memories: vector(1536)
 
 CREATE TABLE IF NOT EXISTS mnemosyne.skill_assets (
     id             BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,

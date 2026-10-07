@@ -1,6 +1,6 @@
-"""v7.1 抽屉化记忆 — 双抽屉流转/遗忘判定 单元测试 (无需 DB)
+"""v7.1 drawer-based memory — dual-drawer transition/forgetting-decision unit tests (no DB needed)
 
-覆盖: 温度抽屉边界 / 时间抽屉边界 / 遗忘候选规则 / 双权重公式数值
+Coverage: temperature-drawer boundaries / time-drawer boundaries / forget-candidate rules / dual-weight formula values
 """
 import pytest
 import sys, os, math
@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
-# ── 与生产 main.py reflect 同源逻辑的纯函数提取 (保证测试=生产) ──
+# ── Pure functions extracted from the same logic as production main.py's reflect (keeps test = production) ──
 def temp_drawer(heat: float) -> str:
     if heat >= 0.7: return "hot"
     if heat >= 0.3: return "normal"
@@ -28,7 +28,7 @@ def is_forget_candidate(temp: str, tmd: str, pinned: bool, category: str) -> boo
 
 
 def compute_heat(last_access_hours: float, freq_ratio: float) -> float:
-    """双权重热度公式 (考古A): 0.6×e^(-λh) + 0.4×freq, λ=0.05"""
+    """Dual-weight heat formula (archaeology-A): 0.6×e^(-λh) + 0.4×freq, λ=0.05"""
     time_factor = math.exp(-0.05 * last_access_hours)
     return round(max(0.0, min(1.0, 0.6 * time_factor + 0.4 * freq_ratio)), 4)
 
@@ -68,7 +68,7 @@ class TestTimeDrawer:
         assert time_drawer(self.NOW - timedelta(days=180), None, self.NOW) == "long"
 
     def test_null_fallback_to_created(self):
-        """last_accessed NULL 时回退 created_at (v7.1 修复: 防一刀切 recent)"""
+        """Falls back to created_at when last_accessed is NULL (v7.1 fix: prevents a blanket "recent")"""
         assert time_drawer(None, self.NOW - timedelta(days=120), self.NOW) == "long"
 
 

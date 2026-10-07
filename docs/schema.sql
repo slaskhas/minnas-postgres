@@ -29,12 +29,14 @@ CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA public;
 
 CREATE EXTENSION IF NOT EXISTS vector WITH SCHEMA public;
 
--- 注: 不对扩展执行 COMMENT ON EXTENSION —— 在与其它应用共享的数据库上,
--- 扩展可能早已由另一角色安装, COMMENT 需要扩展 owner 权限, 非必要地会在此失败。
+-- Note: we don't run COMMENT ON EXTENSION here — on a database shared with other
+-- applications, the extension may already have been installed by a different role;
+-- COMMENT requires extension-owner privileges and would needlessly fail here.
 
 
 --
--- Mnemosyne 专属 schema (与同一数据库中可能存在的其它应用隔离, 不共用 public)
+-- Mnemosyne's dedicated schema (isolated from other applications that may exist in
+-- the same database; does not share public)
 --
 
 CREATE SCHEMA IF NOT EXISTS mnemosyne;
@@ -1059,7 +1061,7 @@ ALTER TABLE ONLY mnemosyne.wiki_versions
 
 
 --
--- v7.0 魔法记忆宫殿 (palace.py 建表)
+-- v7.0 Magic Memory Palace (tables created by palace.py)
 --
 SET search_path = mnemosyne;
 
@@ -1099,8 +1101,8 @@ CREATE TABLE mnemosyne.wiki_entities (
 ALTER TABLE mnemosyne.wiki_entities ADD CONSTRAINT wiki_entities_pkey PRIMARY KEY (id);
 
 
--- ═══ v7.5-v7.8 增量表(2026-08-18 审计补齐: 新部署重建库必需) ═══
--- v7.5 检索优化 P0a: wiki 关键词索引表 (jieba 分词, 双通道 BM25)
+-- ═══ v7.5-v7.8 incremental tables (backfilled 2026-08-18 audit: required when rebuilding a fresh deployment's database) ═══
+-- v7.5 retrieval optimization P0a: wiki keyword index table (jieba tokenization, dual-channel BM25)
 CREATE TABLE IF NOT EXISTS mnemosyne.wiki_keywords (
     id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     page_id bigint NOT NULL REFERENCES mnemosyne.wiki_pages(id) ON DELETE CASCADE,
@@ -1141,7 +1143,7 @@ CREATE TABLE IF NOT EXISTS mnemosyne.skill_keywords (
     UNIQUE (skill_id, token)
 );
 
--- 主搜索 BM25 分量从 ILIKE(假) 升级为 jieba 分词 TF 加权(复用 wiki v7.5 方案)
+-- Main search's BM25 component upgraded from ILIKE (fake) to jieba-tokenized TF weighting (reuses the wiki v7.5 approach)
 CREATE TABLE IF NOT EXISTS mnemosyne.memory_keywords (
     memory_id bigint NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
     token      text  NOT NULL,
