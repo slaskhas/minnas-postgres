@@ -4,7 +4,7 @@ Mnemosyne MCP adaptation test (mcp SDK 2.0)
 =====================================
 Full protocol-level test of mnemosyne_mcp.py: handshake / discovery of the 15 tools /
 write-then-immediately-searchable / lifecycle round trip / slow endpoints / error paths.
-Used for acceptance of the Hermes-to-Mnemosyne integration (segment C).
+Used for acceptance testing of the stdio-to-HTTP MCP bridge (segment C).
 
 Usage:
   python3 scripts/mcp_adapt_test.py
@@ -119,7 +119,7 @@ def main():
     results["restore_memory"] = "OK" if not err else f"FAIL: {text[:100]}"
 
     text, err = call(19, "search_graph", {"query": "G-CAT", "limit": 3})
-    results["search_graph"] = "OK" if not err else f"FAIL: {text[:100]}"
+    results["search_graph"] = "OK" if not err and "error" not in text[:200] else f"FAIL: {text[:100]}"
 
     text, err = call(21, "create_wiki_page", {"title": f"{tag}-wiki", "content": f"{tag} wiki适配测试"})
     results["create_wiki_page"] = "OK" if not err else f"FAIL: {text[:100]}"
@@ -137,8 +137,10 @@ def main():
     text, err = call(12, "dialectic_search", {"query": "记忆宫殿", "max_results": 1})
     results["dialectic_search(slow/LLM)"] = "OK" if not err and "error" not in text[:200] else f"FAIL: {text[:120]}"
 
-    text, err = call(20, "extract_entities", {"text": f"{tag} 服务器部署在腾讯云"})
-    results["extract_entities(slow/LLM)"] = "OK" if not err else f"FAIL: {text[:120]}"
+    # extract_entities scans the user's own unlinked stored memories; it never took
+    # free text despite the old schema's `text` arg (fixed — see mnemosyne_mcp.py).
+    text, err = call(20, "extract_entities", {"max_memories": 10})
+    results["extract_entities"] = "OK" if not err and "error" not in text[:200] else f"FAIL: {text[:120]}"
 
     text, err = call(25, "no_such_tool", {})
     results["unknown_tool(error path)"] = "OK" if (err or "error" in text or "Unknown" in text) else f"FAIL: {text[:100]}"

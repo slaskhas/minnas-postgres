@@ -32,7 +32,7 @@ ALL_TOOLS = {
 
 @pytest.fixture(scope="module")
 def bridge():
-    pytest.importorskip("mcp")      # minimal install (no Hermes) → skip
+    pytest.importorskip("mcp")      # minimal install (no mcp SDK) → skip
     pytest.importorskip("httpx")
     spec = importlib.util.spec_from_file_location("_mnemosyne_bridge_http", BRIDGE)
     assert spec is not None and spec.loader is not None
@@ -56,6 +56,20 @@ def test_set_base_url_repoints_calling_layer(bridge):
     from urllib.parse import urlsplit
     _split = urlsplit(str(bridge.http.base_url))
     assert f"{_split.scheme}://{_split.netloc}" == base
+
+
+def test_set_asgi_app_routes_in_process(bridge):
+    """set_asgi_app must route _call through the given ASGI app with no real socket."""
+    from starlette.applications import Starlette
+    from starlette.responses import JSONResponse
+    from starlette.routing import Route
+
+    async def ping(request):
+        return JSONResponse({"ok": True})
+
+    fake_app = Starlette(routes=[Route("/api/v1/ping", ping)])
+    bridge.set_asgi_app(fake_app)
+    assert asyncio.run(bridge._call("GET", "/ping")) == {"ok": True}
 
 
 def test_build_server_lists_all_tools(bridge):

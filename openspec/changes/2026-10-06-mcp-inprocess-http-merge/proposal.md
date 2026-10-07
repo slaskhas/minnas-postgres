@@ -19,18 +19,18 @@ Previous version: -
 ## Why (Why)
 
 Current state: the 15 Mnemosyne MCP tools are hosted by an independent stdio subprocess
-(`integrations/hermes-mcp/mnemosyne_mcp.py`), launched by the Hermes / slask client over an SSH tunnel
-(18010 → core 8010). This carries three kinds of cost:
+(`integrations/hermes-mcp/mnemosyne_mcp.py`), launched by an MCP client (e.g. the slask client) over
+an SSH tunnel (18010 → core 8010). This carries three kinds of cost:
 
-1. **Multiple processes + multiple tunnels**: Hermes has to spawn a subprocess and needs an SSH tunnel to
-   the core; the bridge and core are two separate processes and two separate REST clients.
+1. **Multiple processes + multiple tunnels**: the client has to spawn a subprocess and needs an SSH
+   tunnel to the core; the bridge and core are two separate processes and two separate REST clients.
 2. **Version drift**: when the bridge evolves independently, its `/api/v1` contract can drift out of sync
    with the core (the v7.8.2 422 incident was exactly this).
 3. The slask TS client is **streamable-HTTP first** — natively supported; stdio is the secondary option.
 
 **Alternative A (this proposal)**: mount the bridge's **same** contract-tested handlers
 (`_dispatch`/`_call`/`list_tools`/`call_tool`) into the core's uvicorn process, exposed over
-**streamable HTTP** at `/mcp`. stdio stays in place (existing Hermes config / `mcp_adapt_test.py`
+**streamable HTTP** at `/mcp`. stdio stays in place (existing stdio client config / `mcp_adapt_test.py`
 continue to work); both transports share a single low-level `Server`. The handlers still call the core
 over **loopback REST** (`set_base_url()`), with **no guessing field names or param positions** — fully
 reusing the already-verified contract path.
@@ -75,7 +75,7 @@ reusing the already-verified contract path.
 
 - ❌ Not touching `tests/test_mcp_bridge_contract.py` (it loads the bridge by file path; `_dispatch`/
   `_call` are unchanged → still green).
-- ❌ Not touching the stdio entry point (existing Hermes config / `scripts/mcp_adapt_test.py` keep
+- ❌ Not touching the stdio entry point (existing stdio client config / `scripts/mcp_adapt_test.py` keep
   working).
 - ❌ Not touching any `/api/v1` endpoint, field name, or parameter position.
 - ❌ Not touching the Nginx auth layer (`/mcp` uses the same loopback direct-connect as REST, with no
@@ -99,5 +99,5 @@ reusing the already-verified contract path.
 - Risk surface: `set_base_url` points the handlers at loopback; if the core's direct-connect layer ever
   adds auth in the future (currently Nginx-only, direct-connect has none), this would break.
 - Multiple workers: `stateless_http=True` guarantees no cross-worker state drift.
-- Rollback: `git revert` this change; the stdio path exists independently and is unaffected, Hermes can
-  still use the tunnel.
+- Rollback: `git revert` this change; the stdio path exists independently and is unaffected, stdio
+  clients can still use the tunnel.

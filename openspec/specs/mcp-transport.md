@@ -10,7 +10,7 @@
 
 | transport | entry point | who starts it |
 |---|---|---|
-| stdio | `python3 integrations/hermes-mcp/mnemosyne_mcp.py` (`__main__`) | Hermes subprocess / `scripts/mcp_adapt_test.py`; via the SSH tunnel 18010→8010 |
+| stdio | `python3 integrations/hermes-mcp/mnemosyne_mcp.py` (`__main__`) | any stdio-capable MCP client / `scripts/mcp_adapt_test.py`; via the SSH tunnel 18010→8010 |
 | streamable HTTP | `GET /mcp` (in-process mount, `main.py`) | the core uvicorn process itself; `stateless_http=True` |
 
 Both share the **same** set of contract-tested handlers: `list_tools` (15 tools), `_dispatch`, `_call`.
@@ -34,9 +34,9 @@ Both share the **same** set of contract-tested handlers: `list_tools` (15 tools)
 ## 4. In-process mount (added in v8.1)
 
 `main.py` loads the bridge **by file path** at startup (the parent directory `hermes-mcp` contains a hyphen → not a legal import name).
-If `_MCP_AVAILABLE` and `set_base_url`/`build_mcp_mount` are callable, then inside the app's **lifespan** (`asynccontextmanager`; `app = FastAPI(..., lifespan=_mcp_lifespan)`):
+If `_MCP_AVAILABLE` and `set_asgi_app`/`build_mcp_mount` are callable, then inside the app's **lifespan** (`asynccontextmanager`; `app = FastAPI(..., lifespan=_mcp_lifespan)`):
 
-1. `set_base_url("http://<HOST>:<PORT>")` (`0.0.0.0`/empty → `127.0.0.1`) — so the handlers call the core over **loopback REST** (direct to uvicorn, no Nginx auth).
+1. `set_asgi_app(app)` — so the handlers call the core through an **in-process ASGI transport** (`httpx.ASGITransport(app=app)`, no real socket; same Starlette routing + Pydantic request validation as a real HTTP call, no Nginx auth). `set_base_url("http://<host>:<port>")` is the sibling function for **real network** HTTP and remains the one the stdio transport uses.
 2. `asgi_endpoint, run_cm = build_mcp_mount()` → `_app.router.add_route("/mcp", asgi_endpoint, methods=None, include_in_schema=False)`, and `async with run_cm():` in the lifespan (`run_cm = session_manager.run()`, which must be entered to initialize the task group, otherwise the endpoint 500s).
    - **Do not** use `app.mount("/mcp", build_http_app())`: a Starlette `Mount` **never runs the sub-app's lifespan** (→ "Task group is not initialized" 500), and the sub-app carries its own `/mcp` route, which nested under a `/mcp` prefix becomes `/mcp/mcp`. The raw per-endpoint ASGI app (method in the body, independent of the URL path) is pinned exactly to `/mcp` with `methods=None` (all methods, no trailing-slash 307) — isomorphic to the SDK's own standalone app (`Route(path, sm.asgi_app, methods=None)` + `lifespan=lambda app: sm.run()`).
 
@@ -51,11 +51,13 @@ If `_MCP_AVAILABLE` and `set_base_url`/`build_mcp_mount` are callable, then insi
    (`...::test_build_server_lists_all_tools`).
 3. After `set_base_url("http://127.0.0.1:8010")`, `API_BASE == "http://127.0.0.1:8010/api/v1"`
    (`...::test_set_base_url_repoints_calling_layer`).
+3b. After `set_asgi_app(app)`, `_call` round-trips through `app` with no real socket
+   (`...::test_set_asgi_app_routes_in_process`).
 4. Real HTTP (with DB): `POST /mcp` `initialize` (`Content-Type: application/json` + `Accept` containing `application/json, text/event-stream` + a valid Host) → 200; the SSE body contains `"mnemosyne"`.
 5. `tests/test_mcp_bridge_contract.py` is unaffected by this change (`_dispatch`/`_call` are byte-identical).
 
 ## 6. What it does not do
 
-- Does not touch the stdio entry (backwards-compatible with existing Hermes usage / `mcp_adapt_test.py`).
+- Does not touch the stdio entry (backwards-compatible with existing stdio-client usage / `mcp_adapt_test.py`).
 - Does not touch the `/api/v1` endpoints / field names / parameter positions.
 - Does not maintain MCP session state across workers (stateless first); if statefulness becomes a requirement → trigger ADR-0003 T-1.

@@ -135,10 +135,11 @@ import tmt.router as tmt_module
 from tmt.router import router as tmt_router
 
 # ── v8.1: MCP over streamable HTTP — lifespan-driven in-process mount at /mcp ──
-# Reuses the hermes-mcp bridge's contract-tested handlers verbatim. Loaded by file
-# path (the parent dir `hermes-mcp` has a hyphen → not a normal import path).
-# Handlers reach the core over loopback REST via set_base_url() (direct uvicorn,
-# no Nginx auth layer); stateless so it is safe under `uvicorn --workers N`.
+# Reuses the stdio-to-HTTP bridge's contract-tested handlers verbatim (lives at
+# integrations/hermes-mcp/, loaded by file path since the parent dir name has a
+# hyphen → not a normal import path).
+# Handlers reach the core via set_asgi_app() — an in-process ASGI transport (no
+# socket, no Nginx auth layer); stateless so it is safe under `uvicorn --workers N`.
 #
 # A Starlette Mount never runs a sub-app lifespan, and mounting a sub-app whose
 # own route is /mcp nests to /mcp/mcp — so we (a) register the raw per-endpoint
@@ -196,15 +197,14 @@ async def _mcp_lifespan(_app: "FastAPI"):
                 sys.modules["_mnemosyne_mcp_bridge"] = _mcp_mod
                 _mcp_spec.loader.exec_module(_mcp_mod)
                 if (getattr(_mcp_mod, "_MCP_AVAILABLE", False)
-                        and callable(getattr(_mcp_mod, "set_base_url", None))
+                        and callable(getattr(_mcp_mod, "set_asgi_app", None))
                         and callable(getattr(_mcp_mod, "build_mcp_mount", None))):
-                    # Point handlers at the core's own loopback address. A `0.0.0.0`/
-                    # empty host binds everywhere → clients should connect via
-                    # 127.0.0.1.
-                    _loopback_host = str(HOST).strip()
-                    if _loopback_host in ("0.0.0.0", ""):
-                        _loopback_host = "127.0.0.1"
-                    _mcp_mod.set_base_url(f"http://{_loopback_host}:{PORT}")
+                    # In-process mount: route the bridge's internal REST calls through
+                    # httpx.ASGITransport(app=_app) — same FastAPI routing + Pydantic
+                    # validation, no loopback socket. Real network loopback
+                    # (set_base_url) is only used by the separate stdio transport
+                    # (SSH-tunnel case), which this does not touch.
+                    _mcp_mod.set_asgi_app(_app)
                     asgi_endpoint, run_cm = _mcp_mod.build_mcp_mount()
                     # Raw per-endpoint ASGI app (path-agnostic; the JSON-RPC method
                     # lives in the request body). methods=None → accepts POST/DELETE/etc.
