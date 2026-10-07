@@ -144,59 +144,95 @@ from tmt.router import router as tmt_router
 # from this app's lifespan — mirroring the SDK's own standalone app
 # (Route(path, endpoint, methods=None) + lifespan=lambda app: session_manager.run()).
 # Skipped silently when the mcp SDK is absent so the REST API is never taken down.
+#
+# The asyncpg pool is also created here rather than in an `@app.on_event("startup")`
+# handler: once a custom `lifespan=` is passed to FastAPI, Starlette no longer runs
+# the legacy on_event handlers at all, so a separate on_event-based pool init is
+# silently skipped — every pool-using route then fails with
+# `NameError: name 'pool' is not defined`.
 @asynccontextmanager
 async def _mcp_lifespan(_app: "FastAPI"):
-    run_cm = None
+    global pool
+    pool = await asyncpg.create_pool(
+        user=PG_USER,
+        password=PG_PASSWORD,
+        database=PG_DB,
+        host=PG_HOST,
+        port=PG_PORT,
+        min_size=2,
+        max_size=10,
+        server_settings={'search_path': PG_SEARCH_PATH}
+    )
+    # Inject into the TMT module
+    tmt_module.pool = pool
+    # Inject into the v5.0 modules
+    security_module.pool = pool
+    skills_module.pool = pool
+    injection_module.pool = pool
+    tmt_module.embed_fn = get_embedding
+    tmt_module.llm_url = "http://127.0.0.1:11435/v1/chat/completions"
+    # v7.0 Memory Palace: init (create tables + archive existing backlog, idempotent)
     try:
-        import importlib.util as _mcp_importlib
-        _mcp_path = os.path.join(
-            os.path.dirname(os.path.abspath(__file__)),
-            "integrations", "hermes-mcp", "mnemosyne_mcp.py")
-        _mcp_spec = _mcp_importlib.spec_from_file_location(
-            "_mnemosyne_mcp_bridge", _mcp_path)
-        if _mcp_spec is not None and _mcp_spec.loader is not None:
-            _mcp_mod = _mcp_importlib.module_from_spec(_mcp_spec)
-            sys.modules["_mnemosyne_mcp_bridge"] = _mcp_mod
-            _mcp_spec.loader.exec_module(_mcp_mod)
-            if (getattr(_mcp_mod, "_MCP_AVAILABLE", False)
-                    and callable(getattr(_mcp_mod, "set_base_url", None))
-                    and callable(getattr(_mcp_mod, "build_mcp_mount", None))):
-                # Point handlers at the core's own loopback address. A `0.0.0.0`/
-                # empty host binds everywhere → clients should connect via
-                # 127.0.0.1.
-                _loopback_host = str(HOST).strip()
-                if _loopback_host in ("0.0.0.0", ""):
-                    _loopback_host = "127.0.0.1"
-                _mcp_mod.set_base_url(f"http://{_loopback_host}:{PORT}")
-                asgi_endpoint, run_cm = _mcp_mod.build_mcp_mount()
-                # Raw per-endpoint ASGI app (path-agnostic; the JSON-RPC method
-                # lives in the request body). methods=None → accepts POST/DELETE/etc.
-                _app.router.add_route(
-                    "/mcp", asgi_endpoint, methods=None, include_in_schema=False)
-    except Exception as _e:  # mcp SDK absent / bridge changed → REST unaffected
-        logger.debug("MCP mount skipped: %s", _e)
+        import palace
+        palace_result = await palace.init_palace(pool)
+        logger.info(f"[palace] init complete: tables={palace_result['tables']} classified={palace_result['classified']} cards={palace_result['cards']}")
+    except Exception as e:
+        logger.warning(f"[palace] init skipped: {e}")
 
-    if run_cm is None:
-        # Not available — still yield so the host app starts (no /mcp).
-        logger.debug("MCP (/mcp) not available; REST API unaffected")
-        yield
-        return
+    try:
+        run_cm = None
+        try:
+            import importlib.util as _mcp_importlib
+            _mcp_path = os.path.join(
+                os.path.dirname(os.path.abspath(__file__)),
+                "integrations", "hermes-mcp", "mnemosyne_mcp.py")
+            _mcp_spec = _mcp_importlib.spec_from_file_location(
+                "_mnemosyne_mcp_bridge", _mcp_path)
+            if _mcp_spec is not None and _mcp_spec.loader is not None:
+                _mcp_mod = _mcp_importlib.module_from_spec(_mcp_spec)
+                sys.modules["_mnemosyne_mcp_bridge"] = _mcp_mod
+                _mcp_spec.loader.exec_module(_mcp_mod)
+                if (getattr(_mcp_mod, "_MCP_AVAILABLE", False)
+                        and callable(getattr(_mcp_mod, "set_base_url", None))
+                        and callable(getattr(_mcp_mod, "build_mcp_mount", None))):
+                    # Point handlers at the core's own loopback address. A `0.0.0.0`/
+                    # empty host binds everywhere → clients should connect via
+                    # 127.0.0.1.
+                    _loopback_host = str(HOST).strip()
+                    if _loopback_host in ("0.0.0.0", ""):
+                        _loopback_host = "127.0.0.1"
+                    _mcp_mod.set_base_url(f"http://{_loopback_host}:{PORT}")
+                    asgi_endpoint, run_cm = _mcp_mod.build_mcp_mount()
+                    # Raw per-endpoint ASGI app (path-agnostic; the JSON-RPC method
+                    # lives in the request body). methods=None → accepts POST/DELETE/etc.
+                    _app.router.add_route(
+                        "/mcp", asgi_endpoint, methods=None, include_in_schema=False)
+        except Exception as _e:  # mcp SDK absent / bridge changed → REST unaffected
+            logger.debug("MCP mount skipped: %s", _e)
 
-    async with run_cm():
-        logger.info("MCP (/mcp) mounted — 15 Mnemosyne tools via streamable HTTP")
-        yield
+        if run_cm is None:
+            # Not available — still yield so the host app starts (no /mcp).
+            logger.debug("MCP (/mcp) not available; REST API unaffected")
+            yield
+        else:
+            async with run_cm():
+                logger.info("MCP (/mcp) mounted — 15 Mnemosyne tools via streamable HTTP")
+                yield
+            logger.info("MCP (/mcp) session manager stopped")
+    finally:
+        await pool.close()
 
-    logger.info("MCP (/mcp) session manager stopped")
 
+pool: Optional[asyncpg.Pool] = None
 
 app = FastAPI(title="Mnemosyne OS v8.1.0 — 认知型记忆操作系统", lifespan=_mcp_lifespan)
 
-# ── 挂载 v5.0 路由 ──
+# ── mount v5.0 routes ──
 app.include_router(tmt_router)
 
-# 三馆闭环 (Phase 2)
+# Three-hall closed loop (Phase 2)
 
-# 安全模块 (Phase 3)
+# Security modules (Phase 3)
 import security.audit as audit_module
 import security.purifier as purifier_module
 
@@ -719,69 +755,35 @@ async def delete_media(media_id: int, user_id: str = "default"):
         deleted = result.split()[-1] if result else "0"
         return {"status": "deleted", "id": media_id, "affected": int(deleted)}
 
-@app.on_event("startup")
-async def startup():
-    global pool
-    pool = await asyncpg.create_pool(
-        user=PG_USER,
-        password=PG_PASSWORD,
-        database=PG_DB,
-        host=PG_HOST,
-        port=PG_PORT,
-        min_size=2,
-        max_size=10,
-        server_settings={'search_path': PG_SEARCH_PATH}
-    )
-    # 注入 TMT 模块
-    tmt_module.pool = pool
-    # 注入 v5.0 模块
-    security_module.pool = pool
-    skills_module.pool = pool
-    injection_module.pool = pool
-    tmt_module.embed_fn = get_embedding
-    tmt_module.llm_url = "http://127.0.0.1:11435/v1/chat/completions"
-    # v7.0 魔法记忆宫殿: 初始化 (建表+存量归档, 幂等)
-    try:
-        import palace
-        palace_result = await palace.init_palace(pool)
-        logger.info(f"[palace] 初始化完成: tables={palace_result['tables']} classified={palace_result['classified']} cards={palace_result['cards']}")
-    except Exception as e:
-        logger.warning(f"[palace] 初始化跳过: {e}")
-
-@app.on_event("shutdown")
-async def shutdown():
-    if pool:
-        await pool.close()
-
-# ── OpenAI 兼容 Embedding API (替代本地 Qwen3-Embedding) ──
+# ── OpenAI-compatible embedding API (replaces the local Qwen3-Embedding) ──
 async def get_embedding(texts: List[str]) -> List[List[float]]:
-    """调用 OpenAI 兼容 embeddings API — 1536维向量"""
+    """Call the OpenAI-compatible embeddings API — 1536-dim vectors"""
     return await get_embedding_async(texts)
 
 async def rerank_docs(query: str, documents: List[str], top_k: int = 5) -> List[str]:
     """
-    v5.1 Reranker: OpenAI 兼容 embedding 主用 (余弦相似度排序)
-    本地 Qwen3-Embed 作为 fallback
+    v5.1 Reranker: primarily uses OpenAI-compatible embeddings (cosine-similarity ranking),
+    with local Qwen3-Embed as a fallback
     """
     RERANK_URL = "http://127.0.0.1:11436/v1/embeddings"
-    
+
     async def _embed_local(texts):
-        """Fallback: 本地 Qwen3-Embedding"""
+        """Fallback: local Qwen3-Embedding"""
         import httpx
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.post(RERANK_URL, json={"input": texts})
             resp.raise_for_status()
             data = resp.json()
             return [d["embedding"] for d in data["data"]]
-    
+
     try:
-        # 主路径: 豆包 embedding
+        # Primary path: Doubao embedding
         from core.backends import rerank_by_similarity
         q_emb = (await get_embedding([query]))[0]
         d_embs = await get_embedding(documents)
         return rerank_by_similarity(q_emb, documents, d_embs, top_k)
     except Exception:
-        # Fallback: 本地 Qwen3-Embedding
+        # Fallback: local Qwen3-Embedding
         try:
             q_emb = (await _embed_local([query]))[0]
             d_embs = await _embed_local(documents)
