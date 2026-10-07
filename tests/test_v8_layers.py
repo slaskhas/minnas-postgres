@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """
-v8.0 S3-1 · 记忆分层模型（可执行规格）测试
+v8.0 S3-1 · memory tiering model (executable spec) tests
 
-这一组测试的**存在本身就是判据** —— 它证明分层不是文档：
-规格若只写在 md 里，没人能证伪"系统其实没按它跑"；写成可运行断言后，
-任何词表/层定义漂移都会让这里变红。
+The **existence of this test group is itself the criterion** — it proves the tiering
+isn't just documentation: if the spec only lives in an md file, nobody can disprove
+"the system doesn't actually follow it"; once it's written as runnable assertions,
+any drift in the wordlist/tier definitions will fail here.
 """
 import pytest
 
@@ -13,7 +14,7 @@ from core import layers as L
 
 def test_l1_self_check_passes():
     r = L.self_check()
-    assert r["ok"], f"规格自检未通过: {r['problems']}"
+    assert r["ok"], f"spec self-check failed: {r['problems']}"
     assert r["problems"] == []
     assert set(r["layers"]) == {"L0", "L1", "L2", "L3", "L4"}
 
@@ -21,12 +22,12 @@ def test_l1_self_check_passes():
 def test_l2_every_controlled_category_maps_to_a_layer():
     for cat in L.KNOWN_CATEGORIES:
         info = L.classify_layer(cat)
-        assert info["layer"] in L.LAYERS, f"{cat} 未归层"
+        assert info["layer"] in L.LAYERS, f"{cat} has no assigned tier"
         assert info["why"]
 
 
 def test_l3_unknown_category_normalizes_like_the_api():
-    """API 侧非法 category 归一化为 knowledge —— 判定器必须与之一致。"""
+    """On the API side, an illegal category normalizes to knowledge — the classifier must agree."""
     info = L.classify_layer("totally-made-up")
     assert info["category"] == "knowledge"
     assert info["layer"] == "L1"
@@ -34,10 +35,12 @@ def test_l3_unknown_category_normalizes_like_the_api():
 
 
 def test_l4_l3_constraint_layer_is_not_in_the_database():
-    """诚实断言：约束层的载体在 Hermes 侧（SOUL/MEMORY/config），库里没有对应 category。
+    """Honest assertion: the constraint tier's carrier lives on the Hermes side
+    (SOUL/MEMORY/config); there's no corresponding category in the database.
 
-    若有人为了"整齐"给 L3 塞一个 category，这里会红 ——
-    那是把「分层模型」与「存储载体」混同，会导致约束被当成普通记忆治理。
+    If someone stuffs a category into L3 for the sake of "tidiness", this test fails —
+    that would conflate the "tiering model" with the "storage carrier", causing a
+    constraint to be governed like an ordinary memory.
     """
     assert L.LAYERS["L3"]["categories"] == ()
     assert "L3" not in set(L.CATEGORY_TO_LAYER.values())
@@ -61,14 +64,14 @@ def test_l6_only_cognition_layer_requires_source():
 def test_l7_artifact_pointer_only_when_artifact_present():
     with_art = L.classify_layer("worklog", has_artifact=True)
     assert with_art["artifact_pointer"] is True
-    assert with_art["artifact_rule"], "带交付物时必须给出指针规则"
+    assert with_art["artifact_rule"], "a pointer rule must be given when an artifact is present"
     without = L.classify_layer("worklog", has_artifact=False)
     assert without["artifact_pointer"] is False
     assert without["artifact_rule"] is None
 
 
 def test_l8_reference_layer_points_not_copies():
-    """参考层的关键规则：记忆里只放指针 + 指纹，不放实体。"""
+    """Reference tier's key rule: memory only stores a pointer + fingerprint, never the entity itself."""
     info = L.classify_layer("reference")
     assert info["layer"] == "L4"
     assert "指针" in info["write_policy"]
@@ -77,7 +80,7 @@ def test_l8_reference_layer_points_not_copies():
 
 
 def test_l9_self_check_detects_drift(monkeypatch):
-    """反证：故意漏掉一个类的归层，自检必须报出来（而不是静默通过）。"""
+    """Regression guard: deliberately drop one category's tier assignment — the self-check must report it (not silently pass)."""
     broken = dict(L.CATEGORY_TO_LAYER)
     broken.pop("worklog")
     monkeypatch.setattr(L, "CATEGORY_TO_LAYER", broken)
@@ -87,9 +90,9 @@ def test_l9_self_check_detects_drift(monkeypatch):
 
 
 def test_l10_conflict_policies_are_distinct_by_family():
-    """三族冲突策略必须真的不同 —— 否则分族就没有意义。"""
+    """The three families' conflict policies must genuinely differ — otherwise the family split is meaningless."""
     l0 = L.LAYERS["L0"]["conflict_policy"]
     l1 = L.LAYERS["L1"]["conflict_policy"]
     l3 = L.LAYERS["L3"]["conflict_policy"]
     assert l0 != l1 != l3
-    assert "禁止并存" in l3, "约束层必须显式禁止并存"
+    assert "禁止并存" in l3, "the constraint tier must explicitly forbid coexistence"

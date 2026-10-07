@@ -11,8 +11,8 @@ lessons accumulated across a lifetime of work with AI agents.
 
 v7.0 introduces the **Magic Memory Palace**: a memory architecture inspired by human
 civilization's proven information systems — library classification (Dewey Decimal),
-archive description standards (DA/T18), and the Chinese medicine cabinet (斗谱/position
-registry). No computers needed; these systems worked for centuries.
+archive description standards (DA/T18), and the traditional Chinese medicine cabinet (its
+drawer-label/position registry). No computers needed; these systems worked for centuries.
 
 ## Core Ideas
 

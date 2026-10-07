@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-Reflector — Mnemosyne 定时反思引擎 v1.0
+Reflector — Mnemosyne scheduled reflection engine v1.0
 
-用法:
-  python3 reflector.py --mode light    # 每小时执行：热度衰减 + 冗余合并
-  python3 reflector.py --mode deep     # 每天凌晨执行：同上 + 实体提取
+Usage:
+  python3 reflector.py --mode light    # run hourly: heat decay + redundancy merge
+  python3 reflector.py --mode deep     # run nightly: same as above + entity extraction
 
-设计文档: 文件14 §6 Reflector 反思引擎
+Design doc: document 14 §6 Reflector reflection engine
 """
 
 import argparse
@@ -19,13 +19,13 @@ from datetime import datetime, timezone
 import asyncpg
 import httpx
 
-# ── 配置 ──
+# ── Config ──
 API_BASE = "http://127.0.0.1:8010"
 PG_DSN = "postgresql://postgres@127.0.0.1:5432/mnemosyne"
-# v5.1 — 已迁移到豆包 doubao-embedding-vision-251215
+# v5.1 — migrated to Doubao doubao-embedding-vision-251215
 from core.embedding import get_embedding as _get_embedding
-SIM_THRESHOLD = 0.85  # v6.0: 0.92→0.85 修复去重失效 (相似表述未合并)
-BATCH_SIZE = 200       # 每批处理的记忆数
+SIM_THRESHOLD = 0.85  # v6.0: 0.92→0.85, fixed dedup not merging similar phrasings
+BATCH_SIZE = 200       # memories processed per batch
 
 logging.basicConfig(
     level=logging.INFO,
@@ -35,15 +35,15 @@ logging.basicConfig(
 log = logging.getLogger("reflector")
 
 
-# ── 工具函数 ──
+# ── Utility functions ──
 
 async def get_embedding(text: str) -> list[float]:
-    """v5.1 — 豆包多模态 Embedding (via core.embedding)"""
+    """v5.1 — Doubao multimodal embedding (via core.embedding)"""
     return _get_embedding([text])[0]
 
 
 def cosine_sim(a_raw, b_raw) -> float:
-    """pgvector 类型返回为 JSON 数组字符串 \"[0.014, -0.042, …]"，需反序列化"""
+    """pgvector returns its type as a JSON array string "[0.014, -0.042, …]", needs deserializing"""
     a = json.loads(a_raw) if isinstance(a_raw, (str, bytes)) else a_raw
     b = json.loads(b_raw) if isinstance(b_raw, (str, bytes)) else b_raw
     dot = sum(x * y for x, y in zip(a, b))
@@ -53,7 +53,7 @@ def cosine_sim(a_raw, b_raw) -> float:
 
 
 def parse_embedding(raw) -> list[float]:
-    """统一将 pgvector 返回值转为 float list"""
+    """Normalize pgvector's return value into a float list"""
     if isinstance(raw, (str, bytes)):
         return json.loads(raw)
     return raw
@@ -66,17 +66,20 @@ async def get_all_users(pool) -> list[str]:
     return [r["user_id"] for r in rows]
 
 
-# ── 冗余检测与合并 ──
+# ── Redundancy detection & merging ──
 
 async def detect_redundancy(pool, user_id: str) -> int:
     """
-    v6.0: 用 pgvector ANN 索引替代 O(n²) Python 两两比较。
-    对每批候选记忆各做 1 次近邻查询 (LIMIT 3)，合并 sim > SIM_THRESHOLD 的记忆对。
-    保留 heat_score 更高的那条，转移 entities，软删另一条。
+    v6.0: replaced O(n²) Python pairwise comparison with a pgvector ANN index.
+    Runs one nearest-neighbor query (LIMIT 3) per candidate memory, merging
+    pairs with sim > SIM_THRESHOLD.
+    Keeps whichever has the higher heat_score, transfers its entities, and
+    soft-deletes the other.
     """
     merged = 0
     checked: set[int] = set()
-    # 候选: 按热度降序取前 BATCH_SIZE 条（优先合并高价值记忆的冗余）
+    # Candidates: top BATCH_SIZE by descending heat (prioritize merging
+    # redundancy among high-value memories)
     rows = await pool.fetch(
         "SELECT id, content, heat_score FROM memories "
         "WHERE user_id=$1 AND is_deleted=FALSE AND embedding IS NOT NULL "
@@ -100,7 +103,7 @@ async def detect_redundancy(pool, user_id: str) -> int:
         ei = parse_embedding(ei_raw)
         vec_str = "[" + ",".join(str(x) for x in ei) + "]"
 
-        # ANN: 近邻查询（走 ivfflat 索引，毫秒级）
+        # ANN: nearest-neighbor query (via ivfflat index, millisecond-scale)
         neighbors = await pool.fetch(
             "SELECT id, heat_score, 1 - (embedding <=> $1::vector) AS sim "
             "FROM memories WHERE user_id=$2 AND is_deleted=FALSE "
@@ -120,7 +123,7 @@ async def detect_redundancy(pool, user_id: str) -> int:
             if nb["heat_score"] > rows[i]["heat_score"]:
                 keep_id, del_id = del_id, keep_id
 
-            # 转移 entities（避免重复）
+            # Transfer entities (avoiding duplicates)
             await pool.execute(
                 """UPDATE memory_entities
                    SET memory_id = $1
@@ -130,11 +133,11 @@ async def detect_redundancy(pool, user_id: str) -> int:
                      )""",
                 keep_id, del_id,
             )
-            # 软删冗余记忆
+            # Soft-delete the redundant memory
             await pool.execute(
                 "UPDATE memories SET is_deleted = TRUE WHERE id = $1", del_id
             )
-            # 保留者吸收访问计数
+            # The surviving record absorbs the access count
             await pool.execute(
                 "UPDATE memories SET access_count = access_count + 1 WHERE id = $1",
                 keep_id,
@@ -149,13 +152,13 @@ async def detect_redundancy(pool, user_id: str) -> int:
     return merged
 
 
-# ── 运行模式 ──
+# ── Run modes ──
 
 async def run_light(pool, users: list[str]):
-    """Light 模式：热度衰减 + 冗余合并"""
+    """Light mode: heat decay + redundancy merge"""
     for uid in users:
         log.info("[light] Processing user=%s", uid)
-        # 1. 调 reflect API（热度衰减 + 层级迁移）
+        # 1. Call the reflect API (heat decay + tier migration)
         try:
             async with httpx.AsyncClient(timeout=60) as client:
                 r = await client.post(
@@ -169,7 +172,7 @@ async def run_light(pool, users: list[str]):
         except Exception as e:
             log.error("  ├─ reflect API error: %s", e)
 
-        # 2. 冗余检测
+        # 2. Redundancy detection
         n = await detect_redundancy(pool, uid)
         if n:
             log.info("  └─ Merged %d redundant memories", n)
@@ -178,10 +181,10 @@ async def run_light(pool, users: list[str]):
 
 
 async def run_deep(pool, users: list[str]):
-    """Deep 模式：热度衰减 + 实体提取 + 冗余合并"""
+    """Deep mode: heat decay + entity extraction + redundancy merge"""
     for uid in users:
         log.info("[deep] Processing user=%s", uid)
-        # 1. 调 reflect(deep) API（热度衰减 + 实体提取）
+        # 1. Call the reflect(deep) API (heat decay + entity extraction)
         try:
             async with httpx.AsyncClient(timeout=120) as client:
                 r = await client.post(
@@ -195,7 +198,7 @@ async def run_deep(pool, users: list[str]):
         except Exception as e:
             log.error("  ├─ reflect API error: %s", e)
 
-        # 2. 冗余检测
+        # 2. Redundancy detection
         n = await detect_redundancy(pool, uid)
         if n:
             log.info("  └─ Merged %d redundant memories", n)
@@ -203,15 +206,15 @@ async def run_deep(pool, users: list[str]):
             log.info("  └─ No redundancy found")
 
 
-# ── 入口 ──
+# ── Entry point ──
 
 async def main():
-    parser = argparse.ArgumentParser(description="Mnemosyne Reflector — 定时反思引擎")
+    parser = argparse.ArgumentParser(description="Mnemosyne Reflector — scheduled reflection engine")
     parser.add_argument(
         "--mode",
         choices=["light", "deep"],
         default="light",
-        help="light=每小时(热度+冗余), deep=每日(含实体提取)",
+        help="light=hourly (heat+redundancy), deep=daily (includes entity extraction)",
     )
     args = parser.parse_args()
 
@@ -220,7 +223,8 @@ async def main():
 
     pool = await asyncpg.create_pool(PG_DSN, min_size=1, max_size=2)
     try:
-        # v6.0: 单用户收敛 — 只处理 default（历史 user_id 由数据迁移统一合并）
+        # v6.0: converged to a single user — only process "default" (legacy
+        # user_ids were consolidated by a data migration)
         users = await get_all_users(pool)
         users = [u for u in users if u == "default"]
         if not users:

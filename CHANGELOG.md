@@ -48,11 +48,11 @@
 
 ### Corrections
 
-- `docs/poster.html` main-title typo 「记忆供电」→「记忆宫殿」（同批修复见上一提交）
+- `docs/poster.html` main-title typo "Memory Power Supply" (`记忆供电`) → "Memory Palace" (`记忆宫殿`) (fixed in the same batch as the previous commit)
 - **Poster footer verification numbers corrected** (cross-repo confusion + stale snapshot):
-  - `契约 45 通过` — that **45 belongs to the `gcat-std` repo** (its governance-foundation suite), and was mistakenly brought into this repo's poster →
+  - "Contract 45 passed" (`契约 45 通过`) — that **45 belongs to the `gcat-std` repo** (its governance-foundation suite), and was mistakenly brought into this repo's poster →
     changed to this repo's measured value **`MCP bridge contract 6 passed`** (`tests/test_mcp_bridge_contract.py`)
-  - `单元 267 通过` (a local snapshot at v8.0.0 completion, per `PROGRESS.md`) → **`273`** (full `pytest` measured, reproducible by anyone)
+  - "Unit 267 passed" (`单元 267 通过`) (a local snapshot at v8.0.0 completion, per `PROGRESS.md`) → **`273`** (full `pytest` measured, reproducible by anyone)
 - **CI privacy-gate misfire fix** (`.github/workflows/privacy.yml`): the credential-class pattern was originally a "fire on presence" writing
   `PGPASSWORD=[^y]`, which judged **legitimate variable expansion** in `setup.sh` as a leak → after push, main went red twice in a row (externally visible).
   - The criterion was changed to **only catch hardcoded values** (variable expansion begins with `$`, so it naturally doesn't match; genuinely hardcoded ones are still caught as before)
@@ -65,7 +65,7 @@
 
 ## release · v8.1.0 (2026-10-06) — MCP bridge folded into core: 15 tools now serve /mcp over streamable HTTP (stdio kept)
 
-> Basis: proposal [P-20261006-03](openspec/changes/2026-10-06-mcp-inprocess-http-merge/proposal.md) · ADR [0003](docs/adr/0003-MCP桥内进程化取舍与触发器.md) · user instruction "do alternative A, implement"
+> Basis: proposal [P-20261006-03](openspec/changes/2026-10-06-mcp-inprocess-http-merge/proposal.md) · ADR [0003](docs/adr/0003-mcp-bridge-inprocess-tradeoffs-and-triggers.md) · user instruction "do alternative A, implement"
 > Net effect: the 15 Mnemosyne MCP tools — previously a separate stdio subprocess behind the 18010→8010 SSH tunnel —
 > are now **mounted in-process** on the core uvicorn process at `/mcp`. The *same* contract-tested handlers
 > (`_dispatch`/`_call`/`list_tools`/`call_tool`) serve **both** transports; stdio is preserved untouched for backwards compatibility.
@@ -96,7 +96,7 @@
 
 ## release · v8.0.0 (2026-09-25) — Memory Palace OS 8.0: write right · recover back · find precisely · clarify
 
-> Basis: proposal [P-20260925-01](openspec/changes/2026-09-25-v8-memory-os/proposal.md) · ADR [0002](docs/adr/0002-文件系统机制取舍与触发器.md)
+> Basis: proposal [P-20260925-01](openspec/changes/2026-09-25-v8-memory-os/proposal.md) · ADR [0002](docs/adr/0002-filesystem-mechanism-tradeoffs-and-triggers.md)
 > Relationship with the prior "Memory Filesystem Research Report" (20-dimension FS mechanism mapping): **narrowed and institutionalized** ——
 > only filled in what PostgreSQL did not provide and we truly lack; the other 17 dimensions were written into ADR triggers (no additions before they fire).
 > The original report's value was preserved as a gate: its boundary conditions are our trigger thresholds.

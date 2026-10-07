@@ -1,21 +1,22 @@
 #!/usr/bin/env python3
 """
-Mnemosyne MCP 适配测试 (mcp SDK 2.0)
+Mnemosyne MCP adaptation test (mcp SDK 2.0)
 =====================================
-对 mnemosyne_mcp.py 做全工具协议级测试: 握手 / 15 工具发现 / 写入即命中 /
-生命周期闭环 / 慢端点 / 错误路径。适用于 Hermes 对接 Mnemosyne 的 C 段验收。
+Full protocol-level test of mnemosyne_mcp.py: handshake / discovery of the 15 tools /
+write-then-immediately-searchable / lifecycle round trip / slow endpoints / error paths.
+Used for acceptance of the Hermes-to-Mnemosyne integration (segment C).
 
-用法:
+Usage:
   python3 scripts/mcp_adapt_test.py
   python3 scripts/mcp_adapt_test.py --mcp integrations/hermes-mcp/mnemosyne_mcp.py
   MNEMOSYNE_URL=http://127.0.0.1:18010 python3 scripts/mcp_adapt_test.py
 
-参数:
-  --python   MCP 桥解释器 (默认 python3)
-  --mcp      mnemosyne_mcp.py 路径 (默认: 仓库根/integrations/hermes-mcp/mnemosyne_mcp.py)
-  --url      Mnemosyne API 基地址 (默认 http://127.0.0.1:8010, 走隧道时给 18010)
+Arguments:
+  --python   MCP bridge interpreter (default: python3)
+  --mcp      path to mnemosyne_mcp.py (default: <repo root>/integrations/hermes-mcp/mnemosyne_mcp.py)
+  --url      Mnemosyne API base URL (default: http://127.0.0.1:8010; use 18010 over a tunnel)
 
-退出码: 0 = 全部通过; 1 = 有失败
+Exit codes: 0 = all passed; 1 = some failed
 """
 import argparse
 import json
@@ -32,7 +33,7 @@ READ_TIMEOUT = 35
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--python", default=os.environ.get("MNEMOSYNE_PYTHON", "python3"))
-    ap.add_argument("--mcp", default=None, help="mnemosyne_mcp.py 路径")
+    ap.add_argument("--mcp", default=None, help="path to mnemosyne_mcp.py")
     ap.add_argument("--url", default=os.environ.get("MNEMOSYNE_URL", DEFAULT_URL))
     args = ap.parse_args()
 
@@ -67,7 +68,7 @@ def main():
 
     r = send({"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
     n = len(r["result"]["tools"]) if r and "result" in r else -1
-    results[f"tools/list({n}个)"] = "OK" if n == 15 else f"FAIL: {n}"
+    results[f"tools/list({n} tools)"] = "OK" if n == 15 else f"FAIL: {n}"
 
     def call(tid, name, args_dict):
         r = send({"jsonrpc": "2.0", "id": tid, "method": "tools/call",
@@ -80,7 +81,7 @@ def main():
         text = content[0]["text"] if content else "{}"
         return text, r["result"].get("isError", False)
 
-    # ── 快批: 核心链路 ──
+    # ── Fast batch: core path ──
     text, err = call(10, "store_memory",
                      {"content": f"{tag} MCP2.0适配测试记忆", "category": "test", "importance": 0.5})
     mid = None
@@ -95,7 +96,7 @@ def main():
     try:
         hits = json.loads(text).get("memories", [])
         hit = any(tag in (m.get("content", "") or "") for m in hits)
-        results["search_memories(当日写入即命中)"] = f"OK hit={hit}" if not err else f"FAIL: {text[:100]}"
+        results["search_memories(same-day write is immediately hit)"] = f"OK hit={hit}" if not err else f"FAIL: {text[:100]}"
     except Exception:
         results["search_memories"] = f"PARSE: {text[:100]}"
 
@@ -132,15 +133,15 @@ def main():
     text, err = call(24, "search_beliefs", {"query": tag, "top_k": 3})
     results["search_beliefs"] = "OK" if not err else f"FAIL: {text[:100]}"
 
-    # ── 慢批: LLM 端点 ──
+    # ── Slow batch: LLM-backed endpoints ──
     text, err = call(12, "dialectic_search", {"query": "记忆宫殿", "max_results": 1})
-    results["dialectic_search(慢/LLM)"] = "OK" if not err and "error" not in text[:200] else f"FAIL: {text[:120]}"
+    results["dialectic_search(slow/LLM)"] = "OK" if not err and "error" not in text[:200] else f"FAIL: {text[:120]}"
 
     text, err = call(20, "extract_entities", {"text": f"{tag} 服务器部署在腾讯云"})
-    results["extract_entities(慢/LLM)"] = "OK" if not err else f"FAIL: {text[:120]}"
+    results["extract_entities(slow/LLM)"] = "OK" if not err else f"FAIL: {text[:120]}"
 
     text, err = call(25, "no_such_tool", {})
-    results["unknown_tool(错误路径)"] = "OK" if (err or "error" in text or "Unknown" in text) else f"FAIL: {text[:100]}"
+    results["unknown_tool(error path)"] = "OK" if (err or "error" in text or "Unknown" in text) else f"FAIL: {text[:100]}"
 
     proc.stdin.close()
     try:
@@ -148,14 +149,14 @@ def main():
     except Exception:
         proc.kill()
 
-    print(f"=== Mnemosyne MCP 适配测试 (标记 {tag}) ===")
+    print(f"=== Mnemosyne MCP adaptation test (tag {tag}) ===")
     ok = 0
     for k, v in results.items():
         good = str(v).startswith("OK")
         ok += 1 if good else 0
         print(f"  {'PASS' if good else 'FAIL'} {k}: {v}")
-    print(f"\n结果: {ok}/{len(results)} 通过")
-    print(f"测试数据标记 {tag} 请手动清理 (记忆/wiki/信念)")
+    print(f"\nResult: {ok}/{len(results)} passed")
+    print(f"Please manually clean up test data tagged {tag} (memories/wiki/beliefs)")
     return 0 if ok == len(results) else 1
 
 

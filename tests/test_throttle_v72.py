@@ -1,6 +1,6 @@
-"""v7.2 遗忘节流 — 用户活跃感知 单元测试 (无需 DB)
+"""v7.2 forgetting throttle — user-activity-aware unit tests (no DB needed)
 
-覆盖: 活跃判定 / 不活跃暂停衰减 / 回归清除标记
+Coverage: activity determination / decay pause while inactive / clearing the marker on return
 """
 import pytest
 import sys, os
@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
-# ── 与生产 reflect 用户活跃感知同源逻辑的纯函数 ──
+# ── Pure functions from the same logic as production reflect's user-activity awareness ──
 def user_active(last_active, now, window_days=7) -> bool:
     if last_active is None:
         return False
@@ -31,7 +31,7 @@ class TestUserActive:
         assert user_active(self.NOW - timedelta(days=6), self.NOW) is True
 
     def test_inactive_8d(self):
-        """用户旅游8天 → 判定不活跃 → 衰减暂停"""
+        """User away for 8 days → determined inactive → decay pauses"""
         assert user_active(self.NOW - timedelta(days=8), self.NOW) is False
 
     def test_inactive_30d(self):
@@ -46,5 +46,5 @@ class TestUserActive:
         assert absence_days(la, self.NOW, True) == 0
 
     def test_absence_boundary(self):
-        """刚好7天: 活跃 (>= 语义) — 用户回归当天不暂停"""
+        """Exactly 7 days: active (>= semantics) — no pause on the day the user returns"""
         assert user_active(self.NOW - timedelta(days=7), self.NOW) is True

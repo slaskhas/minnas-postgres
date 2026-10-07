@@ -1,8 +1,8 @@
 """
 Mnemosyne v5.0 — Hermes MemoryProvider SDK
-白皮书 §6.2 工作流级深度映射 + §6.4 官方原生SDK
+Whitepaper §6.2 workflow-level deep mapping + §6.4 official native SDK
 
-零侵入替换 Hermes 原生记忆基类
+Zero-intrusion replacement for Hermes' native memory base class
 """
 import json
 import urllib.request
@@ -11,12 +11,12 @@ from typing import Dict, List, Optional
 
 class MnemosyneHermesMemory:
     """
-    Hermes 原生 SDK — 3行代码集成
+    Hermes native SDK — 3-line integration
     
     Usage:
         from mnemosyne_hermes_sdk import MnemosyneHermesMemory
         memory = MnemosyneHermesMemory(endpoint="http://127.0.0.1:18010")
-        memory.add("用户偏好使用 Python 3.10", memory_type="preference")
+        memory.add("User prefers Python 3.10", memory_type="preference")
     """
     
     def __init__(self, endpoint: str = "http://127.0.0.1:18010", 
@@ -53,15 +53,15 @@ class MnemosyneHermesMemory:
         with self._opener.open(req, timeout=10) as resp:
             return json.loads(resp.read())
     
-    # ── 会话管理 ──
+    # ── Session management ──
     def on_session_start(self, session_id: str):
-        """会话启动"""
+        """Session start"""
         self.session_id = session_id
     
-    # ── 记忆操作 ──
+    # ── Memory operations ──
     def add(self, content: str, memory_type: str = "general", 
             category: str = "knowledge", tags: List[str] = None) -> dict:
-        """添加记忆 → 研究馆 (v6.0: 分类走受控词表, 服务端自动归一化)"""
+        """Add a memory → research hall (v6.0: category uses a controlled vocabulary, auto-normalized server-side)"""
         return self._post("/api/v1/halls/archive", {
             "content": content,
             "memory_type": memory_type,
@@ -72,26 +72,26 @@ class MnemosyneHermesMemory:
         })
     
     def get_relevant(self, query: str, top_k: int = 3) -> List[dict]:
-        """检索相关记忆"""
+        """Retrieve relevant memories"""
         r = self._post("/api/v1/memories/search", {
             "query": query,
             "top_k": top_k,
             "user_id": self.user_id,
         })
-        data = r.get("data", r)  # 兼容有无包装
+        data = r.get("data", r)  # tolerate both wrapped and unwrapped responses
         return data.get("memories", [])
     
     def search_by_hall(self, hall: str, limit: int = 10) -> List[dict]:
-        """按馆查询"""
+        """Query by hall"""
         r = self._get(f"/api/v1/halls/{hall}?tenant_id={self.user_id}&limit={limit}")
         data = r.get("data", r)
         return data.get("memories", [])
     
-    # ── 工具调用 ──
+    # ── Tool calls ──
     def archive_tool_call(self, tool_name: str, params: dict,
                           result: str, success: bool,
                           error_type: str = None, duration_ms: int = None) -> dict:
-        """归档工具调用结果"""
+        """Archive a tool call result"""
         return self._post("/api/v1/tools/archive", {
             "tool_name": tool_name,
             "params": params,
@@ -103,9 +103,9 @@ class MnemosyneHermesMemory:
             "tenant_id": self.user_id,
         })
     
-    # ── 项目管理 ──
+    # ── Project management ──
     def start_project(self, project_name: str, description: str = "") -> dict:
-        """创建项目"""
+        """Create a project"""
         return self._post("/api/v1/projects/create", {
             "name": project_name,
             "description": description,
@@ -113,46 +113,46 @@ class MnemosyneHermesMemory:
         })
     
     def archive_project(self, project_id: int) -> dict:
-        """归档项目"""
+        """Archive a project"""
         return self._post(f"/api/v1/projects/{project_id}/archive", {})
     
-    # ── 安全操作 ──
+    # ── Security operations ──
     def purify_memory(self, memory_id: int, reason: str = "user_request") -> dict:
-        """哈希净化记忆"""
+        """Hash-purify a memory"""
         return self._post("/api/v1/security/purify", {
             "memory_id": memory_id,
             "reason": reason,
         })
     
     def run_audit(self, limit: int = 5) -> dict:
-        """运行异构审计"""
+        """Run a heterogeneous audit"""
         return self._post(f"/api/v1/security/audit/run?limit={limit}", {})
     
     def get_costs(self) -> dict:
-        """查询成本"""
+        """Query cost"""
         return self._get("/api/v1/security/costs")
     
-    # ── 配置 ──
+    # ── Configuration ──
     def set_decision_level(self, level: str):
-        """设置决策级别 L0/L1/L2"""
+        """Set decision level L0/L1/L2"""
         self.decision_level = level
     
     def enable_anonymous_feedback(self, enabled: bool = True):
-        """启用匿名回传"""
+        """Enable anonymous feedback reporting"""
         self._feedback_enabled = enabled
     
-    # ── 统计 ──
+    # ── Stats ──
     def stats(self) -> dict:
-        """记忆库统计"""
+        """Memory store stats"""
         return self._get(f"/api/v1/memories/stats?user_id={self.user_id}")
     
-    # ── 快捷方法 ──
+    # ── Shortcut methods ──
     def remember(self, content: str, category: str = "note") -> dict:
-        """快捷记忆 (归档到档案馆)"""
+        """Quick memory (archives to the archive hall)"""
         return self.add(content, memory_type="fact", category=category)
     
     def pitfall(self, tool: str, error: str, fix: str = "") -> dict:
-        """记录踩坑"""
+        """Record a pitfall"""
         return self.archive_tool_call(
             tool_name=tool,
             params={},

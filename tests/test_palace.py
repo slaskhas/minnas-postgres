@@ -1,6 +1,6 @@
-"""v7.0 魔法记忆宫殿 — palace.py 单元测试 (无需 DB)
+"""v7.0 magic memory palace — palace.py unit tests (no DB needed)
 
-覆盖: 分类树 / 档号生成 / 生命周期规则 / SQL 生成
+Coverage: classification tree / accession-number generation / lifecycle rules / SQL generation
 """
 import pytest
 import sys, os

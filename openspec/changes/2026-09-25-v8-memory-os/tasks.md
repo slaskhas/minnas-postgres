@@ -1,60 +1,60 @@
-# 记忆宫殿 OS 8.0.1 · 任务拆分表
+# Memory Palace OS 8.0.1 · Task Breakdown
 
-> 依据：G-CAT 交付流程标准（`~/gcat-std/RELEASE-FLOW.md`）第 4 节「任务拆分规则」。
-> 来源：用户 2026-09-25 会话（三次批评 + 流程复述）逐条拆解。
-> 规则：一任务 = 一可独立验收的产出；判据必须**可证伪**；拦截类改动**必须反证**。
+> Basis: G-CAT delivery process standard (`~/gcat-std/RELEASE-FLOW.md`) §4 "Task breakdown rules."
+> Source: broken down line-by-line from the user's 2026-09-25 session (three rounds of criticism + process restatement).
+> Rule: one task = one independently acceptable deliverable; the criterion must be **falsifiable**; blocking-type changes **must have a falsification test**.
 
-## A. 用户诉求 → 任务映射（拆解的源头）
+## A. User requests → task mapping (the source of the breakdown)
 
-| # | 用户原话（要点） | 拆出的任务 | 归属 |
+| # | User's original words (paraphrased) | Task derived | Owner stage |
 |---|---|---|---|
-| 1 | 「本地开发好了之后要做测试」 | T-1 本地测试套件 + 反证 | P2 |
-| 2 | 「测试完成之后再发布到正式环境」 | T-2 部署前验收关卡 | P2→P3 |
-| 3 | 「正式环境里面再测试一遍」 | T-3 真链路端到端实测 | P4 |
-| 4 | 「也没问题了再确认」 | T-4 公开前确认关卡 | P4→P5 |
-| 5 | 「才是发布到 GitHub 仓库」 | T-5 公开（含开源就绪） | P5 |
-| 6 | 「仓库版本也要做特殊优化，分享给别人的」 | T-6 开源就绪件（一键安装/占位符/外部视角文档） | P5 |
-| 7 | 「每个环节都有自己的标准」 | T-7 各环境标准（工作区/测试库/正式/公开） | P0 标准 |
-| 8 | 「GitHub 隐私要单独审核」 | T-8 隐私两层扫描 + 独立 clone 复扫 | P5 |
-| 9 | 「要拆成几个事情，工作拆分和编排任务」 | T-9 任务拆分表 + 门禁执行器 | P0 |
-| 10 | 「一层一层验收」 | T-10 七阶段 + 三道关卡（不可自批） | P0 工具 |
-| 11 | 「流程要固化下来」 | T-11 标准文档 + 执行器 + 回归测试 | P0 工具 |
-| 12 | 「跟 DSH 的沟通有问题，找到核心」 | T-12 DSH 编排接口修复（任务书落文件） | P1（未开工） |
-| 13 | 「又发现潜伏 bug，说明没测干净」 | T-13 GC 还原完整性（已修+tests） | P2（已做） |
-| 14 | 「把这次的修复定为 8.0.1」 | T-14 版本号 8.0.1 + CHANGELOG | P1（已做） |
+| 1 | "Once local dev is done, it needs testing" | T-1 local test suite + falsification | P2 |
+| 2 | "Only release to production after testing is complete" | T-2 pre-deploy acceptance gate | P2→P3 |
+| 3 | "Test it again once it's in production" | T-3 real end-to-end live test | P4 |
+| 4 | "Confirm again once that's also fine" | T-4 pre-public confirmation gate | P4→P5 |
+| 5 | "Only then release to the GitHub repo" | T-5 go public (incl. open-source readiness) | P5 |
+| 6 | "The repo version also needs special optimization, since it's shared with others" | T-6 open-source readiness items (one-click install/placeholders/outsider-perspective docs) | P5 |
+| 7 | "Every stage has its own standard" | T-7 per-environment standards (workspace/test DB/production/public) | P0 standard |
+| 8 | "GitHub privacy needs a separate review" | T-8 two-layer privacy scan + independent clone re-scan | P5 |
+| 9 | "Needs to be broken into several pieces, work breakdown and task orchestration" | T-9 task breakdown table + gate executor | P0 |
+| 10 | "Accept it layer by layer" | T-10 seven stages + three gates (no self-approval) | P0 tooling |
+| 11 | "The process needs to be made permanent" | T-11 standard document + executor + regression tests | P0 tooling |
+| 12 | "There's an issue communicating with DSH, find the root cause" | T-12 DSH orchestration-interface fix (task spec written to a file) | P1 (not started) |
+| 13 | "Found another lurking bug, which means testing wasn't thorough" | T-13 GC restore integrity (fixed + tests) | P2 (done) |
+| 14 | "Call this fix release 8.0.1" | T-14 version number 8.0.1 + CHANGELOG | P1 (done) |
 
-## B. 逐任务判据表（可证伪）
+## B. Per-task acceptance criteria (falsifiable)
 
-| # | 任务 | 判据（怎么算成） | 证据（拿什么证明） | 状态 |
+| # | Task | Criterion (how we know it's done) | Evidence (what proves it) | Status |
 |---|---|---|---|---|
-| T-13 | GC 还原完整性 | 删前各子表计数 == 还原后计数；任一表不等即红 | `test_c9`；反证：撤掉修复→C9 红 | ✅ 已做（P2 待过） |
-| T-10 | 七阶段三道关卡 | 每一道关卡 `pass` 必被拒（不是只测一道） | `test_g3`（遍历全部关卡）；伪造凭证被拒 `test_g4` | ✅ 已做 |
-| T-11 | 流程固化 | 标准文档与执行器成对存在；41 例套件绿 | `RELEASE-FLOW.md` 存在断言 `test_g11`；unittest 41 OK | ✅ 已做 |
-| T-5/T-8 | 公开标准 | 隐私扫描**零输出**；独立 clone 复扫零命中 | `release_checks.py privacy`；clone 复扫 | ⏸ P5 待做 |
-| T-6 | 开源就绪 | 陌生人能装能用：一键安装脚本存在且可跑；文档无真实值 | 待定（`setup.sh` + INSTALL 更新） | ⏸ 未开工 |
-| T-12 | DSH 编排接口 | 任务书**不经 shell**（落文件传路径）；派活失败可自动重派 | 待定（连续 5 类转义故障归零） | ⏸ 未开工 |
-| T-1 | 本地测试 | 全量套件绿 + 反证过 | mnemosyne-dev 259 passed / gcat-std 41 OK | ✅ 已做 |
-| T-3 | 真链路实测 | 生产端到端（非 mock）+ 测试件清场 | 待做 | ⏸ P4 |
-| T-4 | 公开前确认 | 用户对正式环境表现的原话凭证 | 待做 | ⏸ P4→P5 |
+| T-13 | GC restore integrity | Per-subtable counts before deletion == counts after restore; any mismatch is red | `test_c9`; falsification: revert the fix → C9 goes red | ✅ Done (P2 pending sign-off) |
+| T-10 | Seven stages, three gates | Every gate's `pass` must be rejectable (not just tested for one gate) | `test_g3` (iterates all gates); forged credentials rejected by `test_g4` | ✅ Done |
+| T-11 | Process made permanent | Standard document and executor exist as a pair; 41-case suite green | `RELEASE-FLOW.md` existence assertion `test_g11`; unittest 41 OK | ✅ Done |
+| T-5/T-8 | Public release standard | Privacy scan **zero output**; independent clone re-scan zero hits | `release_checks.py privacy`; independent clone re-scan | ⏸ Pending P5 |
+| T-6 | Open-source readiness | A stranger can install and use it: one-click install script exists and runs; docs contain no real values | TBD (`setup.sh` + INSTALL update) | ⏸ Not started |
+| T-12 | DSH orchestration interface | Task specs **bypass the shell** (written to a file, pass the path); failed dispatch can auto-retry | TBD (5 consecutive classes of escaping failures reduced to zero) | ⏸ Not started |
+| T-1 | Local testing | Full suite green + falsification passed | mnemosyne-dev 259 passed / gcat-std 41 OK | ✅ Done |
+| T-3 | Real end-to-end test | Production end-to-end (not mocked) + test artifacts cleaned up | TBD | ⏸ P4 |
+| T-4 | Pre-public confirmation | Documented confirmation from the user on production behavior | TBD | ⏸ P4→P5 |
 
-## C. 阶段编排（谁先谁后、卡在哪）
+## C. Stage orchestration (what comes first, where it's blocked)
 
 ```
-P0 方案        ✅ 已过（本文件 + 提案 + ADR + 标准）
- └─🔒 方案确认 ── 等你一句话
-P1 工作区开发   ⏸ ← 当前卡点
-P2 本地测试     （T-1/T-13 已完成，待正式过门）
- └─🔒 部署前验收
-P3 部署
-P4 正式环境测试
- └─🔒 公开前确认
-P5 发布         （含 T-6 开源就绪）
-P6 归纳
+P0 Plan           ✅ passed (this file + proposal + ADR + standard)
+ └─🔒 Plan confirmation ── waiting on your go-ahead
+P1 Workspace dev   ⏸ ← currently blocked here
+P2 Local testing   (T-1/T-13 done, pending formal sign-off)
+ └─🔒 Pre-deploy acceptance
+P3 Deploy
+P4 Production testing
+ └─🔒 Pre-public confirmation
+P5 Release         (includes T-6 open-source readiness)
+P6 Retrospective
 ```
 
-## D. 未决（需用户定，不自行决定）
+## D. Open decisions (need the user's call, not to be decided unilaterally)
 
-1. **幂等键与 L0 契约矛盾** —— 归 8.0.1 还是 8.1？
-2. **RRF tie-break** —— 承认「记忆优先」写进文档，还是换中性？
-3. **评测基线** —— 跑（E3 已备好 150 条设计）还是继续挂账？
-4. **DSH 编排器** —— 做（治本=任务书落文件；兜底=收活校验+自动重派）？
+1. **Idempotency key vs. L0 contract conflict** — does it belong in 8.0.1 or 8.1?
+2. **RRF tie-break** — document that "memory wins" ties, or switch to a neutral rule?
+3. **Evaluation baseline** — run it now (E3 already has 150 cases designed) or keep it on the backlog?
+4. **DSH orchestrator** — build it (root fix = task spec written to a file; fallback = intake validation + auto-retry)?

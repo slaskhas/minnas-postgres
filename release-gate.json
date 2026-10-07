@@ -1,80 +1,80 @@
 {
   "project": "Mnemosyne-OS",
-  "_comment": "发布流程门禁配置（七阶段 P0~P6，权威标准见 gcat-std/RELEASE-FLOW.md）。命令以 argv 列表执行（shlex.split，不过 shell）——见 gcat-std 红线。⚠️ 不含 repo 字段（本机路径属隐私红线）：运行时用 `--repo <路径>` 传入。",
+  "_comment": "Release-flow gate configuration (seven stages P0-P6; authoritative standard is gcat-std/RELEASE-FLOW.md). Commands run as an argv list (shlex.split, not through a shell) — see the gcat-std red line. ⚠️ No `repo` field (a local machine path is a privacy red line): pass it at runtime via `--repo <path>`.",
   "stages": {
     "P0": {
-      "gate": "方案：PRD + 判据表 + 不做清单 + 任务拆分表",
+      "gate": "Plan: PRD + acceptance-criteria table + won't-do list + task breakdown table",
       "commands": [
         {
-          "name": "方案要件（判据表 + 不做清单）",
+          "name": "Plan artifacts (acceptance-criteria table + won't-do list)",
           "run": "python3 scripts/release_checks.py plan openspec/changes/2026-09-25-v8-memory-os/proposal.md"
         }
       ]
     },
     "P1": {
-      "gate": "工作区开发：改动落地 + 独立 commit（严禁碰正式环境/远端）",
+      "gate": "Workspace development: changes landed + committed separately (never touch staging/remote)",
       "commands": [
         {
-          "name": "工作区已提交（无未提交改动）",
+          "name": "Workspace committed (no uncommitted changes)",
           "run": "git diff --quiet HEAD"
         }
       ]
     },
     "P2": {
-      "gate": "本地测试：全量绿 + 反证 + 契约",
+      "gate": "Local tests: all green + counter-evidence + contracts",
       "commands": [
         {
-          "name": "全量用例",
+          "name": "Full test suite",
           "run": ".venv/bin/python -m pytest tests/ -q",
           "timeout": 600
         },
         {
-          "name": "分层规格自检",
+          "name": "Layer spec self-check",
           "run": ".venv/bin/python core/layers.py --self-check"
         },
         {
-          "name": "回收作业干跑",
+          "name": "Reclamation job dry run",
           "run": ".venv/bin/python jobs/compaction.py --dry-run --dsn postgresql:///mnemosyne_v8test --limit 50"
         }
       ]
     },
     "P3": {
-      "gate": "部署：备份可恢复 + 最小覆盖 + 服务自报版号 + 回滚演练",
+      "gate": "Deploy: backup is restorable + minimal footprint + service self-reports version + rollback drill",
       "commands": [
         {
-          "name": "服务自报版号 == 仓库 VERSION",
+          "name": "Service self-reported version == repo VERSION",
           "run": "python3 scripts/release_checks.py service-version http://127.0.0.1:18010/"
         }
       ]
     },
     "P4": {
-      "gate": "正式环境测试：真链路实测 + 真实数据核验 + 测试件清场",
+      "gate": "Production testing: real end-to-end exercise + real-data verification + test-artifact cleanup",
       "commands": [
         {
-          "name": "正式环境冒烟（分层写入四发验证 + 落库 + 清场）",
+          "name": "Production smoke test (layered-write four-shot verification + DB check + cleanup)",
           "run": ".venv/bin/python scripts/prod_smoke.py http://127.0.0.1:18010",
           "timeout": 300
         }
       ]
     },
     "P5": {
-      "gate": "发布：版本三处一致 + 隐私零输出 + 独立 clone 复扫 + 开源就绪",
+      "gate": "Release: version consistent in all three places + zero privacy-scan output + independent clone re-scan + open-source ready",
       "commands": [
         {
-          "name": "版本一致性",
+          "name": "Version consistency",
           "run": "python3 scripts/release_checks.py version-consistency"
         },
         {
-          "name": "隐私扫描",
+          "name": "Privacy scan",
           "run": "python3 scripts/release_checks.py privacy"
         }
       ]
     },
     "P6": {
-      "gate": "归纳：CHANGELOG + 指针回链 + 记忆 + 台账 + 交付三件套",
+      "gate": "Wrap-up: CHANGELOG + backlink pointers + memory + ledger + the delivery trio",
       "commands": [
         {
-          "name": "CHANGELOG 含版本",
+          "name": "CHANGELOG contains the version",
           "run": "python3 scripts/release_checks.py changelog 8.0.0"
         }
       ]

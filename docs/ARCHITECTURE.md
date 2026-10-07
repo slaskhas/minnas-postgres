@@ -1,26 +1,26 @@
-# 架构速览
+# Architecture Overview
 
-> 从 `AGENTS.md` 下沉。详细设计见 [WHITEPAPER.md](WHITEPAPER.md) 与 [palace-architecture.md](palace-architecture.md)。
-> 返回 [AGENTS.md](../AGENTS.md)
+> Lifted out of `AGENTS.md`. Detailed design: see [WHITEPAPER.md](WHITEPAPER.md) and [palace-architecture.md](palace-architecture.md).
+> Back to [AGENTS.md](../AGENTS.md)
 
-## 架构速览
+## Architecture Overview
 
 ```
-Mnemosyne OS (FastAPI, 50+ 端点)
-  ├── main.py            服务入口 + 核心路由 (memories/search/palace/wiki/...)
-  ├── palace.py          🏰 宫殿核心 (分类/档号/卡片/召唤/生命周期)
-  ├── core/              LLM / Embedding / Chunker 引擎
-  ├── api/               REST API 模块
-  ├── tmt/               蒸馏引擎 (factextract/distill)
-  ├── wiki/              WIKI 知识库模块 (BM25/图谱/提取/评测)
-  ├── security/          审计与净化
-  ├── integrations/      Hermes 集成 (Memory Provider + MCP)
-  │   └── hermes-provider/  Memory Provider v7 (11 工具, palace_summon)
-  ├── sync/              端云同步 (SQLite ↔ PostgreSQL)
-  └── docs/              白皮书 + 宫殿设计 + schema
+Mnemosyne OS (FastAPI, 50+ endpoints)
+  ├── main.py            Service entry point + core routes (memories/search/palace/wiki/...)
+  ├── palace.py          🏰 Palace core (categorization/accession numbers/cards/summon/lifecycle)
+  ├── core/              LLM / Embedding / Chunker engines
+  ├── api/               REST API modules
+  ├── tmt/               Distillation engine (factextract/distill)
+  ├── wiki/              WIKI knowledge base module (BM25/graph/extraction/eval)
+  ├── security/          Audit and purification
+  ├── integrations/      Hermes integration (Memory Provider + MCP)
+  │   └── hermes-provider/  Memory Provider v7 (11 tools, palace_summon)
+  ├── sync/              Edge-cloud sync (SQLite ↔ PostgreSQL)
+  └── docs/              Whitepaper + palace design + schema
 
-数据层: PostgreSQL 16 + pgvector 1536d (HNSW)(v7.8: Apache AGE 图已切除 — 实体关联走 entities/memory_entities/wiki_entities 表)
-模型层: embedding 固定走 OpenAI 兼容端点 (1536d)；对话/LLM 可插拔 —— 豆包 ARK / DeepSeek / 任意 OpenAI 兼容端点
+Data layer: PostgreSQL 16 + pgvector 1536d (HNSW) (v7.8: Apache AGE graph removed — entity association now goes through the entities/memory_entities/wiki_entities tables)
+Model layer: embedding is fixed to an OpenAI-compatible endpoint (1536d); chat/LLM is pluggable — Doubao ARK / DeepSeek / any OpenAI-compatible endpoint
 ```
 
 ---

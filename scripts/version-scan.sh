@@ -1,7 +1,7 @@
 #!/bin/bash
-# Mnemosyne 发布后版本一致性扫描 v2
-# 用法: bash scripts/version-scan.sh [旧版本号] [新版本号]
-# 区分 当前版本引用 vs 历史记录/功能标签
+# Mnemosyne post-release version-consistency scan v2
+# Usage: bash scripts/version-scan.sh [old_version] [new_version]
+# Distinguishes current-version references from historical-record/feature-tag mentions
 
 set -euo pipefail
 
@@ -12,15 +12,15 @@ if [ -z "$OLD" ] || [ -z "$NEW" ]; then
   OLD=$(git tag --sort=-version:refname 2>/dev/null | head -2 | tail -1 | sed 's/^v//')
   NEW=$(git tag --sort=-version:refname 2>/dev/null | head -1 | sed 's/^v//')
   if [ -z "$OLD" ] || [ -z "$NEW" ]; then
-    echo "用法: $0 <旧版本号> <新版本号>"
+    echo "Usage: $0 <old_version> <new_version>"
     exit 1
   fi
 fi
 
-echo "🔍 版本扫描: $OLD → $NEW"
+echo "🔍 Version scan: $OLD → $NEW"
 FAILS=0
 
-# 辅助：计算非功能标签的残留次数
+# Helper: count leftover non-functional-tag occurrences
 count_non_func() {
   local file=$1 total=0 func=0
   total=$(grep -cF "$OLD" "$file" 2>/dev/null) || total=0
@@ -28,9 +28,9 @@ count_non_func() {
   echo $((total - func))
 }
 
-# ── 1. 关键字段（必须无残留） ──
+# ── 1. Key fields (must have zero leftovers) ──
 echo ""
-echo "=== 关键版本字段 ==="
+echo "=== Key version fields ==="
 check_key() {
   local label=$1 file=$2 pattern=$3
   local actual
@@ -45,56 +45,54 @@ check_key() {
 
 check_key "VERSION"     "VERSION"           '.*'
 check_key "README badge" "README.md"        '(?<=version-)[\d.]+'
-check_key "README_CN"   "README_CN.md"      '(?<=version-)[\d.]+'
-check_key "AGENTS.md"   "AGENTS.md"         '(?<=当前版本: \*\*v?)[\d.]+'
-check_key "CHANGELOG最新" "CHANGELOG.md"     '(?<=^## release · v)[\d.]+'
-check_key "README版本表"  "README.md"        '(?<=\| \[v)[\d.]+(?=\]\()'
-check_key "CN版本表"      "README_CN.md"     '(?<=\| \[v)[\d.]+(?=\]\()'
+check_key "AGENTS.md"   "AGENTS.md"         '(?<=\*\*Current version\*\*: v)[\d.]+'
+check_key "CHANGELOG latest" "CHANGELOG.md" '(?<=^## release · v)[\d.]+'
+check_key "README version table"  "README.md" '(?<=\| \[v)[\d.]+(?=\]\()'
 check_key "ROADMAP"       "ROADMAP.md"       '(?<=^> v)[\d.]+'
-# main.py: echo/capabilities 已改为运行时读 VERSION 文件 → 唯一硬编码处是 FastAPI title
+# main.py: echo/capabilities now read the VERSION file at runtime → the only hardcoded spot is the FastAPI title
 check_key "main.py title" "main.py"          '(?<=title="Mnemosyne OS v)[\d.]+(?= )'
 
-# ── 2. 技能文档（只检查非功能标签残留） ──
+# ── 2. Skill docs (only check for leftover non-functional tags) ──
 echo ""
-echo "=== 技能文档 ==="
+echo "=== Skill docs ==="
 SKILL_DIR="$HOME/.hermes/skills"
 for skill in $(grep -rlF "$OLD" "$SKILL_DIR" --include='SKILL.md' 2>/dev/null | grep -v 'references/' | grep -v '.archive/' | grep -v 'CHANGELOG'); do
   nf=$(count_non_func "$skill")
   if [ "$nf" -gt 0 ] 2>/dev/null; then
     sname=$(basename $(dirname "$skill"))
-    echo "  ❌ $sname: $nf 处非功能标签残留"
+    echo "  ❌ $sname: $nf leftover non-functional tag(s)"
     FAILS=$((FAILS + 1))
   fi
 done
-# 如果没有残留，显示全通过
+# If nothing is left over, show all-clear
 if [ "$FAILS" -eq 0 ] || ! grep -rlF "$OLD" "$SKILL_DIR" --include='SKILL.md' 2>/dev/null | grep -qv 'references/\|.archive/\|CHANGELOG'; then
-  echo "  ✅ 全部通过"
+  echo "  ✅ All clear"
 fi
 
 # ── 3. Hermes Memory ──
 echo ""
 echo "=== Hermes Memory ==="
 if grep -qF "$OLD" "$HOME/.hermes/memories/MEMORY.md" 2>/dev/null; then
-  echo "  ❌ MEMORY.md 残留 $OLD"
+  echo "  ❌ MEMORY.md still references $OLD"
   FAILS=$((FAILS + 1))
 else
   echo "  ✅ MEMORY.md"
 fi
 
-# ── 4. 生产 运行版本 ──
+# ── 4. Production running version ──
 echo ""
-echo "=== 生产 运行版本 ==="
+echo "=== Production running version ==="
 prd_ver=$(curl -s --max-time 5 http://127.0.0.1:18010/api/v1/echo 2>/dev/null | python3 -c "import sys,json;print(json.load(sys.stdin).get('version','?'))" 2>/dev/null || echo "unreachable")
 if [ "$prd_ver" = "$NEW" ]; then
-  echo "  ✅ 生产: $prd_ver"
+  echo "  ✅ Production: $prd_ver"
 else
-  echo "  ❌ 生产: $prd_ver (expected $NEW)"
+  echo "  ❌ Production: $prd_ver (expected $NEW)"
   FAILS=$((FAILS + 1))
 fi
 
-# ── 5. 工作区 ──
+# ── 5. Workspace ──
 echo ""
-echo "=== 工作区 PROGRESS ==="
+echo "=== Workspace PROGRESS ==="
 ws_file="/opt/data/workspace/记忆宫殿/PROGRESS.md"
 if [ -f "$ws_file" ]; then
   ws_ver=$(grep '当前版本' "$ws_file" | grep -oP 'v?[\d.]+' | head -1 | sed 's/^v//')
@@ -105,16 +103,16 @@ if [ -f "$ws_file" ]; then
     FAILS=$((FAILS + 1))
   fi
 else
-  echo "  ⚠️ 工作区不可达"
+  echo "  ⚠️ Workspace unreachable"
 fi
 
-# ── 汇总 ──
+# ── Summary ──
 echo ""
 echo "════════════════════════════"
 if [ "$FAILS" -eq 0 ]; then
-  echo "✅ 版本扫描全部通过"
+  echo "✅ Version scan: all passed"
   exit 0
 else
-  echo "❌ 发现 $FAILS 处不一致"
+  echo "❌ Found $FAILS inconsistency/inconsistencies"
   exit 1
 fi

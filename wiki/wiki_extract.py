@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
-"""wiki_extract — WIKI 页面 LLM 实体抽取 (v7.4, v7.8 去 AGE)
+"""wiki_extract — WIKI page LLM entity extraction (v7.4, v7.8 removed AGE)
 
-对 wiki_pages 中未抽取的页面:
-1. LLM 抽取 {实体名, 类型, 描述}
-2. upsert entities 表 (带 embedding + type)
-3. 写 wiki_entities 关联 (page→entity)
-(v7.8: AGE 图已切除, relations 关系抽取一并移除 — 无消费端不花 LLM token)
+For pages in wiki_pages that haven't been extracted yet:
+1. LLM extracts {entity name, type, description}
+2. upsert into the entities table (with embedding + type)
+3. write the wiki_entities association (page→entity)
+(v7.8: the AGE graph was removed, relation extraction was removed along with it —
+no consumer left, so it doesn't spend LLM tokens for nothing)
 
-用法 (生产服务器):
+Usage (production server):
     cd /opt/mnemosyne && venv/bin/python3 wiki_extract.py --batch 5
     venv/bin/python3 wiki_extract.py --batch 5 --dry-run
 """
@@ -17,10 +18,10 @@ import os
 import sys
 import time
 
-# 仓库根入 path (wiki/ 子目录运行时需要 tmt/core)
+# add repo root to path (needed for tmt/core when run from the wiki/ subdirectory)
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# 必须最先 load_env (core.config 在 import 时读环境变量)
+# load_env must run first (core.config reads env vars at import time)
 from tmt.distill import load_env, PG_DSN
 load_env()
 
@@ -33,6 +34,9 @@ async def get_embedding(texts):
 
 USER_ID = "default"
 
+# NOTE: the prompt text below is sent to the LLM and instructs it to respond in
+# Chinese — left untranslated intentionally, this is functional prompt data, not
+# a comment.
 PROMPT = """你是知识图谱抽取引擎。从下面的文章/论文中抽取核心实体，输出严格 JSON。
 
 要求:
@@ -49,7 +53,7 @@ PROMPT = """你是知识图谱抽取引擎。从下面的文章/论文中抽取�
 async def extract_page(conn, page):
     pid = page["id"]
     title = page["title"]
-    content = (page["content"] or "")[:6000]  # 截断防超长
+    content = (page["content"] or "")[:6000]  # truncate to prevent overlong input
     prompt = PROMPT.replace("{content}", content)
     try:
         res = call_llm_json(prompt, tier=3)
@@ -64,7 +68,7 @@ async def extract_page(conn, page):
         if not entities:
             return {"page_id": pid, "status": "no-entities", "title": title}
 
-        # name → entity_id 映射
+        # name → entity_id mapping
         name2id = {}
         for ent in entities:
             name = (ent.get("name") or "").strip()
@@ -91,13 +95,14 @@ async def extract_page(conn, page):
                     print(f"  [warn] entity {name} insert failed: {e}")
                     continue
             name2id[name] = eid
-            # 页面关联 (v7.8: 只写 wiki_entities 表; AGE RELATED_TO 边已随 AGE 切除)
+            # page association (v7.8: only writes the wiki_entities table now;
+            # AGE RELATED_TO edges were removed along with AGE)
             await conn.execute(
                 "INSERT INTO wiki_entities (wiki_page_id, entity_id) VALUES ($1,$2) ON CONFLICT DO NOTHING",
                 pid, eid
             )
 
-        # 标记已抽取
+        # mark as extracted
         await conn.execute("UPDATE wiki_pages SET extracted_at=now() WHERE id=$1", pid)
         return {"page_id": pid, "status": "ok", "title": title,
                 "entities": len(name2id), "relations": 0}
@@ -116,14 +121,14 @@ async def main(batch: int, dry_run: bool):
                 USER_ID, batch
             )
             if not rows:
-                print("无待抽取页面")
+                print("No pages pending extraction")
                 return
             if dry_run:
-                print(f"[dry-run] 待抽取 {len(rows)} 页:")
+                print(f"[dry-run] {len(rows)} pages pending extraction:")
                 for r in rows:
                     print(f"  #{r['id']} {r['title']} ({len(r['content'])}ch)")
                 return
-            print(f"抽取 {len(rows)} 页 ...")
+            print(f"Extracting {len(rows)} pages ...")
             for page in rows:
                 start = time.time()
                 r = await extract_page(conn, page)

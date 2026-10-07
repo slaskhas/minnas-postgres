@@ -1,6 +1,6 @@
 """
-项目注册 — 扫描 /opt/data/workspace/ → 记忆宫殿
-用法: python3 register_projects.py [--dry-run]
+Project registration — scan /opt/data/workspace/ → Memory Palace
+Usage: python3 register_projects.py [--dry-run]
 """
 import sys, os, json, argparse, urllib.request
 from pathlib import Path
@@ -13,7 +13,7 @@ WORKSPACE = os.path.expanduser("/opt/data/workspace")
 
 
 def scan_workspace() -> list:
-    """扫描工作区，收集项目信息"""
+    """Scan the workspace and collect project info"""
     projects = []
     for d in sorted(Path(WORKSPACE).iterdir()):
         if not d.is_dir() or d.name.startswith('.'):
@@ -34,7 +34,7 @@ def scan_workspace() -> list:
 
 
 def register_project(name: str, path: str, description: str = "", dry_run: bool = False) -> dict:
-    """注册项目到记忆宫殿"""
+    """Register a project with the Memory Palace"""
     payload = json.dumps({
         "name": name,
         "workspace_path": path,
@@ -75,7 +75,7 @@ if __name__ == "__main__":
         results.append(r)
         status = "📋" if args.dry_run else ("✅" if r.get("action") in ("created","updated") else "⏭️")
         detail = r.get("action", "") if not args.dry_run else "dry-run"
-        desc = p["description"][:60].replace('\n',' ') if p["description"] else "(无PROGRESS)"
+        desc = p["description"][:60].replace('\n',' ') if p["description"] else "(no PROGRESS)"
         print(f"  {status} {p['name']:<20} {detail:<10} {desc}")
     
     created = sum(1 for r in results if r.get("action") == "created")

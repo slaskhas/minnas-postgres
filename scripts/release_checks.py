@@ -1,28 +1,30 @@
 #!/usr/bin/env python3
 """
-scripts/release_checks.py — 发布门禁的可执行检查项（v8.0 S3-2 配套）
+scripts/release_checks.py — executable checks for the release gate (v8.0 S3-2 support)
 ====================================================================
 
-为什么单独成一个脚本
+Why this is its own script
 --------------------
-发布状态机（`gcat-std/scripts/release-gate.py`）按 gcat-std 红线
-**不许用 shell**（`shlex.split` → argv 列表 → 无元字符解释）。
-所以「版本一致 / 隐私扫描 / 服务自报版号 / 变更日志」这些复合检查
-不能写成带管道的 shell 一行，必须是有明确退出码的可执行文件。
+The release state machine (`gcat-std/scripts/release-gate.py`) follows the gcat-std red
+line of **never using a shell** (`shlex.split` → argv list → no metacharacter
+interpretation). So composite checks like "version consistency / privacy scan / service
+self-reported version / changelog" can't be written as a piped shell one-liner — they
+have to be an executable with a clear exit code.
 
-每个子命令都是**独立可跑、退出码说话**的：
-  0 = 通过   1 = 未过   2 = 用法/环境问题
-这让门禁能自动化，也让人能单独手工复核（不是黑箱）。
+Every subcommand is **independently runnable and speaks through its exit code**:
+  0 = pass   1 = fail   2 = usage/environment problem
+This lets the gate be automated while still letting a human re-check any single item by
+hand (it's not a black box).
 
-子命令
+Subcommands
 ------
-  version-consistency   版本号三处一致: VERSION ↔ README/README_CN badge ↔ CHANGELOG 首条
-  privacy               隐私扫描: 硬编码密钥/IP/域名/本机路径 —— 判据「零输出」
-  service-version URL   线上服务自报版号必须 == 本地 VERSION（防"文档写了实际没跑"）
-  changelog VERSION     CHANGELOG 里必须有该版本条目
-  artifact POINTER      产出物指针完整性: 路径存在 + sha256 可算
+  version-consistency   version number consistent in three places: VERSION ↔ README badge ↔ CHANGELOG's first entry
+  privacy               privacy scan: hardcoded keys/IPs/domains/local paths — criterion is "zero output"
+  service-version URL   the live service's self-reported version must == the local VERSION (guards against "docs say it shipped but it didn't")
+  changelog VERSION     CHANGELOG must contain an entry for this version
+  artifact POINTER      artifact pointer integrity: path exists + sha256 can be computed
 
-用法:
+Usage:
   python3 scripts/release_checks.py version-consistency
   python3 scripts/release_checks.py privacy
   python3 scripts/release_checks.py service-version http://127.0.0.1:18010/
@@ -39,29 +41,32 @@ import urllib.request
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# 隐私扫描模式（与 CI 门禁同源思想）：
-#   ⚠️ 扫描器必然自指 —— 模式定义本身就含敏感串写法 → 必须排除自身
+# Privacy-scan patterns (same spirit as the CI gate):
+#   ⚠️ A scanner inevitably self-references — the pattern definitions themselves contain
+#   sensitive-string syntax → must exclude itself
 SELF_EXCLUDE = {"scripts/release_checks.py", ".github/workflows/privacy.yml",
                 ".github/workflows/ci.yml"}
 PRIVACY_PATTERNS = [
-    ("私钥块", r"-----BEGIN [A-Z ]*PRIVATE KEY-----"),
-    ("明文密钥赋值", r"(?i)(api[_-]?key|secret|passwd|password|token)\s*[:=]\s*['\"][A-Za-z0-9_\-]{16,}['\"]"),
-    ("常见云密钥前缀", r"\b(sk-[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{20,})"),
-    ("真实 IPv4（排除 127/0/255/文档段）", r"\b(?!127\.|0\.|255\.|10\.0\.2\.)(?:\d{1,3}\.){3}\d{1,3}\b"),
-    # 只认**真实账号**，不认 /home/u/ 这类测试占位符 ——
-    # 判据是"泄露了本机身份"，不是"出现过 /home/"。
-    # 收紧前实测被 tests 里的 `/home/u/proj/a.py` 夹具误报（那是通用占位符，零信息量）。
-    ("本机账号路径", r"/home/(g-cat|ubuntu|gy_ma)/"),
-    ("Windows 用户路径", r"[A-Za-z]:\\\\?Users\\\\?(gy_ma|g-cat|Administrator)"),
+    ("private key block", r"-----BEGIN [A-Z ]*PRIVATE KEY-----"),
+    ("plaintext key assignment", r"(?i)(api[_-]?key|secret|passwd|password|token)\s*[:=]\s*['\"][A-Za-z0-9_\-]{16,}['\"]"),
+    ("common cloud key prefix", r"\b(sk-[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{20,})"),
+    ("real IPv4 (excluding 127/0/255/doc ranges)", r"\b(?!127\.|0\.|255\.|10\.0\.2\.)(?:\d{1,3}\.){3}\d{1,3}\b"),
+    # Only flags **real accounts**, not placeholders like /home/u/ used in tests —
+    # the criterion is "leaked this machine's identity", not "contains /home/".
+    # Tightened after this pattern false-positived on the `/home/u/proj/a.py` fixture in
+    # tests (a generic placeholder carrying zero information).
+    ("local account path", r"/home/(g-cat|ubuntu|gy_ma)/"),
+    ("Windows user path", r"[A-Za-z]:\\\\?Users\\\\?(gy_ma|g-cat|Administrator)"),
 ]
 
 
 def _tracked_files() -> list[str]:
-    """只看 git 追踪的文件 —— 本地模拟 == CI 实际行为（治理标准里的踩坑教训）。
+    """Only looks at git-tracked files — so the local run matches actual CI behavior (a
+    lesson learned the hard way, now in the governance standard).
 
-    ⚠️ 必须 `-c core.quotepath=false`：否则 git 会把**非 ASCII 文件名**转义成
-    `"\\351\\207\\207\\224..."` 这种带引号的八进制串，`open()` 直接 FileNotFoundError
-    （实测踩到：中文命名的 ADR 文件）。
+    ⚠️ Must pass `-c core.quotepath=false`: otherwise git escapes **non-ASCII filenames**
+    into quoted octal strings like `"\\351\\207\\207\\224..."`, and `open()` immediately
+    raises FileNotFoundError (hit this in practice with a Chinese-named ADR file).
     """
     try:
         out = subprocess.run(["git", "-c", "core.quotepath=false", "-C", ROOT, "ls-files"],
@@ -82,28 +87,28 @@ def _tracked_files() -> list[str]:
 def check_version_consistency() -> int:
     vpath = os.path.join(ROOT, "VERSION")
     if not os.path.exists(vpath):
-        print("❌ 缺 VERSION 文件")
+        print("❌ Missing VERSION file")
         return 1
     ver = open(vpath, encoding="utf-8").read().strip()
     problems = []
-    for readme in ("README.md", "README_CN.md"):
+    for readme in ("README.md",):
         p = os.path.join(ROOT, readme)
         if not os.path.exists(p):
             continue
         txt = open(p, encoding="utf-8").read()
         if ver not in txt:
-            problems.append(f"{readme} 未出现版本 {ver}")
+            problems.append(f"{readme} does not contain version {ver}")
     cl = os.path.join(ROOT, "CHANGELOG.md")
     if not os.path.exists(cl):
-        problems.append("缺 CHANGELOG.md")
+        problems.append("Missing CHANGELOG.md")
     else:
         head = open(cl, encoding="utf-8").read()[:4000]
         if ver not in head:
-            problems.append(f"CHANGELOG 头部未见 {ver}")
+            problems.append(f"{ver} not found at the top of CHANGELOG")
     if problems:
-        print("❌ 版本一致性未过: " + "; ".join(problems))
+        print("❌ Version consistency failed: " + "; ".join(problems))
         return 1
-    print(f"✅ 版本一致性通过（VERSION={ver}）")
+    print(f"✅ Version consistency passed (VERSION={ver})")
     return 0
 
 
@@ -122,11 +127,11 @@ def check_privacy() -> int:
         except (IsADirectoryError, PermissionError):
             continue
     if hits:
-        print(f"❌ 隐私扫描命中 {len(hits)} 处（判据：零输出）:")
+        print(f"❌ Privacy scan found {len(hits)} hit(s) (criterion: zero output):")
         for h in hits[:40]:
             print("   " + h)
         return 1
-    print(f"✅ 隐私扫描通过（扫描 {len(_tracked_files())} 个追踪文件，零输出）")
+    print(f"✅ Privacy scan passed (scanned {len(_tracked_files())} tracked files, zero output)")
     return 0
 
 
@@ -136,67 +141,69 @@ def check_service_version(url: str) -> int:
         with urllib.request.urlopen(url, timeout=15) as r:
             body = r.read().decode("utf-8", "ignore")
     except Exception as e:  # noqa: BLE001
-        print(f"❌ 无法访问 {url}: {type(e).__name__}: {e}")
+        print(f"❌ Could not reach {url}: {type(e).__name__}: {e}")
         return 2
     if ver in body:
-        print(f"✅ 线上服务自报版号含 {ver}（{body.strip()[:120]}）")
+        print(f"✅ Live service's self-reported version contains {ver} ({body.strip()[:120]})")
         return 0
-    print(f"❌ 线上服务自报版号与本地 VERSION({ver}) 不一致 → {body.strip()[:160]}")
+    print(f"❌ Live service's self-reported version doesn't match local VERSION({ver}) → {body.strip()[:160]}")
     return 1
 
 
 def check_changelog(ver: str) -> int:
     cl = os.path.join(ROOT, "CHANGELOG.md")
     if not os.path.exists(cl):
-        print("❌ 缺 CHANGELOG.md")
+        print("❌ Missing CHANGELOG.md")
         return 1
     txt = open(cl, encoding="utf-8").read()
     if ver in txt:
-        print(f"✅ CHANGELOG 含 {ver}")
+        print(f"✅ CHANGELOG contains {ver}")
         return 0
-    print(f"❌ CHANGELOG 缺 {ver}")
+    print(f"❌ CHANGELOG is missing {ver}")
     return 1
 
 
 def check_artifact(pointer: str) -> int:
-    """产出物指针完整性：路径存在 + sha256 可算（记忆里只放指针 + 指纹）。"""
+    """Artifact pointer integrity: path exists + sha256 can be computed (memory only stores the pointer + fingerprint)."""
     p = os.path.expanduser(pointer)
     if not os.path.exists(p):
-        print(f"❌ 产出物不存在: {p}")
+        print(f"❌ Artifact does not exist: {p}")
         return 1
     if os.path.isdir(p):
-        print(f"✅ 目录存在: {p}（未做哈希，目录请改用文件指针）")
+        print(f"✅ Directory exists: {p} (not hashed — use a file pointer instead of a directory)")
         return 0
     h = hashlib.sha256()
     with open(p, "rb") as f:
         for chunk in iter(lambda: f.read(1 << 20), b""):
             h.update(chunk)
-    print(f"✅ 产出物完好: {p}  sha256={h.hexdigest()[:16]}…  {os.path.getsize(p)} bytes")
+    print(f"✅ Artifact intact: {p}  sha256={h.hexdigest()[:16]}…  {os.path.getsize(p)} bytes")
     return 0
 
 
 def check_plan(path: str) -> int:
-    """P0 方案阶段判据：方案文档存在，且**含判据表与不做清单**（否则方案不可验收）。
+    """P0 plan-stage acceptance criterion: the plan document exists and **contains an
+    acceptance-criteria table and an out-of-scope list** (otherwise the plan can't be accepted).
 
-    为什么把它做成命令而不是"人工看看"：标准里写得很清楚 ——
-    方案的验收标准是「每条诉求有判据」，没有判据的方案不许进开发。
+    Why this is a command instead of "just eyeball it": the standard spells it out clearly —
+    a plan's acceptance criterion is "every requirement has a judgeable criterion"; a plan
+    without criteria isn't allowed to enter development.
     """
     p = os.path.join(ROOT, path) if not os.path.isabs(path) else path
     if not os.path.exists(p):
-        print(f"❌ P0 方案文档不存在: {p}")
+        print(f"❌ P0 plan document does not exist: {p}")
         return 1
     txt = open(p, encoding="utf-8").read()
-    need = {"判据": "判据表", "不做": "不做清单/Out of Scope"}
+    need = {"Acceptance criteria": "acceptance-criteria table", "Out of scope": "out-of-scope/won't-do list"}
     missing = [desc for kw, desc in need.items() if kw not in txt]
     if missing:
-        print(f"❌ 方案缺验收要件: {missing}（方案不许无判据就开工）")
+        print(f"❌ Plan is missing acceptance elements: {missing} (a plan may not start work without criteria)")
         return 1
-    print(f"✅ P0 方案要件齐备（判据表 + 不做清单）: {path}  {len(txt)} 字符")
+    print(f"✅ P0 plan elements complete (acceptance-criteria table + out-of-scope list): {path}  {len(txt)} chars")
     return 0
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="v8.0 发布门禁检查项")
+    ap = argparse.ArgumentParser(description="v8.0 release-gate checks")
     ap.add_argument("check", choices=["version-consistency", "privacy",
                                       "service-version", "changelog", "artifact", "plan"])
     ap.add_argument("arg", nargs="?", default=None)
@@ -207,7 +214,7 @@ def main() -> int:
         return check_privacy()
     if a.check == "service-version":
         if not a.arg:
-            print("需要 URL 参数", file=sys.stderr)
+            print("URL argument required", file=sys.stderr)
             return 2
         return check_service_version(a.arg)
     if a.check == "changelog":
@@ -215,12 +222,12 @@ def main() -> int:
                                              encoding="utf-8").read().strip())
     if a.check == "artifact":
         if not a.arg:
-            print("需要路径参数", file=sys.stderr)
+            print("Path argument required", file=sys.stderr)
             return 2
         return check_artifact(a.arg)
     if a.check == "plan":
         if not a.arg:
-            print("需要方案文档路径参数", file=sys.stderr)
+            print("Plan document path argument required", file=sys.stderr)
             return 2
         return check_plan(a.arg)
     return 2

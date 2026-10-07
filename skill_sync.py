@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 """
-skill_sync.py — Hermes 技能资产 → Mnemosyne skill_assets 同步器 (v7.7.0)
-输入: ~/.hermes/skills/**/SKILL.md + .archive/**/SKILL.md + .usage.json
-输出: 生产 Mnemosyne POST /api/v1/skills/sync (批量幂等) 或 本地直写测试库
+skill_sync.py — Hermes skill assets → Mnemosyne skill_assets syncer (v7.7.0)
+Input: ~/.hermes/skills/**/SKILL.md + .archive/**/SKILL.md + .usage.json
+Output: production Mnemosyne POST /api/v1/skills/sync (batched, idempotent),
+or writes directly to a local test DB
 
-用法:
-  python3 skill_sync.py --collect            # 收集本地技能 → skill_manifest.json
-  python3 skill_sync.py --push               # 推送 manifest → Mnemosyne
-  python3 skill_sync.py --verify             # 比对本地 vs 远端差异
-  python3 skill_sync.py --test-db            # 直写本地测试库 (沙箱)
+Usage:
+  python3 skill_sync.py --collect            # collect local skills → skill_manifest.json
+  python3 skill_sync.py --push               # push manifest → Mnemosyne
+  python3 skill_sync.py --verify             # diff local vs remote
+  python3 skill_sync.py --test-db            # write directly to the local test DB (sandbox)
 """
 import argparse, hashlib, json, os, re, sys
 
@@ -16,10 +17,10 @@ SKILLS_ROOT = os.path.expanduser("~/.hermes/skills")
 USAGE_FILE = os.path.join(SKILLS_ROOT, ".usage.json")
 MANIFEST_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "skill_manifest.json")
 
-# 纯函数区 (可单测, 不依赖 IO)
+# Pure-function section (unit-testable, no IO dependency)
 
 def parse_frontmatter(text):
-    """提取 name/description/category (对齐 skill_sleeper_scan 但更稳)"""
+    """Extract name/description/category (aligned with skill_sleeper_scan but more robust)"""
     name = description = ""
     m = re.match(r"^---\s*\n(.*?)\n---", text, re.S)
     if not m:
@@ -28,7 +29,7 @@ def parse_frontmatter(text):
     m2 = re.search(r"^name:\s*(.+)$", fm, re.M)
     if m2:
         name = m2.group(1).strip().strip("\"'")
-    # block scalar 优先 (> 或 >- 或 |), 再退单行
+    # Prefer a block scalar (> or >- or |), fall back to a single line
     m4 = re.search(r"^description:\s*[>|]\-?\s*\n((?:\s+.+\n?)+)", fm, re.M)
     if m4:
         description = " ".join(l.strip() for l in m4.group(1).splitlines()).strip()
@@ -42,17 +43,17 @@ def parse_frontmatter(text):
 
 
 def state_mapping(usage_rec):
-    """curator .usage.json state → skill_assets state (对齐值域)
-    缺失/未管理 → active (默认, 让 OS 侧不误杀)"""
+    """curator .usage.json state → skill_assets state (aligned value domain)
+    Missing/unmanaged → active (default, so the OS side doesn't wrongly purge it)"""
     st = (usage_rec or {}).get("state", "active")
     return st if st in ("active", "stale", "archived") else "active"
 
 
 def build_skill_items(skills_dir, usage_data):
-    """扫描技能目录 → 统一 manifest item 列表
-    - active 目录: skills/**/SKILL.md
-    - 归档目录: skills/.archive/**/SKILL.md → state=archived
-    - 未在 .usage.json 的 → active 默认
+    """Scan the skills directory → a unified manifest item list
+    - active directory: skills/**/SKILL.md
+    - archive directory: skills/.archive/**/SKILL.md → state=archived
+    - not present in .usage.json → defaults to active
     """
     items = []
     for base, is_archive in ((skills_dir, False), (os.path.join(skills_dir, ".archive"), True)):
@@ -89,7 +90,8 @@ def build_skill_items(skills_dir, usage_data):
 
 
 def dedup_items(items):
-    """同名校验: 归档与活跃同名 → 活跃优先 (本地同名场景少, 防御)"""
+    """Same-name validation: when an archived and an active item share a name
+    → active wins (rare locally, this is just a safety net)"""
     by_name = {}
     for it in items:
         key = it["skill_name"]
@@ -99,13 +101,14 @@ def dedup_items(items):
 
 
 def diff_manifest(local_items, remote_items):
-    """变更检测: 返回需推送的项 (content_hash/state/usage 任一变化)"""
+    """Change detection: returns items that need pushing (any change in
+    content_hash/state/usage)"""
     remote_map = {r["skill_name"]: r for r in remote_items or []}
     to_push = []
     for it in local_items:
         r = remote_map.get(it["skill_name"])
         if r is None:
-            to_push.append(it)  # 新增
+            to_push.append(it)  # new
             continue
         changed = any(
             r.get(k) != it[k]
@@ -118,7 +121,7 @@ def diff_manifest(local_items, remote_items):
     return to_push
 
 
-# ── 主逻辑 (IO) ──
+# ── Main logic (IO) ──
 
 def collect():
     usage_data = {}
@@ -126,24 +129,24 @@ def collect():
         try:
             usage_data = json.load(open(USAGE_FILE, encoding="utf-8"))
         except Exception as e:
-            print(f"[sync] usage.json 读取失败: {e}", file=sys.stderr)
+            print(f"[sync] failed to read usage.json: {e}", file=sys.stderr)
     items = dedup_items(build_skill_items(SKILLS_ROOT, usage_data))
     with open(MANIFEST_FILE, "w", encoding="utf-8") as f:
         json.dump(items, f, ensure_ascii=False, indent=1)
     states = {}
     for it in items:
         states[it["state"]] = states.get(it["state"], 0) + 1
-    print(f"[sync] 收集 {len(items)} 技能 | 状态分布: {states} | → {MANIFEST_FILE}")
+    print(f"[sync] collected {len(items)} skills | state distribution: {states} | → {MANIFEST_FILE}")
     return items
 
 
 def push(endpoint="http://127.0.0.1:18010"):
-    """推送到 Mnemosyne POST /api/v1/skills/sync (服务端算 embedding)"""
+    """Push to Mnemosyne POST /api/v1/skills/sync (server computes the embedding)"""
     if not os.path.exists(MANIFEST_FILE):
-        print("[sync] 无 manifest, 先 --collect", file=sys.stderr)
+        print("[sync] no manifest, run --collect first", file=sys.stderr)
         return
     items = json.load(open(MANIFEST_FILE, encoding="utf-8"))
-    # 批量切片推送 (每批 50, 防 payload 过大)
+    # Push in batches (50 per batch, to avoid an oversized payload)
     import urllib.request
     batch_size = 50
     total_new = total_upd = 0
@@ -159,10 +162,10 @@ def push(endpoint="http://127.0.0.1:18010"):
                 d = json.loads(resp.read())
                 total_new += d.get("new", 0)
                 total_upd += d.get("updated", 0)
-                print(f"[sync] 批次 {i//batch_size+1}: synced={d.get('synced')} new={d.get('new')} upd={d.get('updated')} embedded={d.get('embedded')}")
+                print(f"[sync] batch {i//batch_size+1}: synced={d.get('synced')} new={d.get('new')} upd={d.get('updated')} embedded={d.get('embedded')}")
         except Exception as e:
-            print(f"[sync] 批次 {i//batch_size+1} 失败: {e}", file=sys.stderr)
-    print(f"[sync] 推送完成: {len(items)} 项, 新增 {total_new}, 更新 {total_upd}")
+            print(f"[sync] batch {i//batch_size+1} failed: {e}", file=sys.stderr)
+    print(f"[sync] push complete: {len(items)} items, {total_new} new, {total_upd} updated")
 
 
 def main():
@@ -178,7 +181,7 @@ def main():
         push()
     elif args.verify:
         items = collect()
-        print(f"[sync] verify: manifest {len(items)} 项, 待与远端比对")
+        print(f"[sync] verify: manifest has {len(items)} items, pending comparison against remote")
     else:
         ap.print_help()
 

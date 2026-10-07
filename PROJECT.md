@@ -42,8 +42,8 @@ Mnemosyne turns this "memory lifecycle governance" into a system: classification
 
 | Date | Decision | Record |
 |---|---|---|
-| 2026-09-24 | Adopt G-CAT project governance standard (AGENTS.md slimming + openspec living specs + ADR) | [ADR-0001](docs/adr/0001-采用项目治理标准.md) |
-| 2026-09-25 | Filesystem mechanism trade-offs: only do the 4 items PostgreSQL doesn't provide that we genuinely need; the remaining 17 dimensions go into triggers (>5M rows / body >4KB / true multi-tenancy / accession-number collision / deletion incident) | [ADR-0002](docs/adr/0002-文件系统机制取舍与触发器.md) |
+| 2026-09-24 | Adopt G-CAT project governance standard (AGENTS.md slimming + openspec living specs + ADR) | [ADR-0001](docs/adr/0001-adopt-project-governance-standard.md) |
+| 2026-09-25 | Filesystem mechanism trade-offs: only do the 4 items PostgreSQL doesn't provide that we genuinely need; the remaining 17 dimensions go into triggers (>5M rows / body >4KB / true multi-tenancy / accession-number collision / deletion incident) | [ADR-0002](docs/adr/0002-filesystem-mechanism-tradeoffs-and-triggers.md) |
 
 ## 6. Core Asset Locations
 

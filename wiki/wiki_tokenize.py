@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""wiki_tokenize — WIKI 页面 jieba 分词 → wiki_keywords 表 (v7.5 P0a)
+"""wiki_tokenize — WIKI page jieba tokenization → wiki_keywords table (v7.5 P0a)
 
-为 BM25 关键词通道建立索引: 每页分词, 去停用词, 存 token+freq。
-- 标题权重 ×3, 正文 ×1 (标题词更关键)
-- 过滤: 单字/纯数字/超长/停用词
+Builds the index for the BM25 keyword channel: tokenizes each page, strips stop
+words, stores token+freq.
+- Title weighted ×3, body ×1 (title words are more important)
+- Filters out: single characters/pure numbers/overly long tokens/stop words
 
-用法 (生产服务器):
+Usage (production server):
     cd /opt/mnemosyne && venv/bin/python wiki_tokenize.py --batch 20
     venv/bin/python wiki_tokenize.py --all
 """
@@ -15,7 +16,7 @@ import sys
 import time
 from collections import Counter
 
-# 仓库根入 path (wiki/ 子目录运行时需要 tmt/core)
+# add repo root to path (needed for tmt/core when run from the wiki/ subdirectory)
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from tmt.distill import load_env, PG_DSN
@@ -24,7 +25,7 @@ load_env()
 import asyncpg  # noqa: E402
 import jieba  # noqa: E402
 
-# v7.5 专家评审 P1: 加载专业词典 (术语分词)
+# v7.5 expert review P1: load the domain dictionary (for terminology tokenization)
 import os as _os
 _DICT_PATH = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "wiki_dict.txt")
 if _os.path.exists(_DICT_PATH):
@@ -32,11 +33,11 @@ if _os.path.exists(_DICT_PATH):
 
 USER_ID = "default"
 
-STOPWORDS = set()  # 停用词精简, 交给 jieba 默认词典
+STOPWORDS = set()  # kept minimal, delegated to jieba's default dictionary
 
 
 def clean_token(tok: str) -> bool:
-    """过滤: 单字、纯数字/标点、过长"""
+    """Filters out: single characters, pure numbers/punctuation, overly long tokens"""
     if len(tok) < 2 or len(tok) > 20:
         return False
     if tok.isdigit() or tok.isspace():
@@ -47,7 +48,7 @@ def clean_token(tok: str) -> bool:
 
 
 def tokenize_content(title: str, content: str) -> list:
-    """返回 [(token, freq), ...], 标题词加权"""
+    """Returns [(token, freq), ...], with title words weighted higher"""
     title_toks = [t.strip() for t in jieba.cut(title) if clean_token(t.strip())]
     body_toks = [t.strip() for t in jieba.cut(content[:20000]) if clean_token(t.strip())]
     cnt = Counter()
@@ -69,7 +70,7 @@ async def tokenize_page(conn, page) -> dict:
     if not toks:
         return {"page_id": pid, "status": "no-tokens", "title": title}
 
-    # 清旧 + 写新 (幂等重建)
+    # clear old + write new (idempotent rebuild)
     await conn.execute("DELETE FROM wiki_keywords WHERE page_id=$1", pid)
     await conn.executemany(
         "INSERT INTO wiki_keywords (page_id, token, freq) VALUES ($1,$2,$3) "
@@ -97,9 +98,9 @@ async def main(batch: int, all_pages: bool):
                     USER_ID, batch
                 )
             if not rows:
-                print("无待分词页面")
+                print("No pages pending tokenization")
                 return
-            print(f"分词 {len(rows)} 页 ...")
+            print(f"Tokenizing {len(rows)} pages ...")
             total_tokens = 0
             for page in rows:
                 start = time.time()
@@ -108,7 +109,7 @@ async def main(batch: int, all_pages: bool):
                 total_tokens += r.get("tokens", 0)
                 if r["status"] == "ok":
                     print(f"  #{r['page_id']} {r['title'][:30]} tokens={r['tokens']}")
-            print(f"完成: {len(rows)} 页, {total_tokens} tokens")
+            print(f"Done: {len(rows)} pages, {total_tokens} tokens")
     finally:
         await pool.close()
 
@@ -117,6 +118,6 @@ if __name__ == "__main__":
     import argparse
     ap = argparse.ArgumentParser()
     ap.add_argument("--batch", type=int, default=20)
-    ap.add_argument("--all", action="store_true", help="全量重建")
+    ap.add_argument("--all", action="store_true", help="full rebuild")
     args = ap.parse_args()
     asyncio.run(main(args.batch, args.all))

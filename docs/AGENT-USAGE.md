@@ -1,16 +1,16 @@
-# Agent 使用最佳实践
+# Agent Usage Best Practices
 
-> 从 `AGENTS.md` 下沉。
-> 返回 [AGENTS.md](../AGENTS.md)
+> Lifted out of `AGENTS.md`.
+> Back to [AGENTS.md](../AGENTS.md)
 
-## 最佳实践（Agent 用）
+## Best Practices (for Agents)
 
-1. **存**：重要决策/踩坑/用户偏好 → `POST /memories`，带 `category`（10 类词表见下）
-2. **取**：日常查询用 `POST /memories/search`；宫殿能力用 `palace/summon`；时间问题用 `GET /memories?sort=created_at`（**热度≠时间**）
-3. **分类词表**（10 类，数据库 CHECK 约束）：
-   `knowledge` 知识 · `pitfall` 踩坑 · `reference` 资料 · `project` 项目 · `ops` 运维 · `deploy` 部署 · `preference` 偏好 · `session` 会话 · `worklog` 日志 · `temp` 临时
-4. **多用户**：`user_id` 天然隔离（`alice` / `bob` 互不可见）
-5. **蒸馏**：定时 `POST /reflect?mode=light`（无 LLM 成本）；深度凝练用 `mode=deep`
-6. **不要存**：代码/脚本（放 git）；临时状态（放会话）；可直接重算的中间值
+1. **Store**: important decisions / pitfalls / user preferences → `POST /memories`, with a `category` (10-category list below)
+2. **Retrieve**: everyday queries use `POST /memories/search`; palace capabilities use `palace/summon`; time-based questions use `GET /memories?sort=created_at` (**heat ≠ recency**)
+3. **Category list** (10 categories, enforced by a database CHECK constraint):
+   `knowledge` · `pitfall` · `reference` · `project` · `ops` · `deploy` · `preference` · `session` · `worklog` · `temp`
+4. **Multi-user**: `user_id` provides natural isolation (`alice` / `bob` can't see each other's data)
+5. **Distillation**: run `POST /reflect?mode=light` on a schedule (no LLM cost); use `mode=deep` for deep distillation
+6. **Don't store**: code/scripts (put them in git); ephemeral state (keep it in the session); intermediate values that can be recomputed directly
 
 ---

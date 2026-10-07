@@ -5,10 +5,10 @@ on:
     branches: [main]
   pull_request:
 
-# 判红的必须是「写死的值」，不是「关键词出现」:
-#   PGPASSWORD="${PGPASSWORD:-}" 是合法变量展开 → 必须放过
-#   PGPASSWORD=hunter2abc123     是硬编码凭据   → 必须抓到
-# pattern 只在此处定义一次，扫描与自检共用（改一处，两边同时生效，避免漂移）。
+# What must trip red is a "hardcoded value", not "keyword presence":
+#   PGPASSWORD="${PGPASSWORD:-}" is a legitimate variable expansion → must pass
+#   PGPASSWORD=hunter2abc123     is a hardcoded credential         → must be caught
+# The pattern is defined here once only; the scan and the self-check share it (change it in one place, both take effect, avoiding drift).
 env:
   CRED_PAT: 'sk-[A-Za-z0-9]{16,}|ghp_[A-Za-z0-9]{20,}|github_pat_|PGPASSWORD=["'']?[A-Za-z0-9]{8,}|BEGIN [A-Z ]*PRIVATE KEY|/mnt/c/Users|tencent-gz'
   DOMAIN_PAT: 'g-cat[.]cn'
@@ -18,49 +18,49 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: 门禁自检 · pattern 双向验证（合法写法必须绿 / 硬编码必须红）
+      - name: Gate self-check · bidirectional pattern verification (legitimate usage must be green / hardcoded must be red)
         run: |
-          KEY='PGPASSWORD'                 # 拼接构造，本步自身不触发扫描
+          KEY='PGPASSWORD'                 # built via concatenation so this step itself doesn't trigger the scan
           D="$RUNNER_TEMP/pg"; mkdir -p "$D"
           printf '%s\n' "$KEY=\"\${PGPASSWORD:-}\"" > "$D/good.txt"
           printf '%s\n' "$KEY=hunter2abc123" "$KEY='s3cretPass9'" > "$D/bad.txt"
           if grep -qE "$CRED_PAT" "$D/good.txt"; then
-            echo "FAIL: 合法变量展开被误判为凭据"; grep -nE "$CRED_PAT" "$D/good.txt"; exit 1
+            echo "FAIL: legitimate variable expansion misidentified as a credential"; grep -nE "$CRED_PAT" "$D/good.txt"; exit 1
           fi
           n=$(grep -cE "$CRED_PAT" "$D/bad.txt" || true)
-          if [ "${n:-0}" -ne 2 ]; then echo "FAIL: 硬编码样本漏判（命中 ${n:-0}/2）"; exit 1; fi
-          echo "OK: 合法写法放过 · 硬编码抓得住（双向验证通过）"
-      - name: 隐私扫描 · 凭据类（只扫 git 追踪文件，零输出为通过）
+          if [ "${n:-0}" -ne 2 ]; then echo "FAIL: hardcoded sample missed (matched ${n:-0}/2)"; exit 1; fi
+          echo "OK: legitimate usage passes · hardcoded values caught (bidirectional verification passed)"
+      - name: Privacy scan · credentials (git-tracked files only, zero output = pass)
         run: |
           hits=$(git grep -nE "$CRED_PAT" 2>/dev/null | grep -v -e '[.]github/workflows/privacy[.]yml' || true)
-          if [ -n "$hits" ]; then printf '%s\n' "$hits"; echo "FAIL: 命中凭据类敏感模式"; exit 1; fi
-          echo "OK: 凭据类零命中"
-      - name: 隐私扫描 · 内部域名（只扫 git 追踪文件）
+          if [ -n "$hits" ]; then printf '%s\n' "$hits"; echo "FAIL: matched a sensitive credential pattern"; exit 1; fi
+          echo "OK: zero credential hits"
+      - name: Privacy scan · internal domains (git-tracked files only)
         run: |
           hits=$(git grep -nE "$DOMAIN_PAT" 2>/dev/null | grep -v -e '[.]github/workflows/privacy[.]yml' || true)
-          if [ -n "$hits" ]; then printf '%s\n' "$hits"; echo "FAIL: 命中内部域名"; exit 1; fi
-          echo "OK: 内部域名零命中"
-      - name: 内部目录未被追踪（.hermes / plans / 备份文件）
+          if [ -n "$hits" ]; then printf '%s\n' "$hits"; echo "FAIL: matched an internal domain"; exit 1; fi
+          echo "OK: zero internal domain hits"
+      - name: Internal directories not tracked (.hermes / plans / backup files)
         run: |
           t=$(git ls-files | grep -E '[.]hermes/|/plans/|[.]bak$|[.]bak-|pre-deploy|skill_manifest[.]json' || true)
-          if [ -n "$t" ]; then printf '%s\n' "$t"; echo "FAIL: 内部/备份文件被 git 追踪"; exit 1; fi
-          echo "OK: 无内部文件入库"
+          if [ -n "$t" ]; then printf '%s\n' "$t"; echo "FAIL: internal/backup files are tracked by git"; exit 1; fi
+          echo "OK: no internal files committed"
 
   version-consistency:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: VERSION 与 README badge 一致
+      - name: VERSION matches README badge
         run: |
           v=$(cat VERSION)
           echo "VERSION = $v"
           ok=1
-          for f in README.md README_CN.md; do
+          for f in README.md; do
             [ -f "$f" ] || continue
-            if grep -q "version-$v" "$f"; then echo "OK: $f badge = $v"; else echo "FAIL: $f 缺 badge version-$v"; ok=0; fi
+            if grep -q "version-$v" "$f"; then echo "OK: $f badge = $v"; else echo "FAIL: $f missing badge version-$v"; ok=0; fi
           done
           [ "$ok" -eq 1 ] || exit 1
-      - name: CHANGELOG 有对应版本段落
+      - name: CHANGELOG has a matching version section
         run: |
           v=$(cat VERSION)
-          if grep -qE "^##+.*$v" CHANGELOG.md 2>/dev/null; then echo "OK: CHANGELOG 含 $v"; else echo "WARN: CHANGELOG 未见 $v 段落"; fi
+          if grep -qE "^##+.*$v" CHANGELOG.md 2>/dev/null; then echo "OK: CHANGELOG contains $v"; else echo "WARN: no $v section found in CHANGELOG"; fi

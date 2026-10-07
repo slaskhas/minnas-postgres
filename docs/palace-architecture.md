@@ -1,69 +1,69 @@
-# 魔法记忆宫殿 · 架构设计
+# Magic Memory Palace · Architecture Design
 
 > v7.0.0 | 2026-08-06
-> 核心理念: 记忆宫殿法空间编码 + 档案学著录 + 三室分工
+> Core idea: method-of-loci spatial encoding + archival-science cataloging + three-chamber division of labor
 
-## 一、设计渊源 (人类智慧)
+## I. Design Lineage (Human Wisdom)
 
-| 来源 | 智慧 | 映射 |
+| Source | Wisdom | Mapping |
 |------|------|------|
-| 图书馆 (杜威十进) | 编号即位置, 新书自动归位 | 档号体系 `K·NET·PROXY·2026-0007` |
-| 档案馆 (DA/T18) | 档号分层 + 著录标准化 + 原始与著录分离 | tome_cards 著录卡片 |
-| 中药柜 (斗谱) | 位置谱 + 标签 + 常用就近 | 分类树 + 三通道召唤 |
-| 记忆宫殿法 (2500年) | 空间编码, 检索=走宫殿 | 翼/房间/书架/书卷 层级 |
+| Library (Dewey Decimal) | Number IS position; new books auto-shelve | Archive-number system `K·NET·PROXY·2026-0007` |
+| Archive (DA/T18) | Layered accession numbers + standardized cataloging + separation of raw material and description | `tome_cards` description cards |
+| Chinese medicine cabinet | Position registry + labels + frequent items placed within reach | Category tree + three-channel summon |
+| Method of loci (2500 years) | Spatial encoding; retrieval = walking the palace | Wing/Room/Shelf/Tome hierarchy |
 
-## 二、宫殿结构
+## II. Palace Structure
 
 ```
-大厅 LOBBY      → 高频记忆 (常驻注入, 抬手取)
-翼   WING       → 大类域: K知识/N网络/D开发/O运维/A资产/P人物/I灵感
-房间 ROOM       → 中类 (20 房间)
-书架 SHELF      → 小类/主题
-书卷 TOME       → 单条知识 (著录卡片 + 档号 + 全文指针)
-地下档案馆       → 原始记录全保真 (Hermes state.db)
+LOBBY           → high-frequency memories (always-injected, grab-and-go)
+WING            → top domain: K knowledge / N network / D dev / O ops / A assets / P people / I ideas
+ROOM            → mid category (20 rooms)
+SHELF           → sub-category/topic
+TOME            → a single piece of knowledge (description card + archive-no + full-text pointer)
+Underground archive → raw records, full fidelity (Hermes state.db)
 ```
 
-## 三、三室分工
+## III. Three-Chamber Division of Labor
 
-| 室 | 功能 | 实现 |
+| Chamber | Function | Implementation |
 |----|------|------|
-| 🕵️ 资料室 | 对话→事实精炼 | `/palace/extract` (factextract 管道) |
-| 🏛️ 档案馆 | 分类归档 + 著录 | `tome_cards` + 档号 + 分类树 |
-| 📚 图书馆 | 检索召唤 | `/palace/summon` 三通道 |
-| 🍵 中药柜 | 高频快速取用 | 分类树引导 + 档号点名 |
+| 🕵️ Research room | dialogue → fact distillation | `/palace/extract` (factextract pipeline) |
+| 🏛️ Archive | categorize + catalog | `tome_cards` + archive-no + category tree |
+| 📚 Library | retrieval/summon | `/palace/summon` three-channel |
+| 🍵 Medicine cabinet | high-frequency fast access | category-tree guidance + archive-no lookup |
 
-## 四、三通道召唤
+## IV. Three-Channel Summon
 
 ```
-① 点名 (精确): 档号/题名/标签 ILIKE 直命中 → <100ms
-② 引导 (范围): 分类树翼/房关键词匹配 → 缩小范围
-③ 共鸣 (模糊): 向量检索 (pgvector HNSW) → 语义兜底
+① Name (exact): archive-no/title/tag ILIKE direct hit → <100ms
+② Guide (range): category-tree wing/room keyword matching → narrows scope
+③ Resonate (fuzzy): vector search (pgvector HNSW) → semantic fallback
 ```
 
-## 五、数据模型
+## V. Data Model
 
-- `archive_taxonomy`: 分类树 (翼/房间/书架)
-- `tome_cards`: 著录卡片 (memory_id, title, summary, archive_no, wing, room, shelf, tags, retention)
-- `entities` / `memory_entities` / `wiki_entities`: 实体与关联 (v7.8 起替代 tome_links 轻量图谱, AGE 已切除)
-- `memories.archive_no`: 档号列
+- `archive_taxonomy`: category tree (wing/room/shelf)
+- `tome_cards`: description cards (memory_id, title, summary, archive_no, wing, room, shelf, tags, retention)
+- `entities` / `memory_entities` / `wiki_entities`: entities and associations (replaces the lightweight `tome_links` graph since v7.8; AGE has been removed)
+- `memories.archive_no`: archive-number column
 
-## 六、生命周期 (永恒分级)
+## VI. Lifecycle (Permanence Tiers)
 
-| 等级 | 衰减 | 清理 |
+| Tier | Decay | Cleanup |
 |------|------|------|
-| permanent | 0.0 (不衰减) | 不清理 (规则/红线/身份) |
-| long | 0.999 (极慢) | 不自动清 (知识/项目) |
-| short | 快衰减 | 90 天自动撤架 (临时便签) |
+| permanent | 0.0 (never decays) | never cleaned up (rules/red-lines/identity) |
+| long | 0.999 (very slow) | no auto-cleanup (knowledge/projects) |
+| short | fast decay | auto-removed after 90 days (temporary notes) |
 
-## 七、Hermes 集成
+## VII. Hermes Integration
 
-- `mnemosyne_palace_summon`: 三通道召唤工具
-- `sync_turn`: 对话 → session 类 (无损 2000/3000 字符)
-- `on_session_end`: 自动触发资料室提取
-- `system_prompt_block`: 宫殿状态注入 (覆盖率/卡片/分类树)
+- `mnemosyne_palace_summon`: three-channel summon tool
+- `sync_turn`: dialogue → session records (lossless, 2000/3000 chars)
+- `on_session_end`: auto-triggers research-room extraction
+- `system_prompt_block`: palace-state injection (coverage/cards/category tree)
 
-## 八、关键指标 (v7.0.0)
+## VIII. Key Metrics (v7.0.0)
 
-- 总记忆 8647 | 归档率 100% | 卡片 8614 | 分类树 30 节点
+- Total memories 8647 | archival rate 100% | cards 8614 | category tree 30 nodes
 - facts 6231 (knowledge 5230 + preference 1001)
-- 召唤: xray/部署/密钥/记忆宫殿 全命中 (0.1-0.4s)
+- Summon: xray/deployment/secrets/memory-palace all hit (0.1-0.4s)

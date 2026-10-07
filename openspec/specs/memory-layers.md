@@ -1,74 +1,80 @@
-# 记忆分层模型（能力真相 · 可执行规格）
+# Memory Layering Model (Capability truth · Executable spec)
 
-> 权威实现：`core/layers.py`｜对外入口：`GET /api/v1/layers` · `GET /api/v1/layers/classify`
-> 写入路径已接线：`POST /api/v1/memories` 会在 `metadata.layer` / `metadata.layer_family` 落层
-> 状态：**生效中**（v8.0.0）｜ 来源：用户 2026-09-24 口述 → 归一化 → 可执行化
+> Authoritative implementation: `core/layers.py` | External entry: `GET /api/v1/layers` · `GET /api/v1/layers/classify`
+> Write path is wired up: `POST /api/v1/memories` sets `metadata.layer` / `metadata.layer_family` on every write
+> Status: **active** (v8.0.0) | Origin: user dictation on 2026-09-24 → normalized → made executable
 
-## 1. 判定轴（只有一条）
+## 1. The judgment axis (there's only one)
 
-**允不允许存在矛盾。**
+**Whether contradiction is allowed to exist.**
 
-据此分三族五层。分层不是按"内容主题"分，而是按**治理方式**分 ——
-同一主题的两种记录，若一条必须"只认最新"、另一条"允许矛盾"，它们就不该同层。
+This splits memory into three families and five layers. The split isn't by "content topic" but by
+**governance style** — for two records on the same topic, if one must "only trust the latest" while
+the other "allows contradiction," they don't belong in the same layer.
 
-## 2. 五层 + 一横切
+## 2. Five layers + one cross-cutting concern
 
-| 层 | 名称 | 族 | 载体 | 写规则 | 冲突策略 | 受控 category |
+| Layer | Name | Family | Carrier | Write rule | Conflict policy | Controlled category |
 |---|---|---|---|---|---|---|
-| **L0** | 日志层 | 只增不改 | `state.db`（全量原文 + tool_calls）+ Mnemosyne `session` 归档 | append-only；只去噪，**不压缩正文** | **允许矛盾**，作参考，不判定谁对 | `session` `temp` |
-| **L1** | 认知层 | 版本化·只认最新 | Mnemosyne `knowledge` / `beliefs` + `MEMORY.md` / `USER.md` | 可更新，**须带来源**；更新留变更日志 | 冲突 → 更新为新值 + 记录「从什么变成什么」 | `knowledge` `preference` |
-| **L2** | 技能层 | 版本化·只认最新 | `skills/` 文件 + 触发式注入 | 文件版本化；旧版进 `.archive`（不删，留源） | 只认最新；旧版可召回但不再注入 | `pitfall` `ops` `deploy` |
-| **L3** | 约束层 | **人工定稿** | ⚠️ **不在库内**：`SOUL.md` / `MEMORY.md` / `config.yaml` | 人工定稿；变更有记录 | **禁止并存** —— 不允许两条约束同时有效 | （无）|
-| **L4** | 参考层 | 版本化·只认最新 | `wiki_pages` + 箱子文件 + 项目文档（N+EN / ADR） | 版本化；**记忆里只放指针 + 指纹，不放实体** | 只认最新 + 指针回链 | `reference` `project` `worklog` |
-| 横切 | **产出物索引** | —— | 不是一层，每层都可引用 | 实体只有一份，指针可多处 | 见 §4 | —— |
+| **L0** | Log layer | Append-only | `state.db` (full raw text + tool_calls) + Mnemosyne `session` archive | Append-only; denoise only, **never compress the body** | **Contradiction allowed**, used as reference, no verdict on who's right | `session` `temp` |
+| **L1** | Cognitive layer | Versioned · latest wins | Mnemosyne `knowledge` / `beliefs` + `MEMORY.md` / `USER.md` | Updatable, **must carry a source**; updates leave a changelog | Conflict → update to new value + record "changed from X to Y" | `knowledge` `preference` |
+| **L2** | Skill layer | Versioned · latest wins | `skills/` files + trigger-based injection | File-versioned; old versions go to `.archive` (not deleted, source kept) | Latest wins; old versions can be recalled but no longer injected | `pitfall` `ops` `deploy` |
+| **L3** | Constraint layer | **Manually finalized** | ⚠️ **Not in the database**: `SOUL.md` / `MEMORY.md` / `config.yaml` | Manually finalized; changes are recorded | **Coexistence forbidden** — two constraints cannot be in effect at the same time | (none) |
+| **L4** | Reference layer | Versioned · latest wins | `wiki_pages` + box files + project docs (ZH+EN / ADR) | Versioned; **only pointers + fingerprints go in memory, never the entity itself** | Latest wins + pointer back-link | `reference` `project` `worklog` |
+| Cross-cutting | **Artifact index** | — | Not a layer, referenceable from every layer | An entity exists exactly once, pointers can be in multiple places | See §4 | — |
 
-### L3 为什么没有库内 category（诚实标注）
+### Why L3 has no in-database category (stated plainly)
 
-约束记忆（性格 / 规则 / Hermes 自带）的载体是 `SOUL.md` / `MEMORY.md` / `config.yaml`，
-是**人工定稿的配置文件**，不是数据库行。这不是模型缺陷，而是「分层模型」与
-「存储载体」本来就分离的证据。`self_check()` 里有断言锁住这一点 ——
-若有人为了方便给 L3 塞一个 category，测试会红。
+The carrier for constraint memory (personality / rules / Hermes built-ins) is `SOUL.md` / `MEMORY.md` /
+`config.yaml` — **manually finalized config files**, not database rows. This isn't a model shortcoming;
+it's evidence that the "layering model" and the "storage carrier" are deliberately separate. `self_check()`
+has an assertion locking this in — if anyone stuffs a category onto L3 for convenience, the test goes red.
 
-### 与用户原话的两处分歧（请审）
+### Two points of divergence from the user's original words (for review)
 
-1. **「事实记忆」并入 L2/L3**，不单列一层 —— 用户原话里"事实记忆"的内容就是"技能、约束"。
-2. **认知层归入「只认最新」族**（允许带置信度）。若认为应保留"认知演进史"，
-   它会成为**第三个族**，`core/layers.py` 需相应扩展。**此点仍待拍板**。
+1. **"Factual memory" is folded into L2/L3** rather than kept as its own layer — in the user's original
+   words, the content of "factual memory" was actually "skills, constraints."
+2. **The cognitive layer is classified under the "latest wins" family** (with confidence scores allowed).
+   If the "evolution history of cognition" should be preserved instead, it would become a **third family**,
+   and `core/layers.py` would need to be extended accordingly. **This point is still pending a decision.**
 
-## 3. 写入落层（已接线）
+## 3. Write-path layering (already wired up)
 
-`POST /api/v1/memories` 每次写入都会执行 `classify_layer()`，把 `layer` /
-`layer_family` 写进 `metadata`，L1 未带 `source` 时附 `layer_note` 提示。
+Every write through `POST /api/v1/memories` runs `classify_layer()`, writing `layer` /
+`layer_family` into `metadata`; when L1 is written without a `source`, a `layer_note` hint is attached.
 
-**判据（可证伪）**：查任意 v8.0 之后写入的记忆，`metadata->>'layer'` 必须非空。
-若为空，说明分层退化成文档 —— 这是本规格的"验收锚点"。
+**Acceptance criterion (falsifiable)**: for any memory written after v8.0, `metadata->>'layer'` must be
+non-null. If it's null, layering has degenerated into documentation — this is this spec's "acceptance anchor."
 
 ```sql
--- 生产核查：应返回 0 行（v8.0 之后写入却无 layer 标记）
+-- Production check: should return 0 rows (written after v8.0 but missing a layer tag)
 SELECT count(*) FROM memories
 WHERE created_at > TIMESTAMPTZ '2026-09-25' AND metadata->>'layer' IS NULL;
 ```
 
-## 4. 产出物 → 实体走哪儿、指针留哪儿
+## 4. Where artifacts → entities go, and where pointers live
 
-判别只需一句话：**给谁用**。
+The distinction comes down to one question: **who is it for?**
 
-| 实体类型 | 放哪 | 理由 | 记忆里留什么 |
+| Entity type | Where it goes | Reason | What stays in memory |
 |---|---|---|---|
-| 要交付 / 双击打开 / 给外部看 | **箱子**（收件箱 → 归档） | 用户既有习惯，双击即用 | 绝对路径（Win 格式）+ 大小 + sha256 |
-| 要被检索 / 被 AI 反复引用 | **Wiki** | 可检索、可版本化、可跨会话召回 | Wiki 页名/编号 + 摘要 |
-| 代码 / 仓库产物 | **仓库 + tag** | 版本化交给 git | tag/commit + 线上 URL |
+| To be delivered / double-clicked open / shown externally | **Box** (inbox → archive) | Matches the user's existing habits, double-click to use | Absolute path (Windows format) + size + sha256 |
+| To be retrieved / repeatedly referenced by AI | **Wiki** | Searchable, versionable, recallable across sessions | Wiki page name/ID + summary |
+| Code / repo artifacts | **Repo + tag** | Versioning handled by git | tag/commit + live URL |
 
-三者共同点：**记忆里只放指针 + 指纹，不放实体**。实体唯一，指针可多处。
+The common thread for all three: **only pointers + fingerprints go in memory, never the entity itself**.
+An entity exists exactly once; pointers can be in multiple places.
 
-## 5. 不做什么
+## 5. Non-goals
 
-- 不新造存储表来"实现分层" —— 五层的载体**都已有**，本层做的是**判定与路由**。
-- 不在写入路径上调 LLM 做分类（0 token 原则）；分层是纯规则映射。
-- 不把 L0 的"允许矛盾"扩散到其它层（会污染认知）。
+- Not creating new storage tables to "implement layering" — the carriers for all five layers **already
+  exist**; this layer's job is **classification and routing**.
+- Not calling an LLM on the write path for classification (zero-token principle); layering is a pure
+  rule-based mapping.
+- Not letting L0's "contradiction allowed" leak into other layers (it would pollute cognition).
 
-## 6. 变更记录
+## 6. Change log
 
-| 日期 | 变更 | 依据 |
+| Date | Change | Basis |
 |---|---|---|
-| 2026-09-25 | 建立可执行规格（`core/layers.py` + 写入接线 + 10 条规格测试） | 提案 P-20260925-01 §S3-1 |
+| 2026-09-25 | Established the executable spec (`core/layers.py` + write-path wiring + 10 spec tests) | Proposal P-20260925-01 §S3-1 |

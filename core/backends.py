@@ -1,14 +1,14 @@
 """
-Mnemosyne OS v5.0 — 多后端模型配置
-支持: 豆包(ARK, 仅 chat) / OpenAI兼容 (embedding + chat) / 本地模型
+Mnemosyne OS v5.0 — multi-backend model configuration
+Supports: Doubao (ARK, chat only) / OpenAI-compatible (embedding + chat) / local models
 """
 import os
 from typing import Optional
 
-# ── 模型后端定义 ──
+# ── Model backend definitions ──
 MODEL_BACKENDS = {
     "ark": {
-        "name": "火山引擎 ARK (豆包)",
+        "name": "Volcengine ARK (Doubao)",
         "base_url": "https://ark.cn-beijing.volces.com/api/v3",
         "auth": lambda: f"Bearer {os.getenv('ARK_API_KEY', '')}",
         "models": {
@@ -17,11 +17,12 @@ MODEL_BACKENDS = {
             "chat_code": "doubao-seed-2-0-code-preview-260215",
             "image": "doubao-seedream-5-0-260128",
         },
-        # 注: ARK 不再用于 embedding (embedding 走 openai 兼容后端, 见下)
+        # Note: ARK is no longer used for embedding (embedding goes through the
+        # OpenAI-compatible backend below)
         "dimensions": [],
     },
     "openai": {
-        "name": "OpenAI 兼容 (OpenAI / DeepSeek / 本地)",
+        "name": "OpenAI-compatible (OpenAI / DeepSeek / local)",
         "base_url": os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1"),
         "auth": lambda: f"Bearer {os.getenv('OPENAI_API_KEY', '')}",
         "models": {
@@ -35,64 +36,65 @@ MODEL_BACKENDS = {
     },
 }
 
-# ── 当前激活的后端 ──
+# ── Currently active backend ──
 ACTIVE_BACKEND = os.getenv("MODEL_BACKEND", "ark")
 
 
 def get_backend(name: Optional[str] = None) -> dict:
-    """获取模型后端配置"""
+    """Get a model backend's configuration"""
     backend = MODEL_BACKENDS.get(name or ACTIVE_BACKEND)
     if not backend:
-        raise ValueError(f"未知模型后端: {name or ACTIVE_BACKEND}. 可用: {list(MODEL_BACKENDS.keys())}")
+        raise ValueError(f"Unknown model backend: {name or ACTIVE_BACKEND}. Available: {list(MODEL_BACKENDS.keys())}")
     return backend
 
 
 def get_model(model_type: str, backend_name: Optional[str] = None) -> str:
     """
-    获取指定类型的模型名
-    
+    Get the model name for a given type
+
     model_type: embedding / chat_mini / chat_lite / chat_code / image
     """
     backend = get_backend(backend_name)
     model = backend["models"].get(model_type)
     if not model:
-        raise ValueError(f"后端 {backend['name']} 不支持 {model_type}")
+        raise ValueError(f"Backend {backend['name']} does not support {model_type}")
     return model
 
 
 def list_backends() -> list:
-    """列出所有可用后端"""
+    """List all available backends"""
     return [
         {"id": k, "name": v["name"], "dimensions": v["dimensions"]}
         for k, v in MODEL_BACKENDS.items()
     ]
 
 
-# ── Reranker (Tier 1.5) — 基于Embedding相似度 ──
-# 白皮书定义的三重召回需要reranker。豆包没有独立reranker API。
-# 我们用embedding cosine similarity做轻量替代。
-def rerank_by_similarity(query_embedding: list, documents: list, 
+# ── Reranker (Tier 1.5) — based on embedding similarity ──
+# The whitepaper's triple-recall design calls for a reranker. Doubao has no
+# standalone reranker API, so we use embedding cosine similarity as a lightweight
+# substitute.
+def rerank_by_similarity(query_embedding: list, documents: list,
                          doc_embeddings: list, top_k: int = 5) -> list:
     """
-    基于余弦相似度的轻量reranker
-    
+    Lightweight reranker based on cosine similarity
+
     Args:
-        query_embedding: 查询向量
-        documents: 文档列表
-        doc_embeddings: 文档向量列表 (与documents同序)
-        top_k: 返回前N条
-    
+        query_embedding: query vector
+        documents: list of documents
+        doc_embeddings: list of document vectors (same order as documents)
+        top_k: return the top N results
+
     Returns:
-        重排后的文档列表
+        the reranked list of documents
     """
     import numpy as np
-    
+
     q = np.array(query_embedding)
     scores = []
     for i, emb in enumerate(doc_embeddings):
         d = np.array(emb)
         sim = np.dot(q, d) / (np.linalg.norm(q) * np.linalg.norm(d) + 1e-8)
         scores.append((i, float(sim)))
-    
+
     scores.sort(key=lambda x: x[1], reverse=True)
     return [documents[i] for i, _ in scores[:top_k]]

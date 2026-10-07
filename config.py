@@ -1,10 +1,10 @@
 """
-Mnemosyne v5.0 — 统一配置中心
-替代 v2.1 的内联 CONFIG dict，支持环境变量 + 多后端
+Mnemosyne v5.0 — unified config center
+Replaces the v2.1 inline CONFIG dict; supports env vars + multiple backends
 """
 import os
 
-# ── 豆包 API (火山引擎 ARK) ──
+# ── Doubao API (Volcengine ARK) ──
 ARK_API_KEY = os.getenv("ARK_API_KEY", "")
 ARK_BASE = "https://ark.cn-beijing.volces.com/api/v3"
 
@@ -15,36 +15,39 @@ EMBED_MODEL = os.getenv("OPENAI_EMBED_MODEL", "text-embedding-3-small")
 EMBED_DIM = int(os.getenv("EMBED_DIM", "1536"))
 EMBED_URL = f"{OPENAI_BASE_URL}/embeddings"
 
-# LLM 梯队
-DOUBAO_MINI = "doubao-seed-2-0-mini-260215"     # Tier 2: 快速/便宜
-DOUBAO_LITE = "doubao-seed-2-0-lite-260215"      # Tier 3: 主力, 支持 JSON/工具调用
-DOUBAO_CODE = "doubao-seed-2-0-code-preview-260215"  # Tier 4: 深度推理
+# LLM tiers
+DOUBAO_MINI = "doubao-seed-2-0-mini-260215"     # Tier 2: fast/cheap
+DOUBAO_LITE = "doubao-seed-2-0-lite-260215"      # Tier 3: primary, supports JSON/tool calls
+DOUBAO_CODE = "doubao-seed-2-0-code-preview-260215"  # Tier 4: deep reasoning
 
-# DeepSeek (Tier 4 异构审计)
+# DeepSeek (Tier 4 heterogeneous audit)
 DEEPSEEK_PRO = os.getenv("DEEPSEEK_PRO", "deepseek-v4-pro")
 DEEPSEEK_FLASH = os.getenv("DEEPSEEK_FLASH", "deepseek-v4-flash")
 
-# ── 数据库 ──
+# ── Database ──
 PG_USER = os.getenv("PGUSER", "postgres")
 PG_PASSWORD = os.getenv("PGPASSWORD", "")
 PG_DB = os.getenv("PGDATABASE", "mnemosyne")
 PG_HOST = os.getenv("PGHOST", "127.0.0.1")
 PG_PORT = int(os.getenv("PGPORT", "5432"))
-# 目标 schema (与同一数据库中的其它应用共存时, 用非 public schema 隔离;
-# 须与 docs/schema.sql 中 `CREATE SCHEMA` / `SET search_path` 的目标一致)
+# Target schema (isolates this app via a non-public schema when sharing a database
+# with other apps; must match the `CREATE SCHEMA` / `SET search_path` target in
+# docs/schema.sql)
 PG_SCHEMA = os.getenv("PGSCHEMA", "public")
-# 连接的实际 search_path: pgvector 扩展的 vector 类型/操作符本身装在 public
-# (CREATE EXTENSION ... WITH SCHEMA public), 应用代码里大量裸写 `::vector`
-# 做类型转换, 若 PG_SCHEMA != public 则必须把 public 也带上做类型解析兜底 ——
-# 但顺序上 PG_SCHEMA 在前, 表名解析始终优先命中本 schema 下已存在的同名表,
-# 不会误落到 public 下其它应用的同名表 (除非本 schema 下该表缺失)
+# Actual search_path used on connect: the pgvector extension's `vector` type/operators
+# themselves live in `public` (CREATE EXTENSION ... WITH SCHEMA public), and application
+# code casts bare `::vector` in many places, so if PG_SCHEMA != public, `public` must
+# also be included as a type-resolution fallback — but since PG_SCHEMA comes first,
+# table-name resolution always prefers a same-named table that already exists in this
+# schema, and won't accidentally fall through to another app's same-named table under
+# `public` (unless the table is missing from this schema)
 PG_SEARCH_PATH = PG_SCHEMA if PG_SCHEMA == "public" else f"{PG_SCHEMA}, public"
 
-# ── 服务 ──
+# ── Service ──
 HOST = os.getenv("MNEMOSYNE_HOST", "127.0.0.1")
 PORT = int(os.getenv("MNEMOSYNE_PORT", "8010"))
 
-# ── 搜索权重 ──
+# ── Search weights ──
 SEARCH_WEIGHTS = {
     "vector": 0.45,
     "bm25": 0.15,
@@ -53,10 +56,10 @@ SEARCH_WEIGHTS = {
     "heat": 0.10,
 }
 
-# ── 热度衰减 ──
-HEAT_DECAY_ALPHA = 0.95   # 每日衰减系数
-HEAT_BOOST_ACCESS = 0.05   # 每次访问增量
+# ── Heat decay ──
+HEAT_DECAY_ALPHA = 0.95   # daily decay coefficient
+HEAT_BOOST_ACCESS = 0.05   # increment per access
 
-# ── TMT 蒸馏 ──
-TMT_LLM_TIER = "lite"       # 蒸馏用模型: mini/lite/pro
-TMT_MAX_RETRIES = 3          # LLM 调用最大重试次数
+# ── TMT distillation ──
+TMT_LLM_TIER = "lite"       # distillation model: mini/lite/pro
+TMT_MAX_RETRIES = 3          # max retries for LLM calls

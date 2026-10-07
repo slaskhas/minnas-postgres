@@ -1,15 +1,21 @@
-"""归档质量契约测试 (v7.8.4) — 分级截断 / 证据签名 / 短会话不弃 / 汇报卡入库形态
+"""Archive-quality contract tests (v7.8.4) — tiered truncation / evidence signature /
+short sessions kept / report-card storage shape
 
-背景 (2026-09-24 实测):
-  用户问「生产服务器上那个几百兆的文件是什么」, 查不到 —— 因为 `archive_session.py` 对每条消息
-  一刀切 `content[:2000]`, 而收尾汇报常 >2000 字, 被切掉的恰是**交付物路径/哈希/实测数字**。
-  同源毛病与 v7.8.2 的「语义等价 ≠ 可用」一致: **改了措辞/粒度而消费端没跟上, 不报错、只失真**。
+Background (observed in production, 2026-09-24):
+  The user asked "what's that several-hundred-MB file on the production server" and it couldn't
+  be found — because `archive_session.py` applied a flat `content[:2000]` cutoff to every message,
+  while the closing report is often >2000 chars, and what got cut off was exactly the
+  **deliverable paths/hashes/measured numbers**.
+  Same root cause as v7.8.2's "semantically equivalent ≠ usable": **wording/granularity changed
+  but the consumer wasn't updated — no error, just silent data loss**.
 
-本测试锁死三件事:
-  ① 截断策略(汇报/用户消息全文, 过程消息压缩) ② 工具证据签名形态 ③ 汇报卡入宫的
-  受控 category 与请求形态(不许自造 category —— 服务端会静默归一化为 knowledge)。
+This test suite locks down three things:
+  (1) truncation policy (reports/user messages kept in full, process messages compressed)
+  (2) tool-evidence signature shape
+  (3) the controlled category and request shape for report cards going into the palace
+  (no inventing categories — the server silently normalizes unknown ones to knowledge).
 
-不依赖数据库/网络: 临时 sqlite + monkeypatch urlopen。
+No DB/network dependency: temp sqlite + monkeypatched urlopen.
 """
 import importlib.util
 import json
@@ -43,7 +49,7 @@ def rep():
     return _load("rep_v784", REPORT)
 
 
-# ---------------- 临时库 ----------------
+# ---------------- temp DB ----------------
 
 def _mkdb(tmp_path):
     db = tmp_path / "state.db"
@@ -75,7 +81,7 @@ TC = json.dumps([{"id": "call_1", "type": "function",
 
 
 class TestTieredTruncation:
-    """① 收尾汇报与用户消息全文保留, 只有过程消息被压缩。"""
+    """(1) Closing reports and user messages are kept in full; only process messages are compressed."""
 
     def test_final_report_survives_intact(self, arch, tmp_path):
         long_report = ("交付清单如下: C:\\Users\\<user>\\Desktop\\交付箱\\99_归档\\报告.md " * 200)
@@ -89,11 +95,11 @@ class TestTieredTruncation:
         s = arch.get_session(db, "s1")
         assert "汇报完毕请指示" in s["content"], "收尾汇报被截断 → 交付要素丢失"
         assert s["stats"]["final_report_chars"] > 2000, "汇报未被识别为最终汇报"
-        # 只有过程消息那一条被压缩
+        # Only the process message should be compressed
         assert s["content"].count("...(截断") == 1, "截断次数不对: 不应动到汇报"
 
     def test_user_message_kept(self, arch, tmp_path):
-        long_user = "需求原文" * 900          # 3600 字 < LIMIT_USER
+        long_user = "需求原文" * 900          # 3600 chars < LIMIT_USER
         db, con = _mkdb(tmp_path)
         _add(con, "s2", "t", [("user", long_user, None), ("assistant", "收到", None)])
         s = arch.get_session(db, "s2")
@@ -109,8 +115,8 @@ class TestTieredTruncation:
         assert s["stats"]["truncated_process"] >= 1
 
     def test_total_budget_never_eats_report(self, arch, tmp_path):
-        """总预算超限时只能压缩过程消息, 汇报依然完整。"""
-        big = "过程消息长文" * 4000           # ~24000 字
+        """When the total budget is exceeded, only process messages may be compressed; the report stays intact."""
+        big = "过程消息长文" * 4000           # ~24000 chars
         report = "收尾汇报" + "X" * 300 + "汇报完毕请指示"
         db, con = _mkdb(tmp_path)
         _add(con, "s4", "t", [("user", "q", None),
@@ -124,9 +130,9 @@ class TestTieredTruncation:
 
 
     def test_budget_trimmed_counts_messages_not_iterations(self, arch, tmp_path, monkeypatch):
-        """让位计数语义 = 消息条数(旧版是循环迭代次数, 实测跑出 4227 这种无意义数字)。"""
-        monkeypatch.setattr(arch, "MAX_TOTAL", 3000)     # 压低预算才触发让位路径
-        big = "过程长文" * 600                            # 每条 2400 字 → 先被 1200 阈值压
+        """Eviction-count semantics = message count (the old version counted loop iterations, which produced a meaningless number like 4227 in production)."""
+        monkeypatch.setattr(arch, "MAX_TOTAL", 3000)     # lower the budget to trigger the eviction path
+        big = "过程长文" * 600                            # each message is 2400 chars → first compressed by the 1200 threshold
         db, con = _mkdb(tmp_path)
         _add(con, "s13", "t", [("user", "q", None), ("assistant", big, None),
                                ("assistant", big, None), ("assistant", big, None),
@@ -139,7 +145,7 @@ class TestTieredTruncation:
 
 
 class TestEvidenceSignature:
-    """② 工具证据签名: 让语义层看得见"这轮干了什么"。"""
+    """(2) Tool evidence signature: lets the semantic layer see "what happened this turn"."""
 
     def test_signature_counts(self, arch):
         sig = arch.tool_signature(TC)
@@ -167,19 +173,19 @@ class TestEvidenceSignature:
 
 
 class TestTitlePrefixes:
-    """项目前缀(回库) + 短会话标记。"""
+    """Project prefix (on re-archival) + short-session marker."""
 
     def test_project_prefix_from_keywords(self, arch, tmp_path, monkeypatch):
         monkeypatch.setattr(arch, "PROJECT_KEYWORDS", {"relife": ["relife", "首对外"]})
         db, con = _mkdb(tmp_path)
-        # 6 条消息 → 不算短会话; 正文同时命中 2 个关键词(阈值)才算项目
+        # 6 messages → not a short session; counts as a project only once the body hits 2 keywords (threshold)
         _add(con, "s7", "搬文件", [("user", "relife 首对外 项目", None)]
              + [("assistant", f"第{i}步", None) for i in range(5)])
         s = arch.get_session(db, "s7")
         assert s["title"] == "[relife] 搬文件", s["title"]
 
     def test_short_and_project_single_tag(self, arch, tmp_path, monkeypatch):
-        """短会话 + 项目 → 单个标签 [短·relife], 不是 [短] [relife]。"""
+        """Short session + project → a single tag [短·relife], not [短] [relife]."""
         monkeypatch.setattr(arch, "PROJECT_KEYWORDS", {"relife": ["relife", "首对外"]})
         db, con = _mkdb(tmp_path)
         _add(con, "s7b", "改个名", [("user", "relife 首对外 项目", None), ("assistant", "好了", None)])
@@ -187,7 +193,7 @@ class TestTitlePrefixes:
         assert s["title"] == "[短·relife] 改个名", s["title"]
 
     def test_title_prefix_is_idempotent(self, arch, tmp_path, monkeypatch):
-        """已带标签的标题再处理不许叠加。"""
+        """An already-tagged title must not get tags stacked on reprocessing."""
         monkeypatch.setattr(arch, "PROJECT_KEYWORDS", {"relife": ["relife", "首对外"]})
         db, con = _mkdb(tmp_path)
         _add(con, "s7c", "[relife] 搬文件", [("user", "relife 首对外", None)]
@@ -203,7 +209,7 @@ class TestTitlePrefixes:
 
 
 class TestAutoModeShortSessions:
-    """③ 短会话不再被静默跳过 (旧版 `message_count < 5: continue`)。"""
+    """(3) Short sessions are no longer silently skipped (old version: `message_count < 5: continue`)."""
 
     @pytest.fixture
     def stub(self, arch, tmp_path, monkeypatch):
@@ -230,7 +236,7 @@ class TestAutoModeShortSessions:
 
 
 class TestReportCardContract:
-    """④ 汇报卡: 抽取 + 受控 category + 请求形态。"""
+    """(4) Report card: extraction + controlled category + request shape."""
 
     SAMPLE = (
         "## 交付完成\n"
@@ -267,7 +273,7 @@ class TestReportCardContract:
         assert "[汇报卡]" in txt and "507MB" in txt and "<user>" in txt
 
     def test_category_must_be_controlled(self, rep):
-        """自造 category 会被服务端静默归一化 —— 只许取 capabilities 词表内的值。"""
+        """A made-up category gets silently normalized by the server — only values from the capabilities wordlist are allowed."""
         expected = {"knowledge", "pitfall", "reference", "project", "ops",
                     "deploy", "preference", "session", "worklog", "temp"}
         assert rep.CONTROLLED_CATEGORIES == expected
@@ -313,7 +319,7 @@ class TestReportCardContract:
         assert second["new_cards"] == 0 and second["duplicates"] == 1, "重复抽卡 → 记忆污染"
 
     def test_final_mode_one_card_per_session(self, rep, tmp_path):
-        """默认 final: 每场会话只取收尾汇报 —— 否则一场技术会话会被刷成几十张卡(实测 66 张)。"""
+        """Default final mode: only take the closing report per session — otherwise a single technical session gets turned into dozens of cards (66 seen in production)."""
         db, con = _mkdb(tmp_path)
         _add(con, "s11", "大活", [("user", "干活", None),
                                   ("assistant", self.SAMPLE, None),
@@ -325,7 +331,7 @@ class TestReportCardContract:
         assert "最终交付" in msgs[0][0]["content"]
 
     def test_final_mode_looks_back_past_short_closer(self, rep, tmp_path):
-        """会话常以一句简短收尾结束 → 汇报卡要能回看到前一条真汇报。"""
+        """Sessions often end with a short closing line → the report card must be able to look back to the actual preceding report."""
         db, con = _mkdb(tmp_path)
         _add(con, "s11b", "大活", [("user", "干活", None),
                                    ("assistant", self.SAMPLE, None),
@@ -340,7 +346,7 @@ class TestReportCardContract:
         assert rep.fetch_report_messages(db, "s11c", 1, "final") == [], "无交付要素就不该造卡"
 
     def test_tool_role_messages_never_become_cards(self, rep, tmp_path):
-        """role='tool' 是工具回显 —— 把它的 diff/日志当交付汇报过一次(实测), 必须排除。"""
+        """role='tool' is a tool echo — its diff/log output was once mistakenly treated as a delivery report (seen in production); it must be excluded."""
         db, con = _mkdb(tmp_path)
         _add(con, "s14", "干活", [("user", "q", None),
                                   ("tool", "C:\\tmp\\x.txt 507MB sha256 7b63ac4e77268b5d", None),
@@ -348,7 +354,7 @@ class TestReportCardContract:
         assert rep.fetch_report_messages(db, "s14", 1, "final") == []
 
     def test_path_signal_drops_diff_noise(self, rep):
-        """工具输出的 `\\n` 转义与 diff 的 `+++` 曾被当路径(实测), 必须清掉。"""
+        """Tool output's `\\n` escape sequences and diff's `+++` markers were once mistakenly treated as paths (seen in production); they must be stripped."""
         noisy = r"/home/u/proj/a.py\n+++ b/a.py\n--- /home/u/proj/b.py 507MB 1.3GB"
         sig = rep.extract_signals(noisy)
         joined = " ".join(sig.get("路径", []))
@@ -357,7 +363,7 @@ class TestReportCardContract:
         assert all(len(p) <= rep.MAX_SIG_LEN for p in sig.get("路径", []))
 
     def test_scan_mode_is_stricter_than_all(self, rep):
-        weak = "顺手看了下 C:\\tmp\\x.txt, 有 3MB 数据"      # 2 类信号
+        weak = "顺手看了下 C:\\tmp\\x.txt, 有 3MB 数据"      # 2 signal categories
         assert rep.is_report_card(weak, None, "all")
         assert not rep.is_report_card(weak, None, "scan"), "scan 不抬门槛 → 污染记忆"
         assert rep.is_report_card(self.SAMPLE, None, "scan")
@@ -380,7 +386,7 @@ class TestReportCardContract:
 
 
 class TestArchivePushContractRegression:
-    """回归: 会话归档的推送形态不变 (POST /sessions/archive, json body, 四字段)。"""
+    """Regression: session-archive push shape is unchanged (POST /sessions/archive, json body, four fields)."""
 
     def test_session_archive_payload(self, arch, monkeypatch):
         captured = {}

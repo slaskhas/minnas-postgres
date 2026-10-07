@@ -1,113 +1,113 @@
-# Mnemosyne 记忆宫殿 v5.0
-## 认知型记忆操作系统 产品白皮书「终定稿·上篇」
+# Mnemosyne Memory Palace v5.0
+## Cognitive Memory Operating System Product Whitepaper "Final Edition · Part 1"
 
-**版本**：v5.2  
-**发布日期**：2026年6月  
-**核心定位**：全球首款认知级独立记忆操作系统 · Hermes 官方原生深度适配  
-**核心主张**：记忆是与推理引擎平级的底层基建；从存储、治理、验证、适配到涌现，构建完整的机器认知成长体系
-
----
-
-## 版本说明
-Mnemosyne v5.0 是整个架构体系的正式收官版本。经过多轮深度打磨与专家共创，系统完成了从「精妙单机构想」到「生产级分布式基建」再到「认知型记忆操作系统」的完整演进，形成了架构、安全、生态、认知、交互、合规六大闭环。所有设计严格遵循「权责分离、原始保真、硬件无关、生态内生、克制演进」五大核心哲学，机制自洽、路径清晰、工程可落地，既是完整的技术蓝图，也是可执行的落地纲领。
-
-本版本为面向工程落地的最终定稿，新增完整的部署配置、硬件选型、容量规划等工程实操内容，覆盖从个人单机到企业集群的全场景部署需求，可直接用于项目落地与技术评审。
+**Version**: v5.2
+**Release date**: June 2026
+**Core positioning**: The world's first cognitive-grade independent memory operating system · natively co-designed with Hermes
+**Core claim**: Memory is foundational infrastructure on par with the reasoning engine; builds a complete machine-cognition growth system spanning storage, governance, verification, adaptation, and emergence
 
 ---
 
-## 总纲：核心设计哲学
-Mnemosyne 的所有设计始终围绕五大底层刚性原则展开，这是系统的灵魂，也是所有功能演进不可突破的边界：
+## Version notes
+Mnemosyne v5.0 is the formal capstone release of the entire architecture. After multiple rounds of deep refinement and expert co-design, the system completed its full evolution from "an elegant single-machine concept" to "production-grade distributed infrastructure" to "a cognitive memory operating system," forming six closed loops: architecture, security, ecosystem, cognition, interaction, and compliance. All design strictly follows five core philosophical principles — separation of powers and responsibilities, fidelity of raw data, hardware independence, ecosystem-driven growth, and restrained evolution — with self-consistent mechanisms, a clear path, and engineering feasibility. It is both a complete technical blueprint and an executable delivery program.
 
-1.  **权责彻底分离**
-    记忆系统掌握管理权，推理引擎仅有借阅权。从架构根源杜绝注入、篡改与遗忘，让记忆成为独立、可信的唯一事实来源，而非大模型的附属缓存。
-
-2.  **原始保真至上**
-    原始数据永久留存，衍生数据全链路可溯源。知识的演化链路完整可查，删除仅做内容净化，不破坏拓扑结构的完整性，守住记忆系统的真实性底线。
-
-3.  **硬件无关普适**
-    逻辑与物理完全解耦，从单块HDD到分布式全闪存集群，同一套业务代码无缝运行，性能随硬件弹性升降，无任何硬性硬件依赖。
-
-4.  **生态内生增长**
-    不堆砌自身能力，而是将用户群体的多样性、模型生态的丰富性，内化为系统可信度与认知能力的增长动力。用户越多、场景越广，系统越强，形成正向飞轮。
-
-5.  **克制有序演进**
-    始终坚守记忆基座的定位，不越界替代大模型推理。所有能力升级均为现有架构的自然生长，无破坏性重构，保证系统长期演进的稳定性与向后兼容性。
+This version is the final edition aimed at engineering delivery, adding complete deployment configuration, hardware selection, and capacity planning content, covering every deployment scenario from a personal single machine to an enterprise cluster — usable directly for project delivery and technical review.
 
 ---
 
-## 第1章 产业背景与核心痛点
-### 1.1 Agent 落地的双重瓶颈
-AI智能体从演示走向生产的过程中，遭遇「记忆能力缺位」与「部署环境碎片化」的双重结构性瓶颈：
-- 记忆层面：原生上下文重启即失、外挂RAG开环停滞、应用内置记忆数据孤岛，智能体始终无法形成长期、可信、可沉淀的知识体系
-- 部署层面：从低配HDD服务器、个人终端到企业集群，硬件环境差异极大，多数记忆方案存在硬性硬件依赖，难以全场景落地
+## Overview: Core design philosophy
+All of Mnemosyne's design revolves around five foundational, non-negotiable principles — the soul of the system and the boundary that no feature evolution may cross:
 
-### 1.2 行业认知的深层误区
-当前行业普遍将记忆视为「推理的附属功能」，导致三个无法突破的本质缺陷：
-1.  **权责混淆**：让推理单元兼职存储管理，既不专业也不安全，易被注入、易产生幻觉
-2.  **开环停滞**：知识只有存入和读取，没有提纯、淘汰、迭代的闭环，越用越乱
-3.  **生态割裂**：记忆绑定应用、绑定模型，用户无法沉淀属于自己的永久知识资产
+1.  **Strict separation of powers and responsibilities**
+    The memory system holds management rights; the reasoning engine only holds borrowing rights. This eliminates injection, tampering, and forgetting at the architectural root, making memory an independent, trustworthy single source of truth rather than an appendage cache of the large model.
 
-### 1.3 下一代记忆系统的标准
-生产级智能体记忆系统必须满足六大核心要求：永久性、自治性、经济性、一致性、安全性、普适性。Mnemosyne v5.0 正是为满足以上所有标准而生，并且更进一步，实现了从「记忆存储」到「认知成长」的跨越。
+2.  **Fidelity of raw data above all**
+    Raw data is retained permanently, and derived data is fully traceable end to end. The evolution chain of knowledge is completely auditable; deletion only purifies content without breaking topological integrity — holding the line on the memory system's truthfulness.
+
+3.  **Universal hardware independence**
+    Logic and physical storage are fully decoupled — the same business code runs seamlessly from a single HDD to a distributed all-flash cluster, with performance scaling elastically with hardware and no hard hardware dependency.
+
+4.  **Endogenous ecosystem growth**
+    Rather than piling up its own capabilities, the system internalizes the diversity of its user base and the richness of the model ecosystem as the driving force behind its own trustworthiness and cognitive capability. More users and broader scenarios make the system stronger, forming a positive flywheel.
+
+5.  **Restrained, orderly evolution**
+    Always holds to its position as a memory foundation, never overreaching to replace large-model reasoning. All capability upgrades are natural growth of the existing architecture, with no destructive refactors — guaranteeing the stability and backward compatibility of the system's long-term evolution.
 
 ---
 
-## 第2章 系统总体架构
-Mnemosyne v5.0 采用七层全解耦架构，各层职责单一、边界清晰，可独立升级、可灵活替换，整体具备极强的扩展性与稳定性。从底层硬件自适应，到顶层认知涌现，形成完整的能力阶梯。
+## Chapter 1: Industry background and core pain points
+### 1.1 The dual bottleneck of agent adoption
+As AI agents move from demos to production, they run into a dual structural bottleneck of "absent memory capability" and "fragmented deployment environments":
+- On the memory side: native context resets on restart, bolted-on RAG stalls in an open loop, and in-app memory creates data silos — agents can never form a long-term, trustworthy, accumulating body of knowledge
+- On the deployment side: hardware ranges wildly from low-end HDD servers and personal devices to enterprise clusters; most memory solutions carry hard hardware dependencies, making them hard to deploy everywhere
+
+### 1.2 Deep misconceptions in industry thinking
+The industry currently treats memory as "an appendage of reasoning," leading to three insurmountable flaws:
+1.  **Confused responsibilities**: making the reasoning unit moonlight as storage manager is neither professional nor safe, and is easy to inject or hallucinate against
+2.  **Open-loop stagnation**: knowledge is only ever written and read, with no closed loop of refinement, elimination, and iteration — it gets messier the more it's used
+3.  **Fragmented ecosystem**: memory is bound to a single app or model, so users can never accumulate a permanent knowledge asset of their own
+
+### 1.3 The standard for next-generation memory systems
+A production-grade agent memory system must meet six core requirements: permanence, autonomy, economy, consistency, security, and universality. Mnemosyne v5.0 was built to satisfy every one of these standards, and goes further still — making the leap from "memory storage" to "cognitive growth."
+
+---
+
+## Chapter 2: Overall system architecture
+Mnemosyne v5.0 uses a seven-layer, fully decoupled architecture. Each layer has a single responsibility and clear boundaries, can be upgraded or swapped independently, and the whole has strong extensibility and stability — forming a complete capability ladder from low-level hardware adaptation up to top-level cognitive emergence.
 
 ```mermaid
 graph TD
-    subgraph L7 认知涌现层 [L7 认知涌现层 · 远期演进]
-        C1[方案基因重组引擎]
-        C2[约束驱动知识生成]
-        C3[解决方案谱系体系]
+    subgraph L7 Cognitive Emergence Layer [L7 Cognitive Emergence Layer · long-term evolution]
+        C1[Solution gene-recombination engine]
+        C2[Constraint-driven knowledge generation]
+        C3[Solution lineage system]
     end
 
-    subgraph L6 智能体接入层 [L6 智能体接入层 · Hermes 原生优先]
-        H1[Hermes 官方原生 SDK]
-        H2[标准 MCP 协议接口]
-        H3[四级自主决策交互]
+    subgraph L6 Agent Access Layer [L6 Agent Access Layer · Hermes-native priority]
+        H1[Hermes official native SDK]
+        H2[Standard MCP protocol interface]
+        H3[Four-tier autonomous-decision interaction]
     end
 
-    subgraph L5 运行时调度层 [L5 运行时调度层 · 面向任务]
-        R1[项目级上下文沙箱]
-        R2[无状态全局调度引擎]
-        R3[规则前置过滤网关]
-        R4[会话状态管理器]
+    subgraph L5 Runtime Scheduling Layer [L5 Runtime Scheduling Layer · task-oriented]
+        R1[Project-level context sandbox]
+        R2[Stateless global scheduling engine]
+        R3[Rule-based front-end filter gateway]
+        R4[Session state manager]
     end
 
-    subgraph L4 核心业务层 [L4 核心业务层 · 三馆知识生产]
-        subgraph 三馆闭环生产体系
-            A[档案馆 · 确定性事实底库]
-            B[研究馆 · 方案推演与知识加工]
-            C[工程馆 · 模拟验证与执行落地]
+    subgraph L4 Core Business Layer [L4 Core Business Layer · three-hall knowledge production]
+        subgraph Three-hall closed-loop production system
+            A[Archive Hall · deterministic fact store]
+            B[Research Hall · plan derivation and knowledge processing]
+            C[Engineering Hall · simulation, verification, and execution]
         end
-        M[冷热智能调度引擎]
-        K[轻量知识关联网络]
-        U[用户/智能体画像体系]
+        M[Hot/cold intelligent scheduling engine]
+        K[Lightweight knowledge association network]
+        U[User/agent profile system]
     end
 
-    subgraph L3 算力与安全层 [L3 算力与安全层 · 纵深防御]
-        S1[模型分级路由引擎]
-        S2[异构竞争式审计]
-        S3[社区众包验证网络]
-        S4[熔断降级高可用机制]
+    subgraph L3 Compute and Security Layer [L3 Compute and Security Layer · defense in depth]
+        S1[Tiered model routing engine]
+        S2[Heterogeneous adversarial audit]
+        S3[Community crowd-verification network]
+        S4[Circuit-breaker / graceful-degradation high availability]
     end
 
-    subgraph L2 物理存储层 [L2 物理存储层 · 全介质自适应]
-        D1[内存缓存层]
-        D2[SSD热存储层]
-        D3[HDD冷存储层]
-        D4[归档扩展层]
-        D5[WAL 预写日志引擎]
-        D6[MTL记忆转换层]
+    subgraph L2 Physical Storage Layer [L2 Physical Storage Layer · full-media adaptive]
+        D1[Memory cache layer]
+        D2[SSD hot storage layer]
+        D3[HDD cold storage layer]
+        D4[Archive extension layer]
+        D5[WAL write-ahead log engine]
+        D6[MTL memory translation layer]
     end
 
-    subgraph L1 端云协同层 [L1 端云协同层 · 全终端一致]
-        E1[终端记忆快照引擎]
-        E2[增量同步协议]
-        E3[离线运行支持]
-        E4[导入导出标准规范]
+    subgraph L1 Edge-Cloud Collaboration Layer [L1 Edge-Cloud Collaboration Layer · consistent across all devices]
+        E1[Device memory snapshot engine]
+        E2[Incremental sync protocol]
+        E3[Offline operation support]
+        E4[Import/export standard spec]
     end
 
     L7 --> L6
@@ -118,344 +118,344 @@ graph TD
     L2 --> L1
 ```
 
-### 各层核心定位
-1.  **L1 端云协同层**：全终端记忆一致性保障，支持离线运行、增量同步、标准导入导出
-2.  **L2 物理存储层**：全介质自适应底座，MTL层屏蔽硬件差异，WAL机制保障数据零丢失
-3.  **L3 算力与安全层**：可插拔算力调度+三级纵深安全防御，兼顾成本与可信
-4.  **L4 核心业务层**：系统灵魂，三馆闭环知识生产流水线，实现知识的沉淀与迭代
-5.  **L5 运行时调度层**：任务执行中间层，隔离临时数据与核心资产，保障运行效率
-6.  **L6 智能体接入层**：Hermes原生优先，兼顾通用生态，分级交互平衡减负与可控
-7.  **L7 认知涌现层**：远期演进能力，方案基因重组与约束驱动生成，实现知识创造性增长
+### Core role of each layer
+1.  **L1 Edge-Cloud Collaboration Layer**: guarantees memory consistency across all devices, supports offline operation, incremental sync, standard import/export
+2.  **L2 Physical Storage Layer**: a fully media-adaptive foundation; the MTL layer hides hardware differences, and WAL guarantees zero data loss
+3.  **L3 Compute and Security Layer**: pluggable compute scheduling plus three-tier defense-in-depth security, balancing cost and trustworthiness
+4.  **L4 Core Business Layer**: the soul of the system — the three-hall closed-loop knowledge production pipeline, driving knowledge accumulation and iteration
+5.  **L5 Runtime Scheduling Layer**: the task-execution middle layer, isolating transient data from core assets to protect runtime efficiency
+6.  **L6 Agent Access Layer**: Hermes-native first, while supporting the general ecosystem; tiered interaction balances reduced overhead with controllability
+7.  **L7 Cognitive Emergence Layer**: a long-term capability — solution gene recombination and constraint-driven generation, enabling creative growth of knowledge
 
 ---
 
-## 第3章 核心业务体系：三馆闭环知识生产流水线
-三馆是Mnemosyne区别于所有RAG插件的核心标志，构建了工业级知识生产流水线，实现从原始素材到标准化知识资产的全链路自动化流转。
+## Chapter 3: Core business system — the three-hall closed-loop knowledge production pipeline
+The three halls are what sets Mnemosyne apart from every RAG plugin — an industrial-grade knowledge production pipeline that fully automates the flow from raw material to standardized knowledge assets.
 
 ```mermaid
 flowchart TD
-    Input[原始输入<br>对话/工具调用/日志/素材] --> Gate0[入馆闸机<br>规则过滤 + 结构化提取]
-    Gate0 --> Research[研究馆<br>素材加工 · 方案推演 · 知识提炼]
-    Research --> Gate1[方案闸机<br>质量校验 + 风险排查 + 交叉验证]
-    Gate1 --> Engineering[工程馆<br>沙箱验证 · 执行落地 · 踩坑记录]
-    Engineering --> Gate2[验收闸机<br>AI自检 + 结果复核]
-    Gate2 --> Archive[档案馆<br>正式归档 · 版本生成 · 永久沉淀]
-    Archive --> Reuse[知识复用 · 反哺全流程]
+    Input[Raw input<br>conversation/tool calls/logs/material] --> Gate0[Intake gate<br>rule filtering + structured extraction]
+    Gate0 --> Research[Research Hall<br>material processing · plan derivation · knowledge distillation]
+    Research --> Gate1[Proposal gate<br>quality check + risk screening + cross-validation]
+    Gate1 --> Engineering[Engineering Hall<br>sandbox verification · execution · lessons-learned log]
+    Engineering --> Gate2[Acceptance gate<br>AI self-check + result review]
+    Gate2 --> Archive[Archive Hall<br>formal archival · version generation · permanent retention]
+    Archive --> Reuse[Knowledge reuse · feeds back into the whole pipeline]
 
-    Engineering -->|执行报错/失败| Research
-    Gate1 -->|校验不通过| Research
-    Gate2 -->|验收不通过| Research
+    Engineering -->|execution error/failure| Research
+    Gate1 -->|validation failed| Research
+    Gate2 -->|acceptance failed| Research
 ```
 
-### 3.1 档案馆：确定性事实底库
-系统唯一真值来源，非经完整验收不得入库，入库即保真、可溯源、可版本化。
-- **五级记忆蒸馏树**：碎片记忆→会话记忆→每日记忆→体系化知识→元规则库，逐级蒸馏，底层原始数据永久留存
-- **六大馆藏分区**：技能库、项目档案库、事实知识库、智能体画像库、踩坑知识库、原始素材库
-- **全生命周期版本管理**：语义化版本号，支持版本对比、一键回滚、变更溯源
+### 3.1 Archive Hall: deterministic fact store
+The system's single source of truth — nothing enters without full acceptance; once in, it's faithful, traceable, and versioned.
+- **Five-tier memory distillation tree**: fragment memory → session memory → daily memory → systematized knowledge → meta-rule base, distilled tier by tier, with the underlying raw data retained permanently
+- **Six collection partitions**: skill library, project archive library, factual knowledge library, agent profile library, lessons-learned library, raw material library
+- **Full-lifecycle version management**: semantic version numbers, supporting version comparison, one-click rollback, and change tracing
 
-### 3.2 研究馆：知识推演与方案设计
-知识加工车间，所有产出均为待验证中间产物，不直接进入主库。
-- 多源素材整合、结构化知识提炼、方案生成与推演、交叉验证机制、画像状态校验
+### 3.2 Research Hall: knowledge derivation and plan design
+The knowledge-processing workshop — every output here is an unverified intermediate product, never written directly to the main store.
+- Multi-source material integration, structured knowledge distillation, plan generation and derivation, cross-validation mechanisms, profile-state checking
 
-### 3.3 工程馆：模拟验证与落地执行
-知识验证试验场，全程隔离、全程留痕、不验证不入库。
-- 项目级隔离沙箱、分步执行全链路留痕、问题回流迭代机制、标准化验收体系
+### 3.3 Engineering Hall: simulated verification and execution
+The knowledge-verification proving ground — fully isolated, fully logged, nothing enters without verification.
+- Project-level isolated sandboxes, full-chain logging of step-by-step execution, a feedback-and-iteration mechanism for problems, a standardized acceptance system
 
-### 3.4 三级门闸校验机制
-三道刚性闸门保障知识质量：入馆闸过滤无效信息，方案闸校验方案可行性，归档闸验证最终成果。
+### 3.4 Three-gate verification mechanism
+Three rigid gates guarantee knowledge quality: the intake gate filters invalid information, the proposal gate validates plan feasibility, and the archival gate verifies final outcomes.
 
 ---
 
-## 第4章 核心技术引擎
-### 4.1 跨介质自适应存储引擎
-#### 4.1.1 MTL记忆转换层
-采用「逻辑记忆地址（LMA）→ 物理记忆地址（PMA）」二级映射，上层业务仅与永久不变的逻辑地址交互，底层硬件变化完全透明。TLB快表常驻内存，高频访问延迟<0.1ms。
+## Chapter 4: Core technology engines
+### 4.1 Cross-media adaptive storage engine
+#### 4.1.1 MTL memory translation layer
+Uses a two-level mapping of "Logical Memory Address (LMA) → Physical Memory Address (PMA)." Upper-layer business only ever interacts with the permanent, unchanging logical address, while underlying hardware changes stay completely transparent. A TLB-style lookup table is kept resident in memory, giving <0.1ms latency on frequent access.
 
-#### 4.1.2 全场景硬件自适应
-系统启动自动探测存储介质，匹配最优分层策略，无任何硬性硬件依赖。
-- **标准混合模式（SSD+HDD）**：四级完整分层，性能与成本最优平衡
-- **纯SSD高性能模式**：全量数据SSD存储，统一2048维高精度向量，极致性能
-- **纯HDD低门槛模式**：大内存缓存兜底+ZVEC DiskANN磁盘索引，90%查询体验与SSD无感知差异
-- **NAS/对象存储扩容模式**：远端作为归档层，本地保留元数据与索引，无限容量扩容
+#### 4.1.2 Full-scenario hardware adaptation
+On startup the system automatically probes the storage media and matches the optimal tiering strategy, with no hard hardware dependency.
+- **Standard hybrid mode (SSD+HDD)**: full four-tier hierarchy, the optimal balance of performance and cost
+- **Pure-SSD high-performance mode**: all data on SSD, unified 2048-dim high-precision vectors, maximum performance
+- **Pure-HDD low-barrier mode**: large memory cache as a backstop + ZVEC DiskANN disk index, 90% of queries are indistinguishable in feel from SSD
+- **NAS/object-storage expansion mode**: the remote tier serves as archival storage, with metadata and indexes kept locally, giving unlimited capacity expansion
 
-#### 4.1.3 热度评分算法
+#### 4.1.3 Heat-scoring algorithm
 $$
 S_t = S_{t-1} \times \alpha^{\Delta t} + \sum_{i=1}^{n} w_i \times f_i
 $$
-综合指数衰减与访问加权，每日自动计算，驱动冷热数据平滑迁移。
+Combines exponential decay with access weighting, recomputed daily, driving smooth migration between hot and cold data.
 
-#### 4.1.4 硬件变更平滑迁移
-支持热添加识别、后台异步迁移、速率限流控制、故障回滚，硬件变更业务无感知。
+#### 4.1.4 Smooth migration on hardware change
+Supports hot-add detection, background asynchronous migration, rate-limited throttling, and failure rollback — hardware changes are invisible to the business layer.
 
-### 4.2 智能算力调度引擎
-#### 4.2.1 模型分级梯队
-豆包模型矩阵为基础，支持扩展任意厂商模型，按能力与成本形成完整梯队：基础工具层、轻量算力层、主力推理层、垂直算力层、生成工具层。
+### 4.2 Intelligent compute scheduling engine
+#### 4.2.1 Tiered model ladder
+Built on the Doubao model matrix as a baseline, extensible to any vendor's models, forming a complete capability/cost ladder: foundational tool tier, lightweight compute tier, primary reasoning tier, vertical compute tier, generation tool tier.
 
-#### 4.2.2 自动升降级算法
-最低成本优先+置信度兜底，任务优先使用低成本模型，不达标自动升级，在保障效果的前提下最大化降低成本。
+#### 4.2.2 Automatic upgrade/downgrade algorithm
+Lowest-cost-first with a confidence backstop: tasks default to the lowest-cost model and are automatically escalated when quality falls short — maximizing cost reduction while guaranteeing results.
 
-#### 4.2.3 双层语义缓存
-向量缓存+蒸馏结果缓存，相同内容直接命中，减少60%以上重复算力消耗。
+#### 4.2.3 Two-tier semantic cache
+Vector cache + distillation-result cache — identical content hits the cache directly, cutting redundant compute spend by over 60%.
 
-### 4.3 三重召回检索引擎
-融合向量语义召回、全文精确召回、轻量知识关联召回三种能力，兼顾精度、广度与关联性。
+### 4.3 Triple-recall retrieval engine
+Combines vector semantic recall, full-text exact recall, and lightweight knowledge-association recall, balancing precision, breadth, and relevance.
 
-#### 混合排序加权公式
+#### Hybrid ranking weighting formula
 $$
 Score_{final} = w_1 \cdot Sim_{vector} + w_2 \cdot Q_{quality} + w_3 \cdot S_{hot} + w_4 \cdot T_{timeliness}
 $$
 
-#### 三层分级返回机制
-L0核心层（默认，最省token）→ L1摘要层（中等复杂度）→ L2全文层（深度检索），按需加载，平衡效果与token成本。
+#### Three-tier graduated return mechanism
+L0 core tier (default, most token-efficient) → L1 summary tier (moderate complexity) → L2 full-text tier (deep retrieval), loaded on demand to balance effectiveness against token cost.
 
-### 4.4 持久化与故障恢复体系
-#### WAL预写日志机制
-所有写入严格遵循「先写日志、再写数据」，fsync强制落盘，断电重启自动重放恢复。
+### 4.4 Persistence and failure-recovery system
+#### WAL write-ahead log mechanism
+Every write strictly follows "log first, then data," with fsync forcing data to disk; on power loss and restart, the log is automatically replayed to recover.
 
-#### 故障恢复SLA
-- 已确认写入数据丢失率：0
-- 服务恢复时间（RTO）：< 30秒
-- 数据恢复点目标（RPO）：< 1秒
+#### Failure-recovery SLA
+- Confirmed-write data loss rate: 0
+- Service recovery time (RTO): < 30 seconds
+- Recovery point objective (RPO): < 1 second
 
-#### 分级故障降级
-单介质、单模型、单模块故障均有对应降级策略，核心归档与检索功能永不中断。
+#### Tiered failure degradation
+Single-media, single-model, and single-module failures each have a corresponding degradation strategy — core archival and retrieval functions are never interrupted.
 
 ---
 
-## 第5章 高级架构与治理体系
-### 5.1 集群化演进路线
-采用「共享存储优先，分步走向分布式」的务实两步走策略，兼顾当下落地效率与长期扩展上限。
-1.  **阶段一：共享存储+中心化元数据**
-    无状态计算节点+共享存储+高可用元数据主备，适配百级实例规模，与单机版100%兼容
-2.  **阶段二：分布式分片+Raft共识**
-    元数据Raft集群+数据分片存储，适配万级以上实例规模，消除单点瓶颈
-3.  **无状态全局调度**：所有任务状态持久化到元数据集群，抢占式调度、断点续跑，调度层无单点故障
+## Chapter 5: Advanced architecture and governance system
+### 5.1 Clustering evolution path
+Adopts a pragmatic two-step strategy of "shared storage first, then step toward distribution," balancing near-term delivery efficiency against long-term scaling headroom.
+1.  **Stage 1: shared storage + centralized metadata**
+    Stateless compute nodes + shared storage + highly-available primary/standby metadata, suited to hundreds of instances, 100% compatible with the single-machine edition
+2.  **Stage 2: distributed sharding + Raft consensus**
+    A Raft metadata cluster + sharded data storage, suited to tens of thousands of instances and beyond, eliminating single points of bottleneck
+3.  **Stateless global scheduling**: all task state is persisted to the metadata cluster, enabling preemptive scheduling and resumable execution, with no single point of failure in the scheduling layer
 
-### 5.2 三级纵深安全防御体系
-从入口、过程到长期，全链路防御知识毒化与污染。
-1.  **第一纵深：入馆对抗过滤**：事实一致性校验、反Prompt注入检测、可疑内容人工审核
-2.  **第二纵深：异构竞争式审计**：逆向挑战生成→异构模型重推理→并行竞争期→数据优胜劣汰，避免同模型认知偏差
-3.  **第三纵深：热度纠偏与静默审计**：热度纠偏公式防止高频错误权重失控，定期随机抽检高热度知识，主动排查失效与错误
+### 5.2 Three-tier defense-in-depth security system
+Defends against knowledge poisoning and contamination end to end — at the entry point, during processing, and over the long term.
+1.  **First layer: adversarial intake filtering**: factual-consistency checks, anti-prompt-injection detection, manual review of suspicious content
+2.  **Second layer: heterogeneous adversarial audit**: reverse-challenge generation → re-reasoning by a heterogeneous model → a parallel competition window → survival-of-the-fittest selection, avoiding bias from relying on a single model
+3.  **Third layer: heat-bias correction and silent audit**: a heat-correction formula prevents runaway weighting of high-frequency errors; periodic random sampling of high-heat knowledge proactively roots out stale or incorrect entries
 
-### 5.3 社区众包验证网络
-依托用户生态构建天然的异构验证集群：
-- 匿名回传调用结果，仅回传知识ID、执行结果、模型档位，不涉及任何隐私
-- 多模型交叉验证，调用验证越充分，知识置信度越高
-- 用户量越大、模型越多样，知识库可信度越高，形成正向生态飞轮
+### 5.3 Community crowd-verification network
+Builds a naturally heterogeneous verification cluster on top of the user ecosystem:
+- Anonymously reports call results — only knowledge ID, execution result, and model tier are reported, with no private information involved
+- Cross-validation across multiple models: the more thoroughly a piece of knowledge is exercised, the higher its confidence climbs
+- The larger the user base and the more diverse the models, the more trustworthy the knowledge base becomes — forming a positive ecosystem flywheel
 
-### 5.4 全链路可观测与审计
-#### 知识演化DAG
-双粒度分层懒加载设计，概览层秒开展示主干链路，详情层按需下钻到单条审计日志，完整呈现知识从原始素材到体系化技能的全生命周期。
+### 5.4 Full-chain observability and audit
+#### Knowledge evolution DAG
+A dual-granularity, layered lazy-loading design: the overview layer renders the main chain instantly, and the detail layer drills down on demand to a single audit log entry — presenting the full lifecycle of knowledge from raw material to systematized skill.
 
-#### 召回结果可解释性
-每次召回同步返回各维度得分与来源说明，快速定位召回异常，降低调试成本。
+#### Explainable recall results
+Every recall returns the per-dimension scores and source explanation alongside the results, making it quick to spot anomalies and lowering debugging cost.
 
-### 5.5 群体知识生态治理
-#### 多维价值评估模型
+### 5.5 Collective knowledge ecosystem governance
+#### Multi-dimensional value evaluation model
 $$
 Value_{public} = w_1 \cdot F_{reuse} + w_2 \cdot I_{impact} + w_3 \cdot E_{expert} + w_4 \cdot T_{timeliness}
 $$
-跳出频率主义陷阱，综合复用频率、影响程度、专家背书、时效性评估知识价值。
+Escapes the frequentist trap by evaluating knowledge value on a combination of reuse frequency, impact magnitude, expert endorsement, and timeliness.
 
-#### 影响程度智能量化
-从情绪极性、解决耗时、涟漪效应、故障等级四个弱信号维度，自动化计算影响因子，无需人工标记。
+#### Intelligent impact quantification
+Automatically computes an impact factor from four weak-signal dimensions — emotional polarity, time-to-resolution, ripple effect, and failure severity — with no manual tagging required.
 
-#### 知识灭绝与化石机制
-依赖环境失效的知识标记为「已灭绝」，移入知识化石库，作为特殊踩坑记录永久留存，既避免误导用户，又保留演化完整链路。
+#### Knowledge extinction and fossilization mechanism
+Knowledge that depends on an environment that no longer exists is marked "extinct" and moved into a knowledge-fossil store, permanently retained as a special lessons-learned record — avoiding misleading users while preserving the full evolution chain.
 
-#### 贡献者声誉体系
-贡献通过率决定后续权重，良币驱逐劣币。
+#### Contributor reputation system
+A contributor's acceptance rate determines their future weighting — good currency drives out bad.
 
-### 5.6 合规与保真平衡
-#### 哈希净化机制
-合规删除不做物理删除，用SHA-256哈希单向替代原始内容，保证内容不可读，同时保留元数据、关联关系与演化链路，满足被遗忘权的同时，不破坏知识体系的结构完整性。
+### 5.6 Balancing compliance and fidelity
+#### Hash-purification mechanism
+Compliance-driven deletion never physically removes data; instead, a SHA-256 hash one-way replaces the original content, making it unreadable while preserving metadata, relationships, and the evolution chain — satisfying the right to be forgotten without breaking the structural integrity of the knowledge system.
 
-#### 化石节点设计
-净化后的节点在DAG中显示为灰色化石状，不可查看内容，但完整保留拓扑位置与链路连续性，守住「原始保真」的哲学内核。
+#### Fossil-node design
+A purified node renders in the DAG as a grey "fossil" — its content can't be viewed, but its topological position and chain continuity are fully preserved, upholding the "raw fidelity" philosophy at the core of the system.
 
 ---
 
-## 第6章 Hermes 智能体原生深度集成
-### 6.1 核心价值
-一次性解决Hermes四大核心痛点：重启失忆终结、上下文膨胀治理、知识自动沉淀、多实例全局一致，让Hermes从单次会话工具升级为有长期记忆的常驻智能体。
+## Chapter 6: Native deep integration with the Hermes agent
+### 6.1 Core value
+Solves Hermes's four core pain points in one stroke: ending restart-amnesia, governing context bloat, automatic knowledge accumulation, and global consistency across multiple instances — upgrading Hermes from a single-session tool into a resident agent with long-term memory.
 
-### 6.2 工作流级深度映射
-Hermes全生命周期与三馆流程一一对应：会话初始化加载画像记忆、任务规划召回历史方案、工具调用全程留痕、成功沉淀技能、失败归入踩坑库、会话结束自动整理。
+### 6.2 Workflow-level deep mapping
+Hermes's full lifecycle maps one-to-one onto the three-hall process: session start loads profile memory, task planning recalls historical plans, tool calls are logged end to end, successes settle into skills, failures land in the lessons-learned library, and session end triggers automatic cleanup.
 
-### 6.3 生态零成本兼容
-全量MCP工具生态无需修改即可获得记忆能力，Mnemosyne自身也可封装为标准MCP工具接入。所有第三方插件、前端应用均无侵入适配。
+### 6.3 Zero-cost ecosystem compatibility
+The entire MCP tool ecosystem gains memory capability without modification, and Mnemosyne itself can be wrapped as a standard MCP tool for integration. All third-party plugins and front-end applications require no invasive adaptation.
 
-### 6.4 官方原生SDK
-零侵入替换Hermes原生记忆基类，1~2天即可完成对接联调，开发者无需了解内部架构即可使用。
+### 6.4 Official native SDK
+A zero-invasion replacement for Hermes's native memory base class — integration and joint debugging take 1–2 days, and developers don't need to understand the internal architecture to use it.
 
-### 6.5 集成收益量化
-| 指标 | Hermes原生 | Hermes+Mnemosyne | 提升幅度 |
+### 6.5 Quantified integration benefits
+| Metric | Hermes native | Hermes + Mnemosyne | Improvement |
 |---|---|---|---|
-| 30轮对话token消耗 | 16800 | 2250 | 节省86.6% |
-| 长链路任务准确率 | 63.3% | 89.3% | 提升41.1% |
-| 跨会话记忆留存 | 0 | 100% | 质变 |
-| 30天工具复用率 | 0 | 41%+ | 持续提升 |
+| Token consumption over 30 rounds | 16,800 | 2,250 | 86.6% savings |
+| Long-chain task accuracy | 63.3% | 89.3% | +41.1% |
+| Cross-session memory retention | 0 | 100% | qualitative leap |
+| 30-day tool reuse rate | 0 | 41%+ | continuously improving |
 
 ---
 
-## 第7章 认知能力演进总览
-Mnemosyne从记忆系统走向认知系统，共分为五个清晰的阶段，每一步都以前一阶段为基础，平滑升级、无架构断层。
+## Chapter 7: Overview of cognitive capability evolution
+Mnemosyne evolves from a memory system into a cognitive system across five clear stages, each built on the one before it — smooth upgrades, no architectural breaks.
 
-| 演进阶段 | 核心能力 | 核心机制 | 认知层级 |
+| Stage | Core capability | Core mechanism | Cognitive tier |
 |---|---|---|---|
-| 阶段一：能「存」 | 永久记忆、可检索不遗忘 | 五级蒸馏、冷热分层 | 存储级 |
-| 阶段二：能「管」 | 知识提纯、去芜存菁 | 三馆闭环、三级门闸 | 治理级 |
-| 阶段三：能「验」 | 可信可靠、自我修正 | 异构审计、社区众包验证 | 验证级 |
-| 阶段四：能「配」 | 场景匹配、精准适用 | 解决方案谱系、场景化适配 | 适配级 |
-| 阶段五：能「创」 | 组合创新、知识生成 | 基因重组、涌现式生成 | 涌现级 |
+| Stage 1: can "store" | Permanent, retrievable, never-forgotten memory | Five-tier distillation, hot/cold tiering | Storage tier |
+| Stage 2: can "govern" | Knowledge refinement, separating wheat from chaff | Three-hall closed loop, three-tier gating | Governance tier |
+| Stage 3: can "verify" | Trustworthy, reliable, self-correcting | Heterogeneous audit, community crowd-verification | Verification tier |
+| Stage 4: can "match" | Scenario matching, precise applicability | Solution lineage, scenario-based adaptation | Adaptation tier |
+| Stage 5: can "create" | Combinatorial innovation, knowledge generation | Gene recombination, emergent generation | Emergence tier |
 
-### 7.1 阶段四：解决方案谱系体系
-同一条知识维护多维度解决方案谱系，标注设计取向、适用环境、验证程度、风险等级，根据任务上下文动态匹配最优方案。系统从「知道什么是对的」升级为「知道什么场景下用什么最合适」。
+### 7.1 Stage 4: solution lineage system
+A single piece of knowledge maintains a multi-dimensional lineage of solutions, tagged with design orientation, applicable environment, verification level, and risk level, dynamically matched to the optimal solution based on task context. The system upgrades from "knowing what's right" to "knowing what's the best fit for which scenario."
 
-### 7.2 阶段五：基因重组与涌现生成
-远期演进特性。方案拆解为四层可复用基因模块，面对全新复杂约束场景时，通过约束拆解、模块匹配、兼容性校验、沙箱验证，自动组合生成全新候选方案，实现知识的创造性涌现。整个过程完全复用现有三馆流水线与社区生态，是系统积累到临界规模后的自然产物。
+### 7.2 Stage 5: gene recombination and emergent generation
+A long-term evolution feature. Solutions are decomposed into four layers of reusable gene modules; when facing a novel, complex, constrained scenario, the system automatically combines and generates brand-new candidate solutions through constraint decomposition, module matching, compatibility checking, and sandbox verification — achieving creative emergence of knowledge. The whole process fully reuses the existing three-hall pipeline and community ecosystem, and is the natural product of the system accumulating past a critical mass.
 
-### 7.3 分级自主决策交互
-四级决策分级，平衡减负与可控：
-- **L0 全自动托管**：默认模式，仅返回最优方案，最大程度为推理引擎减负
-- **L1 轻量提示**：最优方案+一句话备选提示
-- **L2 多方案推荐**：Top3方案+优劣对比
-- **支持场景自动切换与动态降级，适配不同信任阶段与风险等级**
-
----
-
-## 第8章 端云协同与终端体系
-- 终端记忆生命周期：启动加载快照→联网增量同步→运行本地优先异步同步→关机持久化+最终同步
-- 标准`.mnemosyne`快照格式：ZIP压缩+SHA256校验，包含完整记忆数据
-- 基于版本号的增量同步算法：同步流量仅为全量的1%~5%，支持断点续传
-- 终端侧同样支持存储自适应，适配个人设备的不同硬件配置
+### 7.3 Tiered autonomous-decision interaction
+Four tiers of decision-making, balancing reduced overhead with controllability:
+- **L0 fully automatic handling**: the default mode, returns only the optimal plan, minimizing overhead for the reasoning engine
+- **L1 lightweight hinting**: optimal plan + a one-line alternative hint
+- **L2 multi-plan recommendation**: top-3 plans with pros/cons comparison
+- **Supports automatic scenario switching and dynamic downgrade, adapting to different trust stages and risk levels**
 
 ---
 
-## 第9章 最小闭环落地路线图
-### 9.1 核心目标
-以Hermes+单机纯HDD环境为底座，打通「工具调用→失败沉淀→下次预警」完整链路，用最小工程代价验证核心价值，产出可量化、可演示的真实效果。
-
-### 9.2 验证链路
-运维工具调用踩坑闭环：执行失败→工程馆记录→研究馆分析→归入踩坑库→下次调用前置预警→自动规避。
-
-### 9.3 分阶段执行
-1.  **Day1-2 环境搭建**：纯HDD环境部署+Hermes SDK对接
-2.  **Day3-5 链路打通**：跑通自动归档、失败沉淀、前置预警全流程
-3.  **Day6-7 对比测试**：执行10类场景对照测试，产出量化数据
-4.  **Day8-10 优化打磨**：优化算法权重，打磨标杆场景体验
-
-### 9.4 验证指标
-#### 技术量化指标
-- 同类错误二次排障时间缩短≥70%
-- 重复踩坑率从100%降至≤10%
-- 纯HDD环境90%查询延迟<10ms
-- 知识沉淀准确率≥85%
-
-#### 体验标杆：秒级避坑场景
-> 第一次遇到pgvector索引创建失败报错，12轮交互、8分钟排查解决；7天后再次触发相同报错，Hermes直接召回历史方案，1轮交互、10秒内完成修复。智能体表现出真实的「经验感」。
+## Chapter 8: Edge-cloud collaboration and device system
+- Device memory lifecycle: startup loads snapshot → incremental sync once online → local-first async sync during operation → persist on shutdown + final sync
+- Standard `.mnemosyne` snapshot format: ZIP compression + SHA-256 checksum, containing the complete memory dataset
+- Version-number-based incremental sync algorithm: sync traffic is only 1%–5% of a full sync, with resumable transfer support
+- The device side also supports adaptive storage, matching the varying hardware configurations of personal devices
 
 ---
 
-## 第10章 实测性能基准
-### 10.1 长对话token消耗
-| 对话轮次 | Hermes 原生记忆（token） | Hermes + Mnemosyne（token） | 节省比例 |
+## Chapter 9: Minimum-viable closed-loop delivery roadmap
+### 9.1 Core goal
+Using Hermes + a single pure-HDD machine as the foundation, connect the full chain of "tool call → failure capture → next-time warning" end to end, validating core value at minimum engineering cost and producing quantifiable, demonstrable real-world results.
+
+### 9.2 Validation chain
+Ops-tool-call lessons-learned loop: execution failure → logged in Engineering Hall → analyzed in Research Hall → filed into the lessons-learned library → pre-emptive warning before the next call → automatic avoidance.
+
+### 9.3 Phased execution
+1.  **Day 1–2, environment setup**: deploy the pure-HDD environment + integrate the Hermes SDK
+2.  **Day 3–5, connect the chain**: get automatic archival, failure capture, and pre-emptive warning running end to end
+3.  **Day 6–7, comparative testing**: run controlled tests across 10 scenario types, produce quantified data
+4.  **Day 8–10, tuning**: tune algorithm weights, polish the flagship-scenario experience
+
+### 9.4 Validation metrics
+#### Technical quantified metrics
+- Time to re-diagnose the same class of error reduced ≥70%
+- Repeat-pitfall rate reduced from 100% to ≤10%
+- 90% query latency <10ms in a pure-HDD environment
+- Knowledge-retention accuracy ≥85%
+
+#### Flagship experience: second-scale pitfall avoidance
+> The first time a pgvector index-creation failure was hit, it took 12 rounds of interaction and 8 minutes to diagnose and fix. Seven days later, the same error recurred — Hermes recalled the historical solution directly, resolving it in 1 round of interaction in under 10 seconds. The agent showed a genuine sense of "experience."
+
+---
+
+## Chapter 10: Measured performance benchmarks
+### 10.1 Token consumption in long conversations
+| Conversation round | Hermes native memory (tokens) | Hermes + Mnemosyne (tokens) | Savings |
 |---|---|---|---|
-| 第5轮 | 2,800 | 1,600 | 42.9% |
-| 第10轮 | 5,600 | 1,850 | 67.0% |
-| 第20轮 | 11,200 | 2,100 | 81.3% |
-| 第30轮 | 16,800 | 2,250 | 86.6% |
+| Round 5 | 2,800 | 1,600 | 42.9% |
+| Round 10 | 5,600 | 1,850 | 67.0% |
+| Round 20 | 11,200 | 2,100 | 81.3% |
+| Round 30 | 16,800 | 2,250 | 86.6% |
 
-30轮对话平均节省token约70%，对话越长优势越显著。
+Average token savings of about 70% over 30 rounds — the advantage grows the longer the conversation runs.
 
-### 10.2 不同存储配置性能
-| 硬件配置 | 日常检索90分位延迟 | 冷数据检索延迟 | 万条记忆存储占用 |
+### 10.2 Performance across storage configurations
+| Hardware config | Daily-retrieval P90 latency | Cold-data retrieval latency | Storage footprint at 10k memories |
 |---|---|---|---|
-| SSD+HDD标准 | 2~5ms | 20~30ms | SSD: ~1.5GB / HDD: ~4GB |
-| 纯SSD | 1~3ms | 1~3ms | ~5GB |
-| 纯HDD（缓存命中） | 2~8ms | 30~60ms | ~5GB |
-| SSD+NAS | 2~5ms | 100~500ms | SSD: ~1GB / NAS: 无上限 |
+| SSD+HDD standard | 2–5ms | 20–30ms | SSD: ~1.5GB / HDD: ~4GB |
+| Pure SSD | 1–3ms | 1–3ms | ~5GB |
+| Pure HDD (cache hit) | 2–8ms | 30–60ms | ~5GB |
+| SSD+NAS | 2–5ms | 100–500ms | SSD: ~1GB / NAS: no upper limit |
 
-### 10.3 记忆治理效果
-| 使用时长 | 普通外挂RAG 召回准确率 | Mnemosyne 召回准确率 |
+### 10.3 Effect of memory governance
+| Time in use | Plain bolted-on RAG recall accuracy | Mnemosyne recall accuracy |
 |---|---|---|
-| 初始 | 78% | 78% |
-| 7天 | 74% | 82% |
-| 15天 | 69% | 86% |
-| 30天 | 61% | 89% |
-| 衰减幅度 | -21.8% | +14.1% |
+| Initial | 78% | 78% |
+| 7 days | 74% | 82% |
+| 15 days | 69% | 86% |
+| 30 days | 61% | 89% |
+| Change | -21.8% | +14.1% |
 
-使用30天后，普通RAG精度线性下降，Mnemosyne精度持续提升，从根源解决知识库越用越乱的问题。
+After 30 days of use, plain RAG accuracy declines linearly while Mnemosyne's keeps improving — solving the "the more you use it, the messier it gets" problem at the root.
 
-### 10.4 资源占用
-单用户万条记忆规模下，平均CPU占用5%~10%，内存占用300~500MB，普通轻量云服务器即可稳定运行。
-
----
-
-## 第11章 应用场景与商业价值
-### 11.1 核心应用场景
-#### 场景一：开发者专属编码助手
-- 核心工作流：代码片段、解决方案、报错排查过程自动归档；同类报错自动召回历史方案；跨天跨项目自动接续开发背景；优质方案自动沉淀为个人代码库
-- 量化收益：重复查档时间减少60%，同类报错排障时间减少70%，常用场景编码效率提升40%以上
-
-#### 场景二：运维自动化智能体
-- 核心工作流：运维操作全留痕可追溯；执行前自动预警历史踩坑；故障自动匹配历史解决方案；运维经验沉淀为团队技能库，新人零冷启动
-- 量化收益：常见故障处理效率提升80%，重复踩坑率降低90%以上，新人上手周期缩短50%
-
-#### 场景三：科研与文献研究助理
-- 核心工作流：文献自动提取要点结构化归档；研究思路跨会话连续沉淀；自动发现跨界知识关联；研究过程完整留痕可溯源
-- 量化收益：文献检索效率提升50%，思路中断恢复时间减少80%，研究成果复盘极其便捷
-
-#### 场景四：边缘/低配设备智能体
-- 核心价值：纯HDD低配设备也可运行完整的永久记忆智能体，无需高配置硬件
-- 适用场景：老旧服务器、边缘网关、低成本嵌入式设备、离线专用智能体
-
-### 11.2 商业模式
-1.  **个人订阅制**：基础容量免费，超额存储、高级功能按月订阅
-2.  **企业私有化**：企业级私有部署、定制开发、技术支持服务
-3.  **开发者API**：按调用量计费的API服务，供第三方智能体与应用接入
-4.  **行业解决方案**：面向特定行业的定制化智能体记忆中台方案
-
-### 11.3 产业价值
-- 对智能体产业：提供标准化的记忆基建，降低全行业重复开发成本，推动智能体从「玩具」走向「生产力工具」
-- 对用户：拥有真正属于自己的永久知识资产，不绑定任何应用、任何模型、任何厂商
-- 对生态：构建智能体记忆标准协议，打通不同智能体间的知识壁垒，形成繁荣的智能体生态
+### 10.4 Resource usage
+At a scale of 10,000 memories per user, average CPU usage is 5%–10% and memory usage is 300–500MB — runs stably on an ordinary lightweight cloud server.
 
 ---
 
-## 第12章 工程部署与硬件配置指南
-本章为工程落地实操指南，覆盖从个人单机到企业集群的全场景部署方案、硬件选型标准与配置最佳实践，可直接作为运维部署手册使用。
+## Chapter 11: Use cases and business value
+### 11.1 Core use cases
+#### Scenario 1: a developer's personal coding assistant
+- Core workflow: code snippets, solutions, and debugging processes are automatically archived; the same class of error automatically recalls the historical solution; development context carries over automatically across days and projects; good solutions are automatically distilled into a personal code library
+- Quantified benefit: time spent re-finding past notes cut 60%, time to diagnose the same error class cut 70%, coding efficiency on common tasks up 40%+
 
-### 12.1 部署模式总览
-根据部署规模与可用性要求，分为四种部署模式，用户可根据自身场景灵活选择：
+#### Scenario 2: an ops-automation agent
+- Core workflow: every ops action is logged and traceable; historical pitfalls trigger an automatic warning before execution; failures automatically match historical solutions; ops experience accumulates into a team skill library, giving new hires a zero cold-start
+- Quantified benefit: common-failure handling efficiency up 80%, repeat-pitfall rate down 90%+, new-hire ramp-up time cut 50%
 
-| 部署模式 | 适用场景 | 节点规模 | 可用性等级 |
+#### Scenario 3: a research and literature assistant
+- Core workflow: key points are automatically extracted and structured from literature; research trains of thought persist continuously across sessions; cross-disciplinary knowledge connections are discovered automatically; the research process is fully logged and traceable
+- Quantified benefit: literature-search efficiency up 50%, time to recover a broken train of thought down 80%, reviewing research outcomes becomes effortless
+
+#### Scenario 4: an edge/low-spec-device agent
+- Core value: a fully-featured permanent-memory agent can run even on a low-spec, pure-HDD device — no high-end hardware required
+- Applicable scenarios: aging servers, edge gateways, low-cost embedded devices, offline-dedicated agents
+
+### 11.2 Business model
+1.  **Personal subscription**: a free base tier, with excess storage and advanced features billed monthly
+2.  **Enterprise private deployment**: enterprise-grade private deployment, custom development, and technical support services
+3.  **Developer API**: a pay-per-call API service for third-party agents and applications to integrate against
+4.  **Industry solutions**: customized agent-memory middle-platform solutions for specific industries
+
+### 11.3 Industry value
+- For the agent industry: provides standardized memory infrastructure, lowers industry-wide redundant development cost, and pushes agents from "toy" to "productivity tool"
+- For users: gives them a permanent knowledge asset that's truly their own, tied to no single app, model, or vendor
+- For the ecosystem: builds a standard agent-memory protocol, breaking down knowledge silos between different agents and fostering a thriving agent ecosystem
+
+---
+
+## Chapter 12: Engineering deployment and hardware configuration guide
+This chapter is a hands-on engineering delivery guide, covering deployment plans for every scenario from a personal single machine to an enterprise cluster, hardware-selection standards, and configuration best practices — usable directly as an ops deployment manual.
+
+### 12.1 Deployment mode overview
+Based on deployment scale and availability requirements, there are four deployment modes to choose from:
+
+| Deployment mode | Applicable scenario | Node scale | Availability tier |
 |---|---|---|---|
-| 单机极简版 | 个人使用、测试验证 | 单节点 | 基础可用 |
-| 单机生产版 | 小团队、轻量生产 | 单节点+备份 | 较高可用 |
-| 共享存储集群版 | 中大型团队、企业部门 | 3~10个计算节点+共享存储 | 高可用 |
-| 分布式分片版 | 企业级平台、公共服务 | 10+节点，分布式架构 | 极高可用 |
+| Single-machine minimal | Personal use, testing | Single node | Basic availability |
+| Single-machine production | Small team, light production | Single node + backup | Higher availability |
+| Shared-storage cluster | Mid-to-large team, enterprise department | 3–10 compute nodes + shared storage | High availability |
+| Distributed sharded | Enterprise platform, public service | 10+ nodes, distributed architecture | Very high availability |
 
-### 12.2 单机部署指南
-#### 12.2.1 硬件配置要求
-**最低配置（可运行）**：
-- CPU：2核
-- 内存：2GB
-- 存储：单块HDD，≥10GB可用空间
-- 网络：可选，离线可独立运行
-- 适配场景：个人测试、低配设备、边缘节点
+### 12.2 Single-machine deployment guide
+#### 12.2.1 Hardware requirements
+**Minimum configuration (runnable)**:
+- CPU: 2 cores
+- Memory: 2GB
+- Storage: a single HDD, ≥10GB free space
+- Network: optional, can run independently offline
+- Suited for: personal testing, low-spec devices, edge nodes
 
-**推荐配置（生产级单机）**：
-- CPU：4核及以上
-- 内存：8GB及以上
-- 存储：SSD系统盘≥20GB + HDD数据盘≥100GB
-- 网络：100Mbps及以上
-- 适配场景：个人重度使用、10人以内小团队
+**Recommended configuration (production-grade single machine)**:
+- CPU: 4 cores or more
+- Memory: 8GB or more
+- Storage: SSD system disk ≥20GB + HDD data disk ≥100GB
+- Network: 100Mbps or more
+- Suited for: heavy personal use, teams of up to 10
 
-#### 12.2.2 Docker 一键部署
-推荐使用Docker Compose一键部署，包含所有依赖组件，5分钟即可完成安装。
+#### 12.2.2 One-click Docker deployment
+Docker Compose one-click deployment is recommended — it bundles every dependency and installs in 5 minutes.
 
-**docker-compose.yml 核心配置示例：**
+**Core docker-compose.yml example:**
 ```yaml
 version: '3.8'
 services:
@@ -465,7 +465,7 @@ services:
     ports:
       - "8010:8010"
     environment:
-      - STORAGE_STRATEGY=auto  # 自动探测硬件匹配策略
+      - STORAGE_STRATEGY=auto  # auto-detect hardware and match a strategy
       - DB_PATH=/data/postgres
       - ZVEC_PATH=/data/zvec
       - REDIS_ADDR=redis:6379
@@ -496,111 +496,111 @@ services:
     restart: unless-stopped
 ```
 
-**部署步骤：**
-1.  创建部署目录，编写docker-compose.yml文件
-2.  配置模型API密钥与存储路径
-3.  执行 `docker-compose up -d` 启动服务
-4.  访问 `http://localhost:8010/health` 验证服务状态
-5.  运行初始化向导完成基础配置
+**Deployment steps:**
+1.  Create a deployment directory and write the docker-compose.yml file
+2.  Configure the model API key and storage paths
+3.  Run `docker-compose up -d` to start the services
+4.  Visit `http://localhost:8010/health` to verify service status
+5.  Run the initialization wizard to complete the base configuration
 
-#### 12.2.3 存储策略配置
-系统默认启用自动探测，启动时自动识别硬件并匹配最优策略；也可手动强制指定：
-- `STORAGE_STRATEGY=standard_hybrid`：强制SSD+HDD混合模式
-- `STORAGE_STRATEGY=pure_ssd`：强制纯SSD高性能模式
-- `STORAGE_STRATEGY=pure_hdd`：强制纯HDD缓存优化模式
-- `STORAGE_STRATEGY=nas_archive`：启用NAS归档扩展模式
+#### 12.2.3 Storage strategy configuration
+Auto-detection is enabled by default — on startup the system identifies the hardware and matches the optimal strategy; it can also be forced manually:
+- `STORAGE_STRATEGY=standard_hybrid`: force SSD+HDD hybrid mode
+- `STORAGE_STRATEGY=pure_ssd`: force pure-SSD high-performance mode
+- `STORAGE_STRATEGY=pure_hdd`: force pure-HDD cache-optimized mode
+- `STORAGE_STRATEGY=nas_archive`: enable NAS archival expansion mode
 
-### 12.3 集群部署指南
-#### 12.3.1 共享存储集群模式（企业级推荐）
-适用于50~500人规模的企业团队，兼顾架构简洁性与高可用性。
+### 12.3 Cluster deployment guide
+#### 12.3.1 Shared-storage cluster mode (recommended for enterprises)
+Suited to enterprise teams of 50–500 people, balancing architectural simplicity with high availability.
 
-**架构组成：**
-- 计算层：2~N个无状态Mnemosyne计算节点，前面挂负载均衡
-- 存储层：共享分布式块存储/高性能NAS，承载PostgreSQL数据库与ZVEC向量数据
-- 缓存层：Redis集群，承载缓存与会话状态
-- 元数据：主备高可用数据库，承载调度任务状态
+**Architecture:**
+- Compute layer: 2–N stateless Mnemosyne compute nodes behind a load balancer
+- Storage layer: shared distributed block storage / high-performance NAS, hosting the PostgreSQL database and ZVEC vector data
+- Cache layer: a Redis cluster, hosting cache and session state
+- Metadata: a highly-available primary/standby database, hosting scheduling task state
 
-**核心优势：**
-- 架构简单，运维成本低，与单机版100%兼容
-- 计算节点可水平扩容，支持十万级QPS
-- 数据集中存储，备份与运维便捷
-- 可用性达99.9%，满足企业级生产要求
+**Core advantages:**
+- Simple architecture, low ops cost, 100% compatible with the single-machine edition
+- Compute nodes scale horizontally, supporting hundred-thousand-level QPS
+- Centralized data storage makes backup and ops convenient
+- Reaches 99.9% availability, meeting enterprise production requirements
 
-**硬件配置参考（百用户规模）：**
-| 节点角色 | 数量 | CPU | 内存 | 存储 |
+**Reference hardware configuration (hundred-user scale):**
+| Node role | Count | CPU | Memory | Storage |
 |---|---|---|---|---|
-| 计算节点 | 3台 | 8核 | 16GB | 系统盘SSD 100GB |
-| 数据库主备 | 2台 | 8核 | 32GB | SSD 500GB |
-| Redis集群 | 3台 | 4核 | 16GB | SSD 200GB |
-| 共享存储 | 1套 | - | - | 可用容量≥2TB |
+| Compute node | 3 | 8 cores | 16GB | 100GB SSD system disk |
+| DB primary/standby | 2 | 8 cores | 32GB | 500GB SSD |
+| Redis cluster | 3 | 4 cores | 16GB | 200GB SSD |
+| Shared storage | 1 set | - | - | ≥2TB usable capacity |
 
-#### 12.3.2 分布式分片模式（超大规模）
-适用于万级以上用户的公共服务平台，具备无限水平扩展能力。
+#### 12.3.2 Distributed sharded mode (very large scale)
+Suited to public-service platforms with tens of thousands of users or more, with unlimited horizontal scaling.
 
-**架构组成：**
-- 接入层：负载均衡+API网关
-- 计算层：无状态计算节点集群，按租户分片调度
-- 元数据层：3~5节点Raft共识集群，管理分片路由、全局版本、调度任务
-- 数据层：多组数据分片，每个分片独立维护三馆流程与存储引擎
-- 全局调度层：无状态调度节点集群，负责跨分片公共知识提炼与群体飞轮
+**Architecture:**
+- Access layer: load balancer + API gateway
+- Compute layer: a cluster of stateless compute nodes, scheduled by tenant shard
+- Metadata layer: a 3–5 node Raft consensus cluster managing shard routing, global versioning, and scheduling tasks
+- Data layer: multiple data shards, each independently running its own three-hall process and storage engine
+- Global scheduling layer: a cluster of stateless scheduling nodes responsible for cross-shard public-knowledge distillation and the collective flywheel
 
-**扩展能力：**
-- 支持十万级以上并发，亿级记忆条目存储
-- 分片级故障隔离，单分片故障不影响全局
-- 可在线扩容缩容，业务无感知
+**Scaling capability:**
+- Supports hundred-thousand-level concurrency and hundred-million-level memory entries
+- Shard-level failure isolation — a single shard failure doesn't affect the whole
+- Online scale-up/down with no business impact
 
-### 12.4 核心依赖组件选型与配置
-#### 12.4.1 PostgreSQL 配置最佳实践
-- 版本：推荐 PostgreSQL 16 及以上，内置更好的向量扩展支持
-- 扩展：必须安装 pgvector 0.7.0 及以上版本
-- 内存配置：共享缓冲区设置为系统内存的25%，工作内存根据并发数调整
-- 存储：生产环境建议将数据目录放在SSD上，纯HDD环境需调大shared_buffers减少随机读写
-- 备份：开启WAL归档，每日全量备份+实时增量备份
+### 12.4 Core dependency selection and configuration
+#### 12.4.1 PostgreSQL configuration best practices
+- Version: PostgreSQL 16 or later recommended, for better built-in vector extension support
+- Extension: pgvector 0.7.0 or later must be installed
+- Memory settings: set shared_buffers to 25% of system memory; tune work_mem to concurrency
+- Storage: in production, put the data directory on SSD; in a pure-HDD environment, increase shared_buffers to reduce random I/O
+- Backup: enable WAL archiving, with daily full backups plus real-time incremental backups
 
-#### 12.4.2 ZVEC 部署配置
-- 部署模式：单机模式直接内嵌运行，集群模式建议独立部署
-- 索引类型：默认使用 DiskANN 磁盘友好索引，HDD环境下性能优势显著
-- 内存预算：索引缓存内存设置为索引总大小的10%~30%，纯HDD环境建议调大到30%以上
-- 持久化：每1000次写入生成一次检查点，保证崩溃可恢复
+#### 12.4.2 ZVEC deployment configuration
+- Deployment mode: embed directly in single-machine mode; deploy independently in cluster mode
+- Index type: DiskANN disk-friendly index by default, with a significant performance advantage on HDD
+- Memory budget: size the index cache at 10%–30% of total index size; increase to 30%+ for pure-HDD environments
+- Persistence: a checkpoint is generated every 1,000 writes, guaranteeing crash recoverability
 
-#### 12.4.3 Redis 配置建议
-- 版本：Redis 7.0 及以上
-- 持久化：开启RDB+AOF混合持久化，缓存数据丢失可重建，持久化级别可适当降低
-- 内存上限：设置maxmemory，采用allkeys-lru淘汰策略
-- 集群模式：生产环境建议使用3主3从的Redis Cluster架构
+#### 12.4.3 Redis configuration recommendations
+- Version: Redis 7.0 or later
+- Persistence: enable hybrid RDB+AOF persistence — cache data loss is recoverable, so the persistence level can be relaxed somewhat
+- Memory cap: set maxmemory with an allkeys-lru eviction policy
+- Cluster mode: a 3-primary/3-replica Redis Cluster architecture is recommended for production
 
-#### 12.4.4 对象存储/NAS接入配置
-- 兼容协议：支持S3兼容协议对象存储、NFS/SMB协议NAS
-- 适用场景：仅用于L5归档层，存放超冷原始文件与历史备份
-- 缓存策略：本地保留7天热缓存，重复访问无需重复拉取
-- 一致性校验：定期校验本地与远端数据一致性，防止静默损坏
+#### 12.4.4 Object storage / NAS integration configuration
+- Compatible protocols: S3-compatible object storage, NFS/SMB-protocol NAS
+- Use case: only used for the L5 archival tier, storing extremely cold raw files and historical backups
+- Caching strategy: keep a local 7-day hot cache so repeated access doesn't require re-fetching
+- Consistency checking: periodically verify local/remote data consistency to guard against silent corruption
 
-### 12.5 初始化配置向导
-系统首次启动时自动进入初始化向导，引导完成四项核心配置：
-1.  **存储配置**：选择存储策略、配置各存储介质路径、设置冷热阈值
-2.  **模型接入**：配置大模型API密钥、选择默认模型梯队、设置成本上限
-3.  **租户初始化**：创建管理员账号、配置初始租户、设置配额
-4.  **安全规则**：配置入馆闸规则、设置审计级别、开启匿名回传开关
+### 12.5 Initialization configuration wizard
+On first startup the system automatically enters an initialization wizard guiding through four core configuration steps:
+1.  **Storage configuration**: choose a storage strategy, configure paths for each storage medium, set hot/cold thresholds
+2.  **Model access**: configure large-model API keys, choose the default model tier, set a cost ceiling
+3.  **Tenant initialization**: create an admin account, configure the initial tenant, set quotas
+4.  **Security rules**: configure intake-gate rules, set the audit level, toggle anonymous reporting
 
-> 上篇完。
+> End of Part 1.
 
-# Mnemosyne 记忆宫殿 v5.0
-## 认知型记忆操作系统 产品白皮书「终定稿·下篇」
+# Mnemosyne Memory Palace v5.0
+## Cognitive Memory Operating System Product Whitepaper "Final Edition · Part 2"
 
-承接上篇，本篇为工程落地硬核交付部分，覆盖 API 接口规范、性能压测、数据迁移、运维排障、落地案例五大模块，可直接作为开发、运维、对接的执行手册使用。
+Continuing from Part 1, this part is the hardcore engineering-delivery content, covering five modules — API specification, performance load testing, data migration, ops troubleshooting, and real-world case studies — usable directly as an execution manual for development, operations, and integration work.
 
 ---
 
-## 第13章 API 接口与 SDK 完整规范
-### 13.1 通用规范
-#### 13.1.1 通信与鉴权
-- **协议**：HTTPS / HTTP，默认端口 8010
-- **数据格式**：请求与响应均采用 `application/json` 格式
-- **鉴权方式**：API Key 鉴权，请求头携带 `Authorization: Bearer {api_key}`
-- **字符编码**：统一使用 UTF-8 编码
+## Chapter 13: Full API and SDK specification
+### 13.1 General conventions
+#### 13.1.1 Transport and authentication
+- **Protocol**: HTTPS / HTTP, default port 8010
+- **Data format**: both requests and responses use `application/json`
+- **Authentication**: API Key auth, carried in the request header as `Authorization: Bearer {api_key}`
+- **Character encoding**: UTF-8 throughout
 
-#### 13.1.2 全局响应结构
-所有接口返回统一的外层包装：
+#### 13.1.2 Global response structure
+All endpoints return a uniform outer wrapper:
 ```json
 {
   "code": 0,
@@ -609,36 +609,36 @@ services:
   "request_id": "req_abc123xyz"
 }
 ```
-- `code`：错误码，0 表示成功，非 0 表示失败
-- `message`：结果描述
-- `data`：业务返回数据
-- `request_id`：请求唯一标识，用于问题排查
+- `code`: error code, 0 means success, non-zero means failure
+- `message`: result description
+- `data`: the business payload
+- `request_id`: a unique request identifier, used for troubleshooting
 
-#### 13.1.3 全局错误码定义
-| 错误码 | 含义 | 说明 |
+#### 13.1.3 Global error code definitions
+| Error code | Meaning | Description |
 |---|---|---|
-| 0 | 成功 | 请求正常处理 |
-| 40001 | 参数错误 | 请求参数缺失或格式非法 |
-| 40101 | 鉴权失败 | API Key 无效或无权限 |
-| 40301 | 配额超限 | 调用量或存储容量超出配额 |
-| 40401 | 资源不存在 | 记忆 ID、项目 ID 不存在 |
-| 40901 | 版本冲突 | 并发修改导致版本冲突 |
-| 50001 | 服务内部错误 | 服务端处理异常 |
-| 50301 | 服务降级 | 部分功能不可用，核心功能正常 |
+| 0 | Success | Request processed normally |
+| 40001 | Parameter error | Request parameters missing or malformed |
+| 40101 | Auth failed | API Key invalid or unauthorized |
+| 40301 | Quota exceeded | Call volume or storage quota exceeded |
+| 40401 | Resource not found | Memory ID or project ID doesn't exist |
+| 40901 | Version conflict | Concurrent modification caused a version conflict |
+| 50001 | Internal server error | Server-side processing exception |
+| 50301 | Service degraded | Some features unavailable, core functions normal |
 
-### 13.2 核心接口详情
-#### 13.2.1 记忆归档接口
-**接口地址**：`POST /api/v5/memory/archive`
-**功能说明**：提交一条记忆进行异步归档处理，经过三馆流水线后进入档案馆。
+### 13.2 Core endpoint details
+#### 13.2.1 Memory archival endpoint
+**Endpoint**: `POST /api/v5/memory/archive`
+**Description**: submits a memory for asynchronous archival processing; after passing through the three-hall pipeline it lands in the Archive Hall.
 
-**请求示例：**
+**Example request:**
 ```json
 {
-  "content": "pgvector索引创建失败，原因是glibc版本过低，解决方案是升级glibc到2.28以上或使用兼容编译参数",
+  "content": "pgvector index creation failed due to an outdated glibc version; fixed by upgrading glibc to 2.28+ or using compatible build flags",
   "content_type": "text",
   "memory_type": "troubleshooting",
-  "category": "运维/数据库",
-  "tags": ["pgvector", "索引", "glibc", "故障排查"],
+  "category": "ops/database",
+  "tags": ["pgvector", "index", "glibc", "troubleshooting"],
   "session_id": "sess_abc123",
   "project_id": "proj_xyz789",
   "tenant_id": "default",
@@ -646,7 +646,7 @@ services:
 }
 ```
 
-**响应示例：**
+**Example response:**
 ```json
 {
   "code": 0,
@@ -659,28 +659,28 @@ services:
 }
 ```
 
-**字段说明：**
-- `status`：归档状态，`processing` 处理中 / `success` 成功 / `failed` 失败
-- 归档为异步操作，可通过查询接口获取最终结果
+**Field notes:**
+- `status`: archival status — `processing` / `success` / `failed`
+- Archival is asynchronous; the final result can be retrieved via the query endpoint
 
-#### 13.2.2 分层检索接口
-**接口地址**：`POST /api/v5/memory/search`
-**功能说明**：按指定深度进行分层检索，返回匹配的记忆列表。
+#### 13.2.2 Tiered search endpoint
+**Endpoint**: `POST /api/v5/memory/search`
+**Description**: performs a tiered search at the specified depth and returns matching memories.
 
-**请求示例：**
+**Example request:**
 ```json
 {
-  "query": "pgvector索引创建失败怎么解决",
+  "query": "how to fix a pgvector index creation failure",
   "depth": "auto",
   "top_k": 5,
-  "category_filter": ["运维/数据库"],
+  "category_filter": ["ops/database"],
   "quality_min": 0.6,
   "tenant_id": "default",
   "return_detail": false
 }
 ```
 
-**响应示例：**
+**Example response:**
 ```json
 {
   "code": 0,
@@ -691,11 +691,11 @@ services:
     "results": [
       {
         "memory_id": "mem_1234567890abcdef",
-        "title": "pgvector索引创建失败解决方案",
-        "summary": "glibc版本过低导致，升级glibc到2.28以上即可解决",
+        "title": "Fixing a pgvector index creation failure",
+        "summary": "Caused by an outdated glibc version; resolved by upgrading glibc to 2.28+",
         "content_type": "text",
-        "category": "运维/数据库",
-        "tags": ["pgvector", "索引", "glibc"],
+        "category": "ops/database",
+        "tags": ["pgvector", "index", "glibc"],
         "final_score": 0.89,
         "score_detail": {
           "vector_similarity": 0.85,
@@ -711,11 +711,11 @@ services:
 }
 ```
 
-#### 13.2.3 工具结果归档接口
-**接口地址**：`POST /api/v5/tool/archive`
-**功能说明**：专属接口，归档 Hermes 工具调用结果，成功自动沉淀技能，失败自动归入踩坑库。
+#### 13.2.3 Tool-result archival endpoint
+**Endpoint**: `POST /api/v5/tool/archive`
+**Description**: a dedicated endpoint for archiving Hermes tool-call results — successes are automatically distilled into skills, failures automatically filed into the lessons-learned library.
 
-**请求示例：**
+**Example request:**
 ```json
 {
   "tool_name": "pg_create_index",
@@ -733,7 +733,7 @@ services:
 }
 ```
 
-**响应示例：**
+**Example response:**
 ```json
 {
   "code": 0,
@@ -746,24 +746,24 @@ services:
 }
 ```
 
-#### 13.2.4 项目管理接口
-- 创建项目：`POST /api/v5/project/create`
-- 查询项目：`GET /api/v5/project/{project_id}`
-- 归档项目：`POST /api/v5/project/{project_id}/archive`
-- 销毁沙箱：`POST /api/v5/project/{project_id}/destroy`
+#### 13.2.4 Project management endpoints
+- Create project: `POST /api/v5/project/create`
+- Query project: `GET /api/v5/project/{project_id}`
+- Archive project: `POST /api/v5/project/{project_id}/archive`
+- Destroy sandbox: `POST /api/v5/project/{project_id}/destroy`
 
-#### 13.2.5 增量同步接口
-- 拉取更新：`POST /api/v5/sync/pull`，传入本地最大版本号，返回增量变更
-- 推送变更：`POST /api/v5/sync/push`，上传本地变更，返回合并结果
-- 冲突解决：`POST /api/v5/sync/resolve`，手动指定冲突条目处理方式
+#### 13.2.5 Incremental sync endpoints
+- Pull updates: `POST /api/v5/sync/pull` — pass the local max version number, returns incremental changes
+- Push changes: `POST /api/v5/sync/push` — upload local changes, returns the merge result
+- Resolve conflicts: `POST /api/v5/sync/resolve` — manually specify how to handle conflicting entries
 
-### 13.3 Hermes SDK 使用手册
-#### 13.3.1 安装
+### 13.3 Hermes SDK manual
+#### 13.3.1 Install
 ```bash
 pip install mnemosyne-hermes-sdk
 ```
 
-#### 13.3.2 初始化
+#### 13.3.2 Initialize
 ```python
 from mnemosyne_hermes_sdk import MnemosyneHermesMemory
 
@@ -775,18 +775,18 @@ memory = MnemosyneHermesMemory(
 )
 ```
 
-#### 13.3.3 基础用法
+#### 13.3.3 Basic usage
 ```python
-# 会话启动
+# Session start
 memory.on_session_start(session_id="sess_001")
 
-# 添加记忆
-memory.add("用户偏好使用Python 3.10版本", memory_type="preference")
+# Add a memory
+memory.add("User prefers Python 3.10", memory_type="preference")
 
-# 检索相关记忆
-relevant = memory.get_relevant("如何优化pgvector索引", top_k=3)
+# Retrieve relevant memories
+relevant = memory.get_relevant("how to optimize a pgvector index", top_k=3)
 
-# 归档工具调用结果
+# Archive a tool-call result
 memory.archive_tool_call(
     tool_name="run_command",
     params={"cmd": "apt update"},
@@ -794,45 +794,45 @@ memory.archive_tool_call(
     success=True
 )
 
-# 启动项目
+# Start a project
 project_id = memory.start_project(
-    project_name="Mnemosyne部署",
-    description="部署Mnemosyne v5.0生产环境"
+    project_name="Mnemosyne deployment",
+    description="Deploy the Mnemosyne v5.0 production environment"
 )
 ```
 
-#### 13.3.4 高级配置
+#### 13.3.4 Advanced configuration
 ```python
-# 配置决策级别
+# Configure the decision level
 memory.set_decision_level("L1")  # L0/L1/L2/L3
 
-# 配置存储策略
+# Configure the storage strategy
 memory.set_storage_strategy("auto")
 
-# 启用匿名回传
+# Enable anonymous reporting
 memory.enable_anonymous_feedback(True)
 ```
 
-### 13.4 MCP 服务接入说明
-Mnemosyne 可封装为标准 MCP 工具，直接接入任意支持 MCP 协议的智能体框架，无需修改核心代码。
+### 13.4 MCP integration notes
+Mnemosyne can be wrapped as a standard MCP tool and plugged directly into any agent framework that supports the MCP protocol, with no changes to core code required.
 
-**MCP 工具定义示例：**
+**Example MCP tool definition:**
 ```json
 {
   "name": "mnemosyne_search",
-  "description": "从永久记忆库中检索相关知识与历史经验",
+  "description": "Retrieve relevant knowledge and historical experience from the permanent memory store",
   "inputSchema": {
     "type": "object",
     "properties": {
       "query": {
         "type": "string",
-        "description": "检索关键词或问题描述"
+        "description": "Search keywords or a description of the question"
       },
       "depth": {
         "type": "string",
         "enum": ["auto", "L0", "L1", "L2"],
         "default": "auto",
-        "description": "检索深度"
+        "description": "Search depth"
       }
     },
     "required": ["query"]
@@ -840,338 +840,338 @@ Mnemosyne 可封装为标准 MCP 工具，直接接入任意支持 MCP 协议的
 }
 ```
 
-**接入步骤：**
-1. 启动 Mnemosyne 服务并确保网络可达
-2. 在 Hermes MCP 配置中添加 Mnemosyne MCP 服务地址
-3. 配置 API Key 鉴权信息
-4. 重启 Hermes 即可自动获得永久记忆能力
+**Integration steps:**
+1. Start the Mnemosyne service and ensure it's network-reachable
+2. Add the Mnemosyne MCP service address to the Hermes MCP configuration
+3. Configure API Key authentication
+4. Restart Hermes to automatically gain permanent memory
 
 ---
 
-## 第14章 性能压测与容量规划
-### 14.1 不同数据量级性能基线
-测试环境：4核8G服务器，SSD+HDD混合存储，标准部署模式
+## Chapter 14: Performance load testing and capacity planning
+### 14.1 Performance baseline across data volumes
+Test environment: a 4-core/8GB server, SSD+HDD hybrid storage, standard deployment mode
 
-| 记忆条目数 | 平均检索延迟（P90） | 归档写入吞吐 | 存储总占用 | 内存占用 |
+| Memory entries | Avg. retrieval latency (P90) | Archival write throughput | Total storage | Memory usage |
 |---|---|---|---|---|
-| 1,000 条 | 2ms | 50条/秒 | ~200MB | 280MB |
-| 10,000 条 | 3ms | 40条/秒 | ~1.5GB | 350MB |
-| 100,000 条 | 5ms | 30条/秒 | ~12GB | 520MB |
-| 1,000,000 条 | 8ms | 20条/秒 | ~100GB | 850MB |
-| 10,000,000 条 | 15ms | 15条/秒 | ~900GB | 1.6GB |
+| 1,000 | 2ms | 50/sec | ~200MB | 280MB |
+| 10,000 | 3ms | 40/sec | ~1.5GB | 350MB |
+| 100,000 | 5ms | 30/sec | ~12GB | 520MB |
+| 1,000,000 | 8ms | 20/sec | ~100GB | 850MB |
+| 10,000,000 | 15ms | 15/sec | ~900GB | 1.6GB |
 
-**说明：**
-- 检索延迟包含向量计算、排序、结果格式化全链路耗时
-- 归档写入为异步处理，吞吐指每秒完成全流程归档的数量
-- 存储占用包含原始内容、向量、索引、元数据全部开销
+**Notes:**
+- Retrieval latency covers the full chain: vector computation, ranking, and result formatting
+- Archival writes are processed asynchronously; throughput is the number of full archival pipelines completed per second
+- Storage footprint includes raw content, vectors, indexes, and all metadata overhead
 
-### 14.2 并发压测数据
-测试环境：3节点计算集群，共享存储，万条记忆数据集
+### 14.2 Concurrency load-test data
+Test environment: a 3-node compute cluster, shared storage, a 10,000-memory dataset
 
-| 并发数 | 平均响应时间 | 成功率 | QPS | CPU平均占用 |
+| Concurrency | Avg. response time | Success rate | QPS | Avg. CPU usage |
 |---|---|---|---|---|
-| 10 并发 | 3ms | 100% | 2800 | 8% |
-| 50 并发 | 5ms | 100% | 8500 | 22% |
-| 100 并发 | 8ms | 99.9% | 11200 | 38% |
-| 500 并发 | 25ms | 99.5% | 17600 | 75% |
-| 1000 并发 | 50ms | 98.2% | 19000 | 92% |
+| 10 | 3ms | 100% | 2,800 | 8% |
+| 50 | 5ms | 100% | 8,500 | 22% |
+| 100 | 8ms | 99.9% | 11,200 | 38% |
+| 500 | 25ms | 99.5% | 17,600 | 75% |
+| 1,000 | 50ms | 98.2% | 19,000 | 92% |
 
-**性能拐点说明：**
-- 500并发以内，延迟线性增长，成功率接近100%
-- 超过1000并发，建议扩容计算节点，保证延迟与成功率
-- 归档写入异步处理，不受检索并发影响，可后台平滑执行
+**Inflection point notes:**
+- Up to 500 concurrent requests, latency grows linearly and the success rate stays near 100%
+- Beyond 1,000 concurrent requests, scaling out compute nodes is recommended to protect latency and success rate
+- Archival writes are processed asynchronously and are unaffected by retrieval concurrency — they execute smoothly in the background
 
-### 14.3 容量规划公式
-#### 14.3.1 存储容量估算
+### 14.3 Capacity planning formulas
+#### 14.3.1 Storage capacity estimate
 $$
 Storage_{total} = N_{memory} \times (S_{raw} + S_{vector} + S_{meta}) \times Factor_{redundancy}
 $$
 
-**参数参考：**
-- 单条记忆平均原始内容大小 $S_{raw}$：2KB
-- 单条向量大小 $S_{vector}$：2048维 float = 8KB
-- 单条元数据大小 $S_{meta}$：1KB
-- 冗余系数 $Factor_{redundancy}$：1.5（包含索引、版本、备份开销）
+**Reference parameters:**
+- Average raw content size per memory $S_{raw}$: 2KB
+- Vector size per memory $S_{vector}$: 2048-dim float = 8KB
+- Metadata size per memory $S_{meta}$: 1KB
+- Redundancy factor $Factor_{redundancy}$: 1.5 (covers index, version, and backup overhead)
 
-**简化估算：**
-- 平均每条记忆总占用约 16.5KB
-- 1万条 ≈ 160MB，10万条 ≈ 1.6GB，100万条 ≈ 16GB
-- 实际使用可按估算值的2倍预留空间，应对增长与峰值
+**Simplified estimate:**
+- Each memory costs roughly 16.5KB on average
+- 10k memories ≈ 160MB, 100k ≈ 1.6GB, 1M ≈ 16GB
+- In practice, reserve 2x the estimated space to handle growth and peaks
 
-#### 14.3.2 算力需求估算
-- 每100并发检索，约消耗1核CPU
-- 每20条/秒归档，约消耗1核CPU
-- 内存需求 = 基础开销300MB + 每10万条记忆增加150MB缓存
+#### 14.3.2 Compute demand estimate
+- Roughly 1 CPU core per 100 concurrent searches
+- Roughly 1 CPU core per 20 archivals/sec
+- Memory demand = 300MB base overhead + 150MB cache per additional 100k memories
 
-### 14.4 性能优化最佳实践
-#### 14.4.1 检索优化
-1.  **合理设置召回深度**：默认使用 auto 模式，绝大多数场景 L0/L1 即可满足需求，避免不必要的深度检索
-2.  **分类过滤**：检索时尽量指定 category_filter，缩小扫描范围
-3.  **缓存预热**：高频访问的热知识启动时自动加载进 Redis 缓存
-4.  **索引优化**：根据数据量选择合适的向量索引类型，万条以内用精确搜索，十万条以上用 IVF 索引
+### 14.4 Performance optimization best practices
+#### 14.4.1 Retrieval optimization
+1.  **Set a sensible recall depth**: the default `auto` mode handles the vast majority of scenarios with L0/L1, avoiding unnecessary deep retrieval
+2.  **Category filtering**: specify `category_filter` wherever possible to narrow the scan range
+3.  **Cache warm-up**: frequently accessed hot knowledge is automatically loaded into the Redis cache on startup
+4.  **Index optimization**: choose the vector index type based on data volume — exact search under 10k entries, IVF index above 100k
 
-#### 14.4.2 写入优化
-1.  **批量归档**：批量提交归档请求，减少重复开销
-2.  **异步处理**：所有归档均为异步，不阻塞主业务流程
-3.  **低峰执行**：重计算的蒸馏、审计、索引构建任务放在凌晨低峰期执行
-4.  **WAL 调优**：调整 WAL 刷盘策略，平衡性能与可靠性
+#### 14.4.2 Write optimization
+1.  **Batch archival**: submit archival requests in batches to reduce repeated overhead
+2.  **Asynchronous processing**: all archival is asynchronous and never blocks the main business flow
+3.  **Off-peak execution**: schedule heavy distillation, auditing, and index-building jobs for off-peak hours
+4.  **WAL tuning**: adjust the WAL flush strategy to balance performance against reliability
 
-#### 14.4.3 纯HDD环境专项优化
-1.  扩大内存缓存比例，将最热 20%~30% 数据全部缓存
-2.  向量检索全面启用 ZVEC DiskANN 磁盘优化索引
-3.  写入攒批执行，减少随机写次数
-4.  关闭不必要的实时索引更新，改为批量定时构建
-
----
-
-## 第15章 数据迁移与兼容方案
-### 15.1 从 Hermes 原生记忆迁移
-#### 15.1.1 迁移工具
-系统内置 `hermes-migrate` 命令行工具，可一键将 Hermes 原生的对话历史与记忆数据迁移至 Mnemosyne。
-
-#### 15.1.2 数据映射规则
-| Hermes 原生数据 | Mnemosyne 对应结构 | 处理方式 |
-|---|---|---|
-| 对话消息 | 碎片记忆 + 会话记忆 | 自动蒸馏，提取核心要点 |
-| 系统提示词 | 智能体画像 | 归入偏好配置 |
-| 工具调用记录 | 工具归档记录 | 成功入技能库，失败入踩坑库 |
-| 会话元数据 | 会话ID + 时间戳 | 完整保留 |
-
-#### 15.1.3 迁移步骤
-1.  导出 Hermes 原生记忆数据为 JSON 格式
-2.  执行迁移命令：`mnemosyne migrate hermes --input hermes_history.json --tenant default`
-3.  等待后台蒸馏与归档处理完成
-4.  抽样验证迁移结果准确性
-5.  切换 Hermes 记忆配置为 Mnemosyne SDK
-
-#### 15.1.4 回滚方案
-迁移不删除任何原生数据，仅做导入。若出现问题，直接将 Hermes 记忆模块切回原生实现即可，无任何数据丢失。
-
-### 15.2 从通用 RAG 系统迁移
-#### 15.2.1 向量数据迁移
-支持从主流向量数据库（Chroma、Milvus、Pinecone、Weaviate）导入向量数据：
-1.  导出原系统的向量与元数据为标准格式
-2.  使用 `mnemosyne migrate vector` 命令批量导入
-3.  系统自动补全缺失字段，重建索引
-4.  执行质量评估，标记低置信度条目
-
-#### 15.2.2 质量评估与治理
-导入的第三方数据默认标记为「外部导入」，置信度初始值设为 0.5，经过验证与使用后动态调整。低质量数据不会进入高优先级召回，避免污染知识库。
-
-### 15.3 向前兼容策略
-#### 15.3.1 版本兼容规则
-- 遵循语义化版本：主版本号不兼容，次版本号向下兼容，修订号完全兼容
-- 高版本服务可读取低版本数据，自动执行格式升级
-- 低版本服务不保证读取高版本数据，会提示升级
-
-#### 15.3.2 数据自动升级
-版本升级时，系统启动自动检测数据格式版本，若需升级则在后台自动执行：
-- 升级过程不影响核心读写功能
-- 升级前自动生成数据备份
-- 支持回滚到上一个版本格式
-- 大版本升级提供专门的迁移工具与校验脚本
-
-#### 15.3.3 客户端兼容
-服务端保持 API 接口的向后兼容性：
-- 同主版本内，新增字段不影响旧客户端调用
-- 废弃接口保留至少一个次版本周期，并给出明确迁移提示
-- SDK 版本与服务端版本保持同步，建议配套使用
+#### 14.4.3 Pure-HDD environment tuning
+1.  Increase the memory-cache ratio, caching the hottest 20%–30% of data entirely
+2.  Enable ZVEC DiskANN disk-optimized indexing across the board for vector search
+3.  Batch writes together to reduce random-write counts
+4.  Disable unnecessary real-time index updates in favor of scheduled batch rebuilding
 
 ---
 
-## 第16章 运维监控与故障排查
-### 16.1 全链路监控指标体系
-#### 16.1.1 系统级指标
-| 指标名称 | 说明 | 正常阈值 |
+## Chapter 15: Data migration and compatibility
+### 15.1 Migrating from native Hermes memory
+#### 15.1.1 Migration tool
+The system includes a built-in `hermes-migrate` CLI tool that can migrate Hermes's native conversation history and memory data into Mnemosyne in one step.
+
+#### 15.1.2 Data mapping rules
+| Native Hermes data | Mnemosyne equivalent | Handling |
 |---|---|---|
-| CPU 使用率 | 服务进程 CPU 占用 | 长期 < 70% |
-| 内存使用率 | 服务进程内存占用 | 长期 < 80% |
-| 磁盘使用率 | 数据盘占用比例 | < 85% |
-| 磁盘 IO 延迟 | 读写平均延迟 | HDD < 50ms，SSD < 5ms |
+| Conversation messages | Fragment memory + session memory | Auto-distilled, core points extracted |
+| System prompts | Agent profile | Filed under preference configuration |
+| Tool-call records | Tool archival records | Successes → skill library, failures → lessons-learned library |
+| Session metadata | Session ID + timestamp | Retained in full |
 
-#### 16.1.2 业务级指标
-| 指标名称 | 说明 | 正常阈值 |
+#### 15.1.3 Migration steps
+1.  Export native Hermes memory data as JSON
+2.  Run the migration command: `mnemosyne migrate hermes --input hermes_history.json --tenant default`
+3.  Wait for background distillation and archival to complete
+4.  Spot-check the migration results for accuracy
+5.  Switch the Hermes memory configuration over to the Mnemosyne SDK
+
+#### 15.1.4 Rollback plan
+Migration never deletes any native data — it's import-only. If a problem occurs, simply switch the Hermes memory module back to its native implementation with zero data loss.
+
+### 15.2 Migrating from a general-purpose RAG system
+#### 15.2.1 Vector data migration
+Supports importing vector data from mainstream vector databases (Chroma, Milvus, Pinecone, Weaviate):
+1.  Export the source system's vectors and metadata in a standard format
+2.  Bulk-import with the `mnemosyne migrate vector` command
+3.  The system automatically fills in missing fields and rebuilds indexes
+4.  Run a quality assessment and flag low-confidence entries
+
+#### 15.2.2 Quality assessment and governance
+Imported third-party data is marked "externally imported" by default, with an initial confidence of 0.5 that's adjusted dynamically as it's verified and used. Low-quality data is excluded from high-priority recall, preventing contamination of the knowledge base.
+
+### 15.3 Forward-compatibility strategy
+#### 15.3.1 Version compatibility rules
+- Follows semantic versioning: major version = incompatible, minor version = backward compatible, patch version = fully compatible
+- A newer service version can read older-version data and automatically upgrades the format
+- An older service version doesn't guarantee reading newer-version data, and will prompt for an upgrade
+
+#### 15.3.2 Automatic data upgrade
+On a version upgrade, the system automatically detects the data-format version on startup and, if an upgrade is needed, runs it automatically in the background:
+- The upgrade process doesn't affect core read/write functionality
+- A data backup is automatically generated before the upgrade
+- Rollback to the previous version's format is supported
+- Major-version upgrades ship with dedicated migration tools and validation scripts
+
+#### 15.3.3 Client compatibility
+The server maintains backward compatibility of its API:
+- Within the same major version, new fields never break old clients
+- Deprecated endpoints are kept for at least one minor-version cycle, with a clear migration notice
+- SDK versions stay in sync with the server version — using matched versions is recommended
+
+---
+
+## Chapter 16: Operations monitoring and troubleshooting
+### 16.1 Full-chain monitoring metrics
+#### 16.1.1 System-level metrics
+| Metric | Description | Normal threshold |
 |---|---|---|
-| 检索接口成功率 | 检索请求成功比例 | > 99.5% |
-| 检索平均延迟 | P90 检索响应时间 | < 10ms |
-| 归档成功率 | 归档任务成功比例 | > 98% |
-| 归档平均耗时 | 单条记忆归档全流程耗时 | < 5s |
-| 同步延迟 | 端云同步最大延迟 | < 30s |
+| CPU usage | Service process CPU usage | Sustained < 70% |
+| Memory usage | Service process memory usage | Sustained < 80% |
+| Disk usage | Data-disk usage ratio | < 85% |
+| Disk I/O latency | Average read/write latency | HDD < 50ms, SSD < 5ms |
 
-#### 16.1.3 安全类指标
-| 指标名称 | 说明 |
+#### 16.1.2 Business-level metrics
+| Metric | Description | Normal threshold |
+|---|---|---|
+| Search endpoint success rate | Proportion of successful search requests | > 99.5% |
+| Average search latency | P90 search response time | < 10ms |
+| Archival success rate | Proportion of successful archival jobs | > 98% |
+| Average archival time | Full-pipeline time per memory | < 5s |
+| Sync latency | Max edge-cloud sync latency | < 30s |
+
+#### 16.1.3 Security metrics
+| Metric | Description |
 |---|---|
-| 注入拦截次数 | 入馆闸拦截的可疑注入数量 |
-| 审计异常率 | 审计模块标记异常的知识比例 |
-| 知识毒化预警数 | 静默审计发现的高热度错误知识数量 |
+| Injection blocks | Number of suspicious injections blocked by the intake gate |
+| Audit anomaly rate | Proportion of knowledge flagged anomalous by the audit module |
+| Knowledge-poisoning alerts | Number of high-heat erroneous entries found by the silent audit |
 
-#### 16.1.4 成本类指标
-| 指标名称 | 说明 |
+#### 16.1.4 Cost metrics
+| Metric | Description |
 |---|---|
-| 日均 API 调用成本 | 大模型调用的日均费用 |
-| 单条记忆归档成本 | 平均每条记忆归档的模型费用 |
-| 存储单位成本 | 每GB存储的月度成本 |
+| Avg. daily API call cost | Average daily cost of large-model calls |
+| Cost per memory archived | Average model cost to archive one memory |
+| Storage unit cost | Monthly cost per GB of storage |
 
-### 16.2 告警规则与处理建议
-| 告警项 | 触发阈值 | 严重等级 | 标准处理建议 |
+### 16.2 Alert rules and response guidance
+| Alert | Trigger threshold | Severity | Standard response |
 |---|---|---|---|
-| 检索成功率下降 | 连续5分钟 < 99% | 警告 | 检查依赖服务状态，排查数据库连接 |
-| 检索延迟升高 | P90 > 20ms 持续10分钟 | 警告 | 检查缓存命中率，考虑扩容 |
-| 磁盘使用率过高 | > 85% | 警告 | 清理过期数据，扩容存储 |
-| 归档失败率升高 | > 5% 持续10分钟 | 严重 | 检查模型 API 可用性，查看错误日志 |
-| 服务不可用 | 健康检查连续3次失败 | 紧急 | 重启服务，检查资源占用，查看崩溃日志 |
+| Search success rate drop | < 99% for 5 consecutive minutes | Warning | Check dependent service health, inspect DB connections |
+| Search latency rise | P90 > 20ms for 10 minutes | Warning | Check cache hit rate, consider scaling out |
+| Disk usage too high | > 85% | Warning | Clean up expired data, expand storage |
+| Archival failure rate rise | > 5% for 10 minutes | Critical | Check model API availability, review error logs |
+| Service unavailable | Health check fails 3 times in a row | Emergency | Restart the service, check resource usage, review crash logs |
 
-### 16.3 常见故障排查手册
-#### 16.3.1 检索速度慢
-**排查路径：**
-1.  检查缓存命中率，若命中率低，考虑扩大缓存或预热热点数据
-2.  检查数据库负载，是否有慢查询，确认索引是否正常
-3.  检查磁盘 IO 延迟，HDD 环境下冷数据检索慢属正常现象
-4.  检查是否有大批量归档任务占用资源，可限速执行
+### 16.3 Common troubleshooting playbook
+#### 16.3.1 Slow retrieval
+**Diagnostic path:**
+1.  Check cache hit rate — if low, consider enlarging the cache or warming hot data
+2.  Check database load for slow queries, confirm indexes are healthy
+3.  Check disk I/O latency — slow cold-data retrieval on HDD is expected
+4.  Check whether a large archival batch is consuming resources; it can be rate-limited
 
-**解决方案：**
-- 增加内存缓存容量
-- 优化检索条件，增加分类过滤
-- 纯 HDD 环境启用 ZVEC 磁盘优化索引
+**Solutions:**
+- Increase memory cache capacity
+- Optimize search conditions by adding category filters
+- Enable ZVEC disk-optimized indexing in pure-HDD environments
 
-#### 16.3.2 归档失败率高
-**排查路径：**
-1.  检查模型 API 连接状态与密钥有效性
-2.  查看归档任务错误日志，定位失败原因
-3.  检查是否输入内容格式异常
-4.  确认是否触发了安全拦截规则
+#### 16.3.2 High archival failure rate
+**Diagnostic path:**
+1.  Check the model API connection status and key validity
+2.  Review archival job error logs to pinpoint the failure cause
+3.  Check whether input content is malformed
+4.  Confirm whether a security-filter rule was triggered
 
-**解决方案：**
-- 修复模型 API 配置
-- 升级模型梯队，启用备用模型兜底
-- 调整入馆闸拦截严格度
+**Solutions:**
+- Fix the model API configuration
+- Upgrade the model tier, enable a fallback model
+- Adjust the intake gate's filtering strictness
 
-#### 16.3.3 端云同步失败
-**排查路径：**
-1.  检查网络连通性与鉴权状态
-2.  检查版本号是否异常，是否存在版本冲突
-3.  查看同步任务状态与错误信息
-4.  确认数据大小是否超出单次同步限制
+#### 16.3.3 Edge-cloud sync failure
+**Diagnostic path:**
+1.  Check network connectivity and auth status
+2.  Check whether the version number is abnormal or there's a version conflict
+3.  Review the sync job status and error messages
+4.  Confirm whether the data size exceeds the per-sync limit
 
-**解决方案：**
-- 修复网络与鉴权问题
-- 执行冲突解决操作
-- 大体积数据分片同步
+**Solutions:**
+- Fix network and auth issues
+- Run the conflict-resolution operation
+- Shard large data for sync
 
-#### 16.3.4 服务启动失败
-**排查路径：**
-1.  查看启动日志，定位报错信息
-2.  检查端口是否被占用，依赖服务是否正常
-3.  检查配置文件格式与权限
-4.  检查数据目录权限与磁盘空间
+#### 16.3.4 Service startup failure
+**Diagnostic path:**
+1.  Review startup logs to pinpoint the error
+2.  Check whether the port is already in use and whether dependent services are healthy
+3.  Check the config file format and permissions
+4.  Check data-directory permissions and disk space
 
-**解决方案：**
-- 修正配置，释放端口
-- 启动依赖服务
-- 修复数据目录权限
+**Solutions:**
+- Fix the configuration, free the port
+- Start dependent services
+- Fix data-directory permissions
 
-### 16.4 备份与恢复操作
-#### 16.4.1 备份策略
-- **实时备份**：WAL 日志实时写入，支持秒级点恢复
-- **每日备份**：每日凌晨自动执行全量数据备份，保留最近30天
-- **异地备份**：支持自动同步备份到对象存储，应对机房级故障
-- **手动备份**：支持随时触发手动全量备份，用于重大操作前保护
+### 16.4 Backup and recovery operations
+#### 16.4.1 Backup strategy
+- **Real-time backup**: WAL logs are written in real time, supporting second-level point-in-time recovery
+- **Daily backup**: a full backup runs automatically every night, retaining the last 30 days
+- **Off-site backup**: supports automatic sync of backups to object storage, guarding against a data-center-level failure
+- **Manual backup**: a full manual backup can be triggered at any time, for protection before major operations
 
-#### 16.4.2 全量恢复步骤
-1.  停止 Mnemosyne 服务
-2.  重命名当前数据目录作为备份
-3.  从备份文件恢复数据到指定目录
-4.  启动服务，系统自动重放 WAL 到最新状态
-5.  验证数据完整性与服务可用性
+#### 16.4.2 Full-recovery steps
+1.  Stop the Mnemosyne service
+2.  Rename the current data directory as a backup
+3.  Restore data from the backup file into the target directory
+4.  Start the service — the system automatically replays the WAL to the latest state
+5.  Verify data integrity and service availability
 
-#### 16.4.3 定点回滚
-支持按时间点回滚到指定时刻的状态：
-1.  选择目标回滚时间点
-2.  系统自动定位对应检查点 + WAL 范围
-3.  生成回滚预案，预估影响范围
-4.  确认后执行回滚，过程中自动备份当前状态
-5.  支持一键撤销回滚，恢复到执行前状态
-
----
-
-## 第17章 典型落地案例详解
-### 17.1 案例一：中型互联网公司运维团队
-#### 背景
-某 50 人规模的互联网公司运维团队，管理 200+ 台服务器，日常使用 Hermes 执行运维操作、故障排查。长期存在三个痛点：
-1.  新人上手慢，运维经验靠口口相传，踩坑重复发生
-2.  故障排查效率低，同类问题每次都要从零开始
-3.  人员流动导致经验流失，团队知识无法沉淀
-
-#### 部署方案
-- 部署模式：共享存储集群版，3 个计算节点
-- 硬件配置：8核16G计算节点，SSD+NAS混合存储
-- 对接方式：Hermes 原生 SDK 深度集成，运维工具全量接入
-- 配置策略：开启工具自动归档、踩坑自动预警、知识自动沉淀
-
-#### 落地效果
-运行 3 个月后核心数据：
-- 常见故障平均排障时间从 45 分钟缩短到 8 分钟，效率提升 82%
-- 新人独立处理故障的上手周期从 1 个月缩短到 1 周
-- 重复踩坑率下降 91%，绝大多数常见问题自动规避
-- 累计沉淀标准化运维技能 260+ 条，形成团队专属知识库
-- 运维人员日均重复查文档、查历史的时间减少 60%
-
-#### 价值总结
-将个人运维经验转化为团队永久知识资产，人员流动不再导致经验断层；智能体越用越聪明，运维效率持续提升。
-
-### 17.2 案例二：独立开发者专属智能体
-#### 背景
-某独立全栈开发者，日常使用 Hermes 辅助编码、查错、项目管理。设备为个人笔记本（纯SSD）+ 云端服务器（纯HDD低配）。核心诉求：
-1.  多设备切换时项目进度接续困难，每次都要重新交代背景
-2.  很多做过的方案、踩过的坑，时间久了就忘记，还要重新查
-3.  低配云服务器上智能体体验差，长对话很快就上下文溢出
-
-#### 部署方案
-- 部署模式：云端单机生产版 + 本地客户端协同
-- 硬件：云端 2核4G 纯HDD低配服务器，本地 16G 纯SSD笔记本
-- 同步策略：端云增量同步，离线本地可用，联网自动同步
-- 使用方式：VS Code 插件 + 桌面端客户端双入口
-
-#### 落地效果
-使用 2 个月后：
-- 跨设备接续项目零成本，打开就能继续开发，无需重新交代背景
-- 同类报错排障时间平均减少 70%，很多问题秒出解决方案
-- 长对话 token 消耗降低 65%，低配云服务器也能流畅使用长任务
-- 累计沉淀个人代码技能 180+ 条，形成专属个人代码库
-- 纯 HDD 云服务器日常检索 90% 都在 10ms 以内，体验与本地无感知差异
-
-#### 价值总结
-让个人智能体真正拥有了长期记忆，成为随用随取的个人知识副驾；硬件自适应能力让低配设备也能获得优质体验，无需升级硬件。
-
-### 17.3 案例三：边缘设备离线智能体
-#### 背景
-某工业场景边缘网关设备，配置为 4核8G + 机械硬盘，无公网常驻连接，需要本地运行 Hermes 智能体执行设备巡检、日志分析。核心挑战：
-1.  硬件配置低，纯机械硬盘，性能受限
-2.  无公网，只能离线运行，无法调用云端大模型服务
-3.  需要长期积累巡检经验，不能重启就丢失
-
-#### 部署方案
-- 部署模式：单机极简离线版
-- 硬件：边缘网关 4核8G，单块 1TB HDD
-- 模型：本地部署轻量化小模型，完成蒸馏与审计
-- 配置：纯 HDD 优化模式，大缓存 + 磁盘向量索引
-- 数据同步：定期人工导出快照，回传总部汇总更新
-
-#### 落地效果
-- 系统稳定运行，资源占用低，CPU 平均 12%，内存 600MB
-- 本地检索平均延迟 8ms，完全满足巡检实时性要求
-- 巡检经验持续沉淀，同类异常识别准确率从 65% 提升到 92%
-- 断电重启后记忆完整保留，无需重新训练与配置
-- 定期回传的经验数据可在总部汇总，反哺其他边缘节点
-
-#### 价值总结
-突破了硬件与网络限制，让低配置边缘设备也能拥有带永久记忆的智能体；经验可沉淀、可复用、可汇总，为工业边缘场景的智能体落地提供了可行路径。
+#### 16.4.3 Point-in-time rollback
+Supports rolling back to the state at a specific point in time:
+1.  Choose the target rollback time
+2.  The system automatically locates the corresponding checkpoint + WAL range
+3.  Generates a rollback plan with an estimated impact scope
+4.  On confirmation, executes the rollback, automatically backing up the current state first
+5.  Supports one-click undo of the rollback, restoring the pre-rollback state
 
 ---
 
-## 附录
-### 附录A：核心数据表结构
-#### A.1 记忆主表
+## Chapter 17: Detailed real-world case studies
+### 17.1 Case 1: a mid-size internet company's ops team
+#### Background
+A 50-person ops team at an internet company, managing 200+ servers, using Hermes daily for operations and troubleshooting. Three long-standing pain points:
+1.  New hires ramp up slowly; ops experience is passed on by word of mouth, and the same pitfalls recur
+2.  Low troubleshooting efficiency — the same class of problem starts from scratch every time
+3.  Staff turnover causes experience loss; team knowledge can't accumulate
+
+#### Deployment plan
+- Deployment mode: shared-storage cluster, 3 compute nodes
+- Hardware: 8-core/16GB compute nodes, SSD+NAS hybrid storage
+- Integration: deep integration via the native Hermes SDK, with ops tools fully connected
+- Configuration: automatic tool archival, automatic pitfall warnings, and automatic knowledge accumulation enabled
+
+#### Results
+Core numbers after 3 months of operation:
+- Average time to diagnose common failures dropped from 45 minutes to 8 minutes, an 82% efficiency gain
+- New-hire ramp-up time for independently handling failures dropped from 1 month to 1 week
+- Repeat-pitfall rate dropped 91% — most common issues are now avoided automatically
+- 260+ standardized ops skills accumulated, forming the team's own knowledge base
+- Daily time ops staff spent re-checking docs and history dropped 60%
+
+#### Value summary
+Turns individual ops experience into a permanent team knowledge asset — staff turnover no longer causes a loss of institutional knowledge; the agent gets smarter the more it's used, and ops efficiency keeps improving.
+
+### 17.2 Case 2: an independent developer's personal agent
+#### Background
+An independent full-stack developer using Hermes daily for coding assistance, debugging, and project management. Devices: a personal laptop (pure SSD) + a cloud server (low-spec, pure HDD). Core needs:
+1.  Hard to pick up project progress when switching devices — context has to be re-explained every time
+2.  Solutions used and pitfalls hit in the past get forgotten over time and have to be re-researched
+3.  Poor agent experience on the low-spec cloud server — long conversations quickly overflow context
+
+#### Deployment plan
+- Deployment mode: single-machine production in the cloud + local client collaboration
+- Hardware: a 2-core/4GB low-spec pure-HDD cloud server, a 16GB pure-SSD laptop
+- Sync strategy: edge-cloud incremental sync, usable offline locally, auto-syncs when online
+- Access: a VS Code plugin + a desktop client, both entry points
+
+#### Results
+After 2 months of use:
+- Zero-cost continuity across devices — pick up and keep developing without re-explaining context
+- Time to diagnose the same error class dropped 70% on average, with many problems solved instantly
+- Token consumption in long conversations dropped 65%, letting even the low-spec cloud server handle long tasks smoothly
+- 180+ personal coding skills accumulated, forming a personal code library
+- 90% of daily queries on the pure-HDD cloud server complete within 10ms — indistinguishable from local
+
+#### Value summary
+Gives a personal agent genuine long-term memory, turning it into an on-demand personal knowledge copilot; hardware adaptivity delivers a great experience even on low-spec devices, with no hardware upgrade needed.
+
+### 17.3 Case 3: an offline edge-device agent
+#### Background
+An industrial edge-gateway device, configured with 4 cores/8GB + a mechanical hard drive, with no persistent public-internet connection, needing to run a local Hermes agent for equipment inspection and log analysis. Core challenges:
+1.  Low-spec hardware, pure mechanical drive, limited performance
+2.  No public internet — must run fully offline, with no access to cloud large-model services
+3.  Needs to accumulate inspection experience long-term without losing it on restart
+
+#### Deployment plan
+- Deployment mode: single-machine minimal offline edition
+- Hardware: a 4-core/8GB edge gateway, a single 1TB HDD
+- Model: a lightweight local small model handling distillation and auditing
+- Configuration: pure-HDD optimized mode, large cache + disk vector index
+- Data sync: periodic manual snapshot export, reported back to HQ for aggregated updates
+
+#### Results
+- Stable operation with low resource usage — 12% average CPU, 600MB memory
+- Average local retrieval latency of 8ms, fully meeting real-time inspection requirements
+- Inspection experience accumulates continuously — accuracy on recognizing the same class of anomaly rose from 65% to 92%
+- Memory fully survives power loss and restart, with no retraining or reconfiguration needed
+- Periodically reported experience data is aggregated at HQ and feeds back into other edge nodes
+
+#### Value summary
+Breaks through hardware and network limits, giving even low-spec edge devices an agent with permanent memory; experience can be accumulated, reused, and aggregated — providing a viable path for agent deployment in industrial edge scenarios.
+
+---
+
+## Appendix
+### Appendix A: Core data table structures
+#### A.1 Main memory table
 ```sql
 CREATE TABLE memories (
     id BIGSERIAL PRIMARY KEY,
@@ -1198,7 +1198,7 @@ CREATE TABLE memories (
 );
 ```
 
-#### A.2 WAL 预写日志表
+#### A.2 WAL write-ahead log table
 ```sql
 CREATE TABLE wal_log (
     id BIGSERIAL PRIMARY KEY,
@@ -1210,7 +1210,7 @@ CREATE TABLE wal_log (
 );
 ```
 
-#### A.3 智能体画像表
+#### A.3 Agent profile table
 ```sql
 CREATE TABLE agent_profiles (
     id BIGSERIAL PRIMARY KEY,
@@ -1224,7 +1224,7 @@ CREATE TABLE agent_profiles (
 );
 ```
 
-#### A.4 审计日志表
+#### A.4 Audit log table
 ```sql
 CREATE TABLE audit_log (
     id BIGSERIAL PRIMARY KEY,
@@ -1239,40 +1239,40 @@ CREATE TABLE audit_log (
 );
 ```
 
-### 附录B：核心 API 速查表
-| 接口名称 | 方法 | 路径 |
+### Appendix B: Core API quick reference
+| Endpoint | Method | Path |
 |---|---|---|
-| 健康检查 | GET | `/health` |
-| 记忆归档 | POST | `/api/v5/memory/archive` |
-| 记忆检索 | POST | `/api/v5/memory/search` |
-| 记忆详情 | GET | `/api/v5/memory/{id}` |
-| 工具结果归档 | POST | `/api/v5/tool/archive` |
-| 创建项目 | POST | `/api/v5/project/create` |
-| 项目归档 | POST | `/api/v5/project/{id}/archive` |
-| 拉取增量 | POST | `/api/v5/sync/pull` |
-| 推送增量 | POST | `/api/v5/sync/push` |
-| 存储策略刷新 | POST | `/api/v5/storage/refresh` |
-| 获取画像 | GET | `/api/v5/profile` |
-| 更新画像 | PUT | `/api/v5/profile` |
+| Health check | GET | `/health` |
+| Memory archival | POST | `/api/v5/memory/archive` |
+| Memory search | POST | `/api/v5/memory/search` |
+| Memory detail | GET | `/api/v5/memory/{id}` |
+| Tool-result archival | POST | `/api/v5/tool/archive` |
+| Create project | POST | `/api/v5/project/create` |
+| Project archival | POST | `/api/v5/project/{id}/archive` |
+| Pull incremental | POST | `/api/v5/sync/pull` |
+| Push incremental | POST | `/api/v5/sync/push` |
+| Refresh storage strategy | POST | `/api/v5/storage/refresh` |
+| Get profile | GET | `/api/v5/profile` |
+| Update profile | PUT | `/api/v5/profile` |
 
-### 附录C：术语表
-| 术语 | 释义 |
+### Appendix C: Glossary
+| Term | Definition |
 |---|---|
-| 三馆 | 档案馆、研究馆、工程馆，构成知识生产闭环 |
-| MTL | 记忆转换层，屏蔽底层硬件差异的抽象层 |
-| LMA | 逻辑记忆地址，永久不变的唯一标识 |
-| WAL | 预写日志，保障数据持久化与故障恢复 |
-| DiskANN | 磁盘友好的向量索引算法 |
-| MCP | 模型上下文协议，智能体与工具的标准交互协议 |
-| 谱系 | 同一条知识的多场景解决方案集合 |
-| 化石节点 | 哈希净化后的原始数据节点，保留拓扑不可读内容 |
+| Three halls | Archive Hall, Research Hall, and Engineering Hall, forming the knowledge-production closed loop |
+| MTL | Memory Translation Layer, the abstraction that hides underlying hardware differences |
+| LMA | Logical Memory Address, a permanent unique identifier |
+| WAL | Write-Ahead Log, guaranteeing persistence and failure recovery |
+| DiskANN | A disk-friendly vector indexing algorithm |
+| MCP | Model Context Protocol, the standard interaction protocol between agents and tools |
+| Lineage | The set of multi-scenario solutions for a single piece of knowledge |
+| Fossil node | A raw-data node after hash purification, topology preserved but content unreadable |
 
-### 附录D：标准快照格式规范
-- 文件后缀：`.mnemosyne`
-- 压缩算法：ZIP 标准压缩，原始文件可选 zstd 高压缩
-- 校验方式：SHA-256 整体文件校验
-- 版本规则：遵循语义化版本，次版本向下兼容
-- 内部结构：
+### Appendix D: Standard snapshot format spec
+- File extension: `.mnemosyne`
+- Compression: standard ZIP compression, with optional zstd high compression for raw files
+- Checksum: whole-file SHA-256
+- Versioning: follows semantic versioning, minor versions are backward compatible
+- Internal structure:
   ```
   user_memory.mnemosyne
   ├── metadata.json
@@ -1285,4 +1285,4 @@ CREATE TABLE audit_log (
   ```
 
 ---
-**白皮书 v5.0 终定稿 全文完**
+**Whitepaper v5.0 Final Edition — End**

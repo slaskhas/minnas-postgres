@@ -1,8 +1,10 @@
 """
-Mnemosyne v7.7.0 — 注入调度大厅 (Injection Scheduler)
-注入 = 认知调度, 不是内容塞入。
-场景(查询) × 价值(rank/热度/状态) → 动态决定「这一轮该看到什么」。
-全部复用现有能力: 向量+BM25(wiki 模式) / memories hybrid 搜索 / heat-top。
+Mnemosyne v7.7.0 — Injection Scheduler
+Injection = cognitive scheduling, not content stuffing.
+Scenario (query) × value (rank/heat/state) → dynamically decide "what should be
+seen this round."
+Entirely reuses existing capabilities: vector+BM25 (wiki mode) / memories hybrid
+search / heat-top.
 """
 from fastapi import APIRouter
 from pydantic import BaseModel
@@ -15,25 +17,28 @@ pool = None
 
 class InjectionPlanRequest(BaseModel):
     user_id: str = "default"
-    context: str = ""                      # 当前会话/任务场景描述
+    context: str = ""                      # description of the current session/task scenario
     limits: dict = {"skills": 3, "memories": 5, "hooks": 5}
 
 
 @router.post("/plan")
 async def injection_plan(req: InjectionPlanRequest):
-    """按场景返回注入流: {skills, memories, hooks}
-    通道: ①技能语义召唤(含沉寂, 可唤醒) ②记忆 hybrid 搜索 ③热点钩子
-    任一通道失败 → 只返回成功通道 (静默降级, 不阻断)
-    服务端硬校验: limits 超上限自动截断 (防打爆上下文窗口)"""
+    """Return an injection stream for a scenario: {skills, memories, hooks}
+    Channels: ① skill semantic recall (including dormant, wakeable) ② memories
+    hybrid search ③ hot hooks
+    Any channel failing → only the successful channels are returned (silent
+    degradation, never blocks)
+    Server-side hard validation: limits over the cap are auto-truncated (prevents
+    blowing out the context window)"""
     result = {"session_token": "", "skills": [], "memories": [], "hooks": [], "meta": {}}
-    # ── 服务端硬上限 (防恶意/错误超大 limit) ──
+    # ── Server-side hard caps (guards against malicious/erroneous oversized limits) ──
     HARD_CAPS = {"skills": 8, "memories": 10, "hooks": 10}
     limits = req.limits or {}
     try:
         caps = {k: max(1, min(int(limits.get(k, 3)), HARD_CAPS[k])) for k in HARD_CAPS}
     except Exception:
         caps = {"skills": 3, "memories": 5, "hooks": 5}
-    # ── 空 context → 返回空注入流 (不浪费 embedding 调用) ──
+    # ── Empty context → return an empty injection stream (don't waste an embedding call) ──
     if not (req.context or "").strip():
         result["meta"] = {"latency_ms": 0, "channels": {"skills": 0, "memories": 0, "hooks": 0}, "note": "empty_context"}
         return result
@@ -42,7 +47,7 @@ async def injection_plan(req: InjectionPlanRequest):
     t0 = time.time()
     STATE_WEIGHT = {"active": 1.0, "stale": 0.85, "archived": 0.7}
 
-    # ── ① 技能通道: 向量 + BM25 (对齐 wiki search 模式) ──
+    # ── ① Skills channel: vector + BM25 (aligned with wiki search mode) ──
     skills_out = []
     try:
         r_q = (await get_embedding_async([req.context]))[0]
@@ -57,7 +62,7 @@ async def injection_plan(req: InjectionPlanRequest):
                    LIMIT 30""",
                 q_str, req.user_id
             )
-            # BM25 补强 (租户隔离)
+            # BM25 boost (tenant-isolated)
             bm25_scores = {}
             try:
                 import jieba
@@ -107,11 +112,11 @@ async def injection_plan(req: InjectionPlanRequest):
         skills_out = []
     result["skills"] = skills_out
 
-    # ── ② 记忆通道: 复用 memories hybrid 搜索 ──
+    # ── ② Memories channel: reuses the memories hybrid search ──
     memories_out = []
     try:
         if req.context.strip():
-            # 直接查库 (与 /memories/search 同逻辑的轻量路径)
+            # Query the DB directly (a lightweight path with the same logic as /memories/search)
             r_q2 = (await get_embedding_async([req.context]))[0]
             q_str2 = "[" + ",".join(str(x) for x in r_q2) + "]"
             async with pool.acquire() as conn:
@@ -138,7 +143,7 @@ async def injection_plan(req: InjectionPlanRequest):
         memories_out = []
     result["memories"] = memories_out
 
-    # ── ③ 热点钩子通道: 复用 heat-top + 时间衰减 ──
+    # ── ③ Hot hooks channel: reuses heat-top + time decay ──
     hooks_out = []
     try:
         async with pool.acquire() as conn:

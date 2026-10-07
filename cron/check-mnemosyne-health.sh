@@ -1,13 +1,13 @@
 #!/bin/bash
-# Mnemosyne 健康检查 v5.2 — 个人版监控
+# Mnemosyne health check v5.2 — personal-edition monitoring
 API_BASE="http://127.0.0.1:8010"
 LOG="/var/log/mnemosyne-health.log"
 FAIL_COUNT_FILE="/tmp/mnemosyne_fail_count"
 
-# 1. 基础健康
+# 1. Basic health
 api_code=$(curl -s --max-time 10 -o /dev/null -w "%{http_code}" "$API_BASE/api/v1/echo" 2>/dev/null)
 
-# 2. 搜索可达性
+# 2. Search reachability
 search_code=$(curl -s --max-time 10 -X POST "$API_BASE/api/v1/memories/search" \
   -H "Content-Type: application/json" \
   -d "{\"query\":\"health_check\",\"user_id\":\"default\",\"top_k\":1}" \
@@ -16,7 +16,7 @@ search_code=$(curl -s --max-time 10 -X POST "$API_BASE/api/v1/memories/search" \
 echo "$(date "+%Y-%m-%d %H:%M:%S") api=$api_code search=$search_code" >> $LOG
 
 if [ "$api_code" != "200" ] || [ "$search_code" != "200" ]; then
-  # 故障：累加计数 + 深度诊断
+  # Failure: bump the counter + run deep diagnostics
   count=$(cat $FAIL_COUNT_FILE 2>/dev/null || echo 0)
   count=$((count + 1))
   echo $count > $FAIL_COUNT_FILE
@@ -33,6 +33,6 @@ if [ "$api_code" != "200" ] || [ "$search_code" != "200" ]; then
   echo "  --- process ---" >> $LOG
   ps aux | grep -E "uvicorn|mnemosyne" | grep -v grep | head -3 >> $LOG
 else
-  # 恢复：清零
+  # Recovered: reset the counter
   rm -f $FAIL_COUNT_FILE
 fi

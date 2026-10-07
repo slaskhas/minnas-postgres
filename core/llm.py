@@ -1,12 +1,12 @@
 """
-Mnemosyne v5.0 — 模型路由引擎 v2.0
-白皮书 L3 算力调度层完整实现
+Mnemosyne v5.0 — model routing engine v2.0
+Full implementation of the whitepaper's L3 compute scheduling layer
 
-Tier 1: doubao-embedding-vision   → 向量化 (128 tokens/条, ¥0.0001)
-Tier 2: doubao-seed-2-0-mini      → 快速分类/摘要 (¥0.001/1K tokens)
-Tier 3: doubao-seed-2-0-lite      → 蒸馏主力 JSON mode (¥0.003/1K tokens)
-Tier 4: deepseek-v4-pro           → 异构审计/矛盾检测 (¥0.015/1K tokens)
-Tier 5: doubao-seedream           → 可视化素材 (按图计费)
+Tier 1: doubao-embedding-vision   → vectorization (128 tokens/item, ¥0.0001)
+Tier 2: doubao-seed-2-0-mini      → fast classification/summarization (¥0.001/1K tokens)
+Tier 3: doubao-seed-2-0-lite      → primary distillation, JSON mode (¥0.003/1K tokens)
+Tier 4: deepseek-v4-pro           → heterogeneous audit/conflict detection (¥0.015/1K tokens)
+Tier 5: doubao-seedream           → visualization assets (billed per image)
 """
 import urllib.request
 import urllib.error
@@ -16,7 +16,7 @@ import sys, os
 import time
 from typing import Dict, Optional, List
 
-# 兼容导入
+# Compatibility import
 try:
     from .config import (ARK_API_KEY, ARK_BASE, DOUBAO_MINI, DOUBAO_LITE, DOUBAO_CODE,
                          DEEPSEEK_PRO, DEEPSEEK_FLASH, TMT_MAX_RETRIES)
@@ -25,24 +25,25 @@ except ImportError:
     from config import (ARK_API_KEY, ARK_BASE, DOUBAO_MINI, DOUBAO_LITE, DOUBAO_CODE,
                         DEEPSEEK_PRO, DEEPSEEK_FLASH, TMT_MAX_RETRIES)
 
-# v6.5 双底座: DeepSeek 主 (蒸馏/审计), 豆包 辅 (mini 快速分类)
+# v6.5 dual-backbone: DeepSeek primary (distillation/audit), Doubao secondary (mini fast classification)
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
 DEEPSEEK_BASE = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1")
 
-# ── 模型梯队定义 ──
+# ── Model tier definitions ──
 TIERS = {
     1: {"model": "doubao-embedding-vision-251215", "type": "embedding", "cost_per_1k": 0.0001},
     2: {"model": DOUBAO_MINI, "type": "chat", "cost_per_1k": 0.001, "max_tokens": 500},
-    # v6.5: Tier 3 蒸馏主力切 DeepSeek (豆包 json_object 长 prompt 400, DeepSeek 60K 正常+快)
+    # v6.5: Tier 3's primary distillation model switched to DeepSeek (Doubao's
+    # json_object mode 400s on long prompts; DeepSeek handles 60K fine and fast)
     3: {"model": DEEPSEEK_FLASH, "type": "chat", "cost_per_1k": 0.003, "max_tokens": 2000, "provider": "deepseek"},
     4: {"model": DEEPSEEK_PRO, "type": "chat", "cost_per_1k": 0.015, "max_tokens": 2048, "provider": "deepseek"},
     5: {"model": "doubao-seedream-5-0-260128", "type": "image", "cost_per_image": 0.02},
 }
 
-# ── 成本统计 ──
+# ── Cost stats ──
 _cost_stats: Dict[str, dict] = {}  # {tier: {calls, tokens, cost}}
 
-# ── 双层语义缓存 ──
+# ── Two-tier semantic cache ──
 _cache: Dict[str, dict] = {}
 _embed_cache: Dict[str, List[float]] = {}
 MAX_CACHE = 500
@@ -51,12 +52,12 @@ MAX_CACHE = 500
 def _call_ark(messages: list, model: str, max_tokens: int = 500,
               response_format: Optional[dict] = None, temperature: float = 0.3,
               provider: Optional[str] = None) -> dict:
-    # v6.5 双底座路由: provider=deepseek → DeepSeek API, 默认 → 豆包 ARK
+    # v6.5 dual-backbone routing: provider=deepseek → DeepSeek API, default → Doubao ARK
     if provider == "deepseek":
         api_key = DEEPSEEK_API_KEY
         base = DEEPSEEK_BASE
         if not api_key:
-            raise RuntimeError("DEEPSEEK_API_KEY 未配置")
+            raise RuntimeError("DEEPSEEK_API_KEY not configured")
     else:
         api_key = ARK_API_KEY
         base = ARK_BASE
@@ -69,7 +70,7 @@ def _call_ark(messages: list, model: str, max_tokens: int = 500,
     if response_format:
         payload["response_format"] = response_format
     if provider == "deepseek":
-        # DeepSeek V4 关闭思考链 (蒸馏场景不需要), 加快响应
+        # Disable DeepSeek V4's thinking chain (not needed for distillation), speeds up response
         payload["thinking"] = {"type": "disabled"}
 
     req = urllib.request.Request(
@@ -89,29 +90,31 @@ def _call_ark(messages: list, model: str, max_tokens: int = 500,
 def call_llm(prompt: str, tier: int = 3, json_mode: bool = False, 
              temperature: float = 0.3, no_cache: bool = False) -> dict:
     """
-    分级路由 + 自动升降级 + 缓存
-    
+    Tiered routing + automatic upgrade/downgrade + caching
+
     Args:
-        prompt: 提示词
-        tier: 初始层级 2-4 (2=mini, 3=lite, 4=code)
-        json_mode: JSON 结构化输出
-        temperature: 温度 (仅 Tier 2-4)
-        no_cache: 跳过缓存
-    
+        prompt: the prompt
+        tier: starting tier 2-4 (2=mini, 3=lite, 4=code)
+        json_mode: structured JSON output
+        temperature: temperature (Tier 2-4 only)
+        no_cache: skip the cache
+
     Returns:
         {"content": str, "tokens": int, "model": str, "tier": int, "cost": float, "cache_hit": bool}
     """
-    # 缓存检查
+    # Cache check
     cache_key = f"t{tier}:j{json_mode}:t{temperature}:{hash(prompt)}"
     if not no_cache and cache_key in _cache:
         result = _cache[cache_key].copy()
         result["cache_hit"] = True
         return result
-    
+
     messages = [{"role": "user", "content": prompt}]
-    # v6.5 豆包 json_object 长 prompt 400 修复:
-    # response_format=json_object + prompt>~4500字符 → 豆包返回 HTTP 400 (实测阈值)
-    # 方案: 超阈值自动降级去掉 response_format, 靠上层 parse_json_response 提取 JSON
+    # v6.5 fix for Doubao's json_object 400 on long prompts:
+    # response_format=json_object + prompt >~4500 chars → Doubao returns HTTP 400
+    # (threshold observed empirically). Workaround: above the threshold, drop
+    # response_format automatically and rely on parse_json_response upstream to
+    # extract the JSON.
     JSON_FMT_SAFE_LEN = 4000
     fmt = ({"type": "json_object"} if (json_mode and len(prompt) <= JSON_FMT_SAFE_LEN) else None)
     
@@ -129,7 +132,7 @@ def call_llm(prompt: str, tier: int = 3, json_mode: bool = False,
                               provider=tinfo.get("provider"))
             elapsed = time.time() - t0
             
-            # JSON 验证
+            # JSON validation
             if json_mode:
                 try:
                     content = result["content"]
@@ -145,7 +148,7 @@ def call_llm(prompt: str, tier: int = 3, json_mode: bool = False,
                         continue
                     result["content"] = "{}"
             
-            # 成本核算
+            # Cost accounting
             cost = (result["tokens"] / 1000) * tinfo["cost_per_1k"]
             
             final = {
@@ -159,7 +162,7 @@ def call_llm(prompt: str, tier: int = 3, json_mode: bool = False,
                 "upgraded": current_tier > tier,
             }
             
-            # 成本统计
+            # Cost stats
             tk = str(current_tier)
             if tk not in _cost_stats:
                 _cost_stats[tk] = {"calls": 0, "tokens": 0, "cost": 0.0}
@@ -167,7 +170,7 @@ def call_llm(prompt: str, tier: int = 3, json_mode: bool = False,
             _cost_stats[tk]["tokens"] += result["tokens"]
             _cost_stats[tk]["cost"] += cost
             
-            # 缓存
+            # Cache
             if len(_cache) >= MAX_CACHE:
                 _cache.pop(next(iter(_cache)))
             _cache[cache_key] = final
@@ -175,7 +178,8 @@ def call_llm(prompt: str, tier: int = 3, json_mode: bool = False,
             return final
             
         except (urllib.error.URLError, TimeoutError, OSError) as e:
-            # 连接/网络类错误：升级 tier 无意义（服务不可用或网络慢），直接失败快速降级
+            # Connection/network errors: upgrading tier is pointless (service down
+            # or network slow) — fail fast instead
             last_error = e
             break
         except Exception as e:
@@ -199,17 +203,17 @@ def call_llm(prompt: str, tier: int = 3, json_mode: bool = False,
 
 
 def call_llm_json(prompt: str, tier: int = 3) -> dict:
-    """JSON 模式便捷包装"""
+    """Convenience wrapper for JSON mode"""
     return call_llm(prompt, tier=tier, json_mode=True)
 
 
 def call_llm_fast(prompt: str) -> dict:
-    """Tier 2 快速模式"""
+    """Tier 2 fast mode"""
     return call_llm(prompt, tier=2)
 
 
 def get_cost_stats() -> dict:
-    """获取成本统计"""
+    """Get cost stats"""
     total = sum(s["cost"] for s in _cost_stats.values())
     return {
         "by_tier": _cost_stats,
@@ -219,7 +223,7 @@ def get_cost_stats() -> dict:
 
 
 def get_cache_stats() -> dict:
-    """获取缓存统计"""
+    """Get cache stats"""
     return {
         "llm_cache_size": len(_cache),
         "llm_cache_max": MAX_CACHE,
@@ -228,12 +232,12 @@ def get_cache_stats() -> dict:
 
 
 def get_embed_cached(text: str) -> Optional[List[float]]:
-    """获取缓存的向量"""
+    """Get a cached vector"""
     return _embed_cache.get(text)
 
 
 def set_embed_cached(text: str, embedding: List[float]):
-    """缓存向量"""
+    """Cache a vector"""
     if len(_embed_cache) >= MAX_CACHE:
         _embed_cache.pop(next(iter(_embed_cache)))
     _embed_cache[text] = embedding

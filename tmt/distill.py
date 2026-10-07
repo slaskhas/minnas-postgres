@@ -1,26 +1,29 @@
 #!/usr/bin/env python3
 """
-distill.py — 知识蒸馏管道 v0.1 (2026-08-05)
+distill.py — Knowledge distillation pipeline v0.1 (2026-08-05)
 
-设计来源: 爆炸遗产考古 — NCP-008 知识吸收七步(识别→分析→语义化→索引→验证→归档→引用)
-          + 认知AI底座 TEL/MAIL 协议(架构级杜绝幻觉: FACTS 多源验证 + MAIL 结构化返回)
+Design origin: legacy-system archaeology — NCP-008's seven-step knowledge absorption
+          (identify→analyze→semanticize→index→verify→archive→cite)
+          + the cognitive-AI foundation's TEL/MAIL protocol (architecture-level
+          hallucination prevention: FACTS multi-source verification + MAIL
+          structured return)
 
-目标: 解决分类失衡 (session+worklog 88%, knowledge 仅 9%)
-    从原始 session/worklog 记忆中提炼可复用的 knowledge/pitfall 知识条目。
+Goal: fix category imbalance (session+worklog at 88%, knowledge only 9%)
+    by distilling reusable knowledge/pitfall entries out of raw session/worklog memories.
 
-用法:
-  python3 distill.py --batch 30            # 处理最近 30 条未蒸馏候选
-  python3 distill.py --batch 30 --dry-run  # 只预览候选+LLM产出, 不入库
-  python3 distill.py --stats               # 查看蒸馏统计
+Usage:
+  python3 distill.py --batch 30            # process the 30 most recent undistilled candidates
+  python3 distill.py --batch 30 --dry-run  # preview candidates + LLM output only, no DB writes
+  python3 distill.py --stats               # view distillation stats
 
-流程 (七步映射):
-  1. 识别    — 候选筛选: session/worklog + 未蒸馏 + 长度/信号词过滤
-  2. 分析    — TEL 组装: CONTRACT + FACTS + REQUIREMENTS
-  3. 语义化  — LLM 凝练: 豆包 Lite (tier3), JSON 模式
-  4. 索引    — 入库: category=knowledge/pitfall, hall=archive/engineering
-  5. 验证    — 去重闸机: pgvector ANN, sim>0.92 跳过
-  6. 归档    — 三馆流转: knowledge→archive, pitfall→engineering
-  7. 引用    — metadata.source_memory_id 溯源
+Pipeline (mapped to the seven steps):
+  1. Identify    — candidate screening: session/worklog + undistilled + length/signal-word filter
+  2. Analyze     — TEL assembly: CONTRACT + FACTS + REQUIREMENTS
+  3. Semanticize — LLM condensation: Doubao Lite (tier3), JSON mode
+  4. Index       — write to DB: category=knowledge/pitfall, hall=archive/engineering
+  5. Verify      — dedup gate: pgvector ANN, skip if sim>0.92
+  6. Archive     — move between the three halls: knowledge→archive, pitfall→engineering
+  7. Cite        — metadata.source_memory_id provenance
 """
 
 import argparse
@@ -36,14 +39,14 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import asyncpg
 
 async def get_embedding(text: str) -> list[float]:
-    """同步 embedding 包装 (同 consolidate.py 模式)"""
+    """Synchronous embedding wrapper (same pattern as consolidate.py)"""
     return _embedding_sync([text])[0]
 
 PG_DSN = os.environ.get("MNEMOSYNE_PG_DSN", "postgresql://postgres@127.0.0.1:5432/mnemosyne")
 
 
 def load_env(path: str = "/opt/mnemosyne/.env") -> None:
-    """加载 .env (独立脚本不依赖 systemd EnvironmentFile)"""
+    """Load .env (standalone script doesn't rely on systemd EnvironmentFile)"""
     if not os.path.exists(path):
         return
     with open(path, encoding="utf-8") as f:
@@ -59,22 +62,24 @@ def load_env(path: str = "/opt/mnemosyne/.env") -> None:
 
 load_env()
 
-# key 就绪后再 import (core.config 在 import 时读取环境变量)
+# import only once the key is ready (core.config reads env vars at import time)
 from core.embedding import get_embedding as _embedding_sync
 from core.llm import call_llm_json
 
-# 知识信号词: 候选记忆命中任一即进入蒸馏候选
+# Knowledge signal words: a candidate memory matching any of these enters the distillation pool
+# (kept in Chinese — matched against Chinese memory content; do not translate)
 SIGNAL_WORDS = (
     "学到", "解决", "发现", "坑", "教训", "经验", "方案", "架构", "踩坑",
     "修复", "优化", "结论", "要点", "注意", "规则", "流程", "设计", "原理",
     "配置", "部署", "故障", "报错", "错误", "成功", "失败", "踩过", "总结",
 )
-# 排除词: 纯寒暄/情绪/无关
+# Exclusion words: pure small talk/emotion/irrelevant content
+# (kept in Chinese — matched against Chinese memory content; do not translate)
 EXCLUDE_WORDS = ("撒娇", "可爱", "晚安", "早安", "哈哈", "嘿嘿", "呜呜", "喵~", "欺负", "亲亲")
 
-MIN_LEN = 120          # 最小候选长度
-DEDUP_THRESHOLD = 0.92  # 与已有 knowledge 相似度超过此值 → 跳过
-MAX_RETRY = 2          # LLM 失败重试
+MIN_LEN = 120          # minimum candidate length
+DEDUP_THRESHOLD = 0.92  # similarity to an existing knowledge entry above this → skip
+MAX_RETRY = 2          # LLM failure retries
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s", datefmt="%H:%M:%S")
 log = logging.getLogger("distill")
@@ -88,9 +93,9 @@ async def get_pool() -> asyncpg.Pool:
     return await asyncpg.create_pool(PG_DSN, min_size=1, max_size=3)
 
 
-# ── 1. 识别: 候选筛选 ──
+# ── 1. Identify: candidate screening ──
 async def find_candidates(pool, batch: int) -> list[dict]:
-    """未蒸馏的 session/worklog 记忆, 按新鲜度倒序取 batch 条"""
+    """Undistilled session/worklog memories, newest-first, up to `batch` rows"""
     rows = await pool.fetch(
         """
         SELECT id, content, category, created_at
@@ -103,9 +108,9 @@ async def find_candidates(pool, batch: int) -> list[dict]:
         ORDER BY created_at DESC
         LIMIT $2
         """,
-        MIN_LEN, batch * 3,  # 多取 3 倍, 信号词过滤后仍够数
+        MIN_LEN, batch * 3,  # over-fetch 3x so enough remain after signal-word filtering
     )
-    # 信号词 + 排除词过滤
+    # signal-word + exclusion-word filtering
     cands = []
     for r in rows:
         c = r["content"]
@@ -115,7 +120,7 @@ async def find_candidates(pool, batch: int) -> list[dict]:
             cands.append(r)
         if len(cands) >= batch:
             break
-    # 若信号词过滤后不足, 补足长度足够且非纯寒暄的
+    # if signal-word filtering left too few, top up with anything long enough and not pure small talk
     if len(cands) < batch:
         for r in rows:
             if r not in cands and len(cands) < batch:
@@ -123,7 +128,10 @@ async def find_candidates(pool, batch: int) -> list[dict]:
     return cands[:batch]
 
 
-# ── 2+3. 分析 + 语义化: TEL 组装 → LLM 凝练 ──
+# ── 2+3. Analyze + Semanticize: TEL assembly → LLM condensation ──
+# NOTE: the TEL prompt text below is sent to the LLM and instructs it to respond in
+# Chinese (per the memory content's language) — left untranslated intentionally,
+# this is functional prompt data, not a comment.
 def build_tel(content: str) -> str:
     return f"""<TEL>
 <CONTRACT>你是记忆宫殿的知识蒸馏器。把一段原始记忆凝练成结构化知识条目。铁律:
@@ -147,17 +155,17 @@ async def distill_one(content: str) -> dict | None:
             raw = res.get("content", "")
             m = json.loads(raw) if raw else {}
             if not m or "type" not in m:
-                raise ValueError(f"LLM 返回无 type: {raw[:100]}")
+                raise ValueError(f"LLM response missing type: {raw[:100]}")
             return m
         except Exception as e:
-            log.warning("  LLM 失败 (attempt %d): %s", attempt + 1, e)
+            log.warning("  LLM failed (attempt %d): %s", attempt + 1, e)
     return None
 
 
-# ── 5. 验证: 去重闸机 (ANN) ──
+# ── 5. Verify: dedup gate (ANN) ──
 async def dedup_check(pool, summary: str, in_batch: list[str] | None = None) -> bool:
-    """与已有 knowledge/pitfall 记忆比较 + 本批内比较, sim>阈值返回 True (重复)"""
-    # 批内去重 (v6.2): 同批已提炼的相似条目直接跳过
+    """Compares against existing knowledge/pitfall memories plus this batch; returns True (duplicate) if sim > threshold"""
+    # In-batch dedup (v6.2): skip entries similar to ones already distilled in this same batch
     if in_batch:
         for prev in in_batch:
             if prev and len(prev) > 5 and (summary[:40] in prev or prev[:40] in summary):
@@ -182,11 +190,11 @@ async def dedup_check(pool, summary: str, in_batch: list[str] | None = None) -> 
     return row is not None
 
 
-# ── 4+6+7. 索引+归档+引用: 入库 ──
+# ── 4+6+7. Index + archive + cite: write to DB ──
 async def insert_knowledge(pool, src_id: int, src_category: str, distilled: dict) -> bool:
     mtype = distilled["type"]
     if mtype == "skip":
-        # 只标记源, 不产生新记忆
+        # Only mark the source, produce no new memory
         await pool.execute(
             "UPDATE memories SET metadata = metadata || $2::jsonb WHERE id = $1",
             src_id, json.dumps({"distilled_at": utcnow(), "distill_result": "skip"}),
@@ -194,13 +202,13 @@ async def insert_knowledge(pool, src_id: int, src_category: str, distilled: dict
         return False
 
     hall = "archive" if mtype == "knowledge" else "engineering"
-    # 再次确认类型合法
+    # Re-confirm the type is valid
     if mtype not in ("knowledge", "pitfall"):
         return False
 
     summary = (distilled.get("summary") or "").strip()
     if len(summary) < 10:
-        # 摘要太短视为无效, 只标记
+        # Summary too short, treat as invalid, just mark it
         await pool.execute(
             "UPDATE memories SET metadata = metadata || $2::jsonb WHERE id = $1",
             src_id, json.dumps({"distilled_at": utcnow(), "distill_result": "invalid"}),
@@ -208,8 +216,8 @@ async def insert_knowledge(pool, src_id: int, src_category: str, distilled: dict
         return False
 
     importance = min(max(float(distilled.get("importance", 0.4)), 0.1), 0.95)
-    # v6.2: 蒸馏新知识初始热度信号 0.65 (默认 0.5 → 0.65, 标记"新提炼")
-    # v6.3: pitfall(坑) 天生重要 → 0.70
+    # v6.2: distilled knowledge starts with heat signal 0.65 (default 0.5 → 0.65, marks "newly distilled")
+    # v6.3: pitfalls are inherently important → 0.70
     heat_init = 0.70 if mtype == "pitfall" else 0.65
     metadata = {
         "distilled_from": src_id,
@@ -226,7 +234,7 @@ async def insert_knowledge(pool, src_id: int, src_category: str, distilled: dict
         """,
         summary, mtype, hall, importance, heat_init, json.dumps(metadata, ensure_ascii=False),
     )
-    # 标记源已蒸馏
+    # Mark the source as distilled
     await pool.execute(
         "UPDATE memories SET metadata = metadata || $2::jsonb WHERE id = $1",
         src_id, json.dumps({"distilled_at": utcnow(), "distill_result": mtype}),
@@ -234,17 +242,17 @@ async def insert_knowledge(pool, src_id: int, src_category: str, distilled: dict
     return True
 
 
-# ── 主流程 ──
+# ── Main flow ──
 async def run(batch: int, dry_run: bool) -> None:
     pool = await get_pool()
     try:
         cands = await find_candidates(pool, batch)
-        log.info("候选 %d 条 (dry_run=%s)", len(cands), dry_run)
+        log.info("%d candidates (dry_run=%s)", len(cands), dry_run)
 
         stats = {"knowledge": 0, "pitfall": 0, "skip": 0, "dedup": 0, "fail": 0}
-        in_batch: list[str] = []  # v6.2: 批内去重
+        in_batch: list[str] = []  # v6.2: in-batch dedup
         for i, c in enumerate(cands, 1):
-            log.info("[%d/%d] 蒸馏 #%d (%s): %.50s...", i, len(cands), c["id"], c["category"], c["content"])
+            log.info("[%d/%d] Distilling #%d (%s): %.50s...", i, len(cands), c["id"], c["category"], c["content"])
             d = await distill_one(c["content"])
             if d is None:
                 stats["fail"] += 1
@@ -263,7 +271,7 @@ async def run(batch: int, dry_run: bool) -> None:
             dup = await dedup_check(pool, d.get("summary", ""), in_batch if not dry_run else None)
             if dup:
                 stats["dedup"] += 1
-                log.info("  → 去重跳过 (sim>%.2f): %.60s", DEDUP_THRESHOLD, d.get("summary", ""))
+                log.info("  → skipped as duplicate (sim>%.2f): %.60s", DEDUP_THRESHOLD, d.get("summary", ""))
                 continue
 
             stats[t] += 1
@@ -272,7 +280,7 @@ async def run(batch: int, dry_run: bool) -> None:
                 await insert_knowledge(pool, c["id"], c["category"], d)
             log.info("  → %s [%s]: %.70s (imp=%.2f)", t, d.get("confidence", "?"), d.get("summary", ""), float(d.get("importance", 0)))
 
-        log.info("═══ 蒸馏完成: %s ═══", json.dumps(stats, ensure_ascii=False))
+        log.info("═══ Distillation complete: %s ═══", json.dumps(stats, ensure_ascii=False))
     finally:
         await pool.close()
 
@@ -287,14 +295,14 @@ async def show_stats(pool) -> None:
         GROUP BY category ORDER BY n DESC
         """
     )
-    print("\n=== 分类分布 (蒸馏前/后) ===")
-    print(f"{'分类':<12}{'总数':>6}{'已蒸馏':>8}")
+    print("\n=== Category distribution (before/after distillation) ===")
+    print(f"{'category':<12}{'total':>6}{'distilled':>8}")
     for r in rows:
         print(f"{r['category']:<12}{r['n']:>6}{r['distilled']:>8}")
 
 
 async def main():
-    parser = argparse.ArgumentParser(description="Mnemosyne 知识蒸馏管道")
+    parser = argparse.ArgumentParser(description="Mnemosyne knowledge distillation pipeline")
     parser.add_argument("--batch", type=int, default=30)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--stats", action="store_true")

@@ -1,13 +1,13 @@
 """
-Mnemosyne v5.0 — 哈希净化与化石节点
-白皮书 L3 第三纵深 + 合规保真
+Mnemosyne v5.0 — hash purification and fossil nodes
+Whitepaper L3 third line of defense + compliance/fidelity
 
-原理: 
-- 删除 = SHA-256 哈希替代原始内容 (不可逆)
-- 保留元数据 + 拓扑关系 (链路完整)
-- DAG 中显示为灰色化石节点
+Principle:
+- Deletion = original content replaced by a SHA-256 hash (irreversible)
+- Metadata + topology are retained (the link chain stays intact)
+- Shown as a gray fossil node in the DAG
 
-对应 白皮书 §5.6 合规与保真平衡
+Corresponds to whitepaper §5.6, balancing compliance and fidelity
 """
 import hashlib
 from datetime import datetime, timezone
@@ -15,13 +15,13 @@ from datetime import datetime, timezone
 
 def purify_content(content: str) -> str:
     """
-    哈希净化: 将原始内容替换为 SHA-256 哈希
-    
+    Hash purification: replace the original content with a SHA-256 hash
+
     Args:
-        content: 原始内容
-    
+        content: the original content
+
     Returns:
-        sha256:hash_prefix (不可逆)
+        sha256:hash_prefix (irreversible)
     """
     h = hashlib.sha256(content.encode()).hexdigest()
     return f"sha256:{h}"
@@ -29,15 +29,15 @@ def purify_content(content: str) -> str:
 
 async def soft_delete_memory(conn, memory_id: int, reason: str = "user_request") -> dict:
     """
-    软删除 + 哈希净化
-    
-    流程:
-    1. 原始内容 → SHA-256 哈希
-    2. content 替换为净化值 (不可读)
+    Soft delete + hash purification
+
+    Flow:
+    1. Original content → SHA-256 hash
+    2. content is replaced with the purified value (unreadable)
     3. is_deleted = TRUE
-    4. metadata 记录删除原因
-    5. 保留所有关联关系 (拓扑完整)
-    
+    4. metadata records the deletion reason
+    5. All relationships are kept (topology stays intact)
+
     Returns:
         {"memory_id": int, "status": "purified", "fossil": bool}
     """
@@ -73,15 +73,15 @@ async def soft_delete_memory(conn, memory_id: int, reason: str = "user_request")
 
 
 def verify_purified(content: str) -> bool:
-    """检查内容是否已被净化"""
+    """Check whether content has already been purified"""
     return content.startswith("sha256:")
 
 
 async def get_fossil_nodes(conn, tenant_id: str = "default", limit: int = 20) -> list:
     """
-    查询化石节点列表 (已净化但拓扑保留的记忆)
-    
-    白皮书: "净化后的节点在 DAG 中显示为灰色化石状"
+    Query the list of fossil nodes (memories that are purified but whose topology is retained)
+
+    Whitepaper: "a purified node is shown as a gray fossil in the DAG"
     """
     rows = await conn.fetch(
         """SELECT id, content, category, hall, metadata, 

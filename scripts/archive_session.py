@@ -1,19 +1,24 @@
 #!/usr/bin/env python3
 """
-会话归档 — Hermes 对话 → Mnemosyne 记忆宫殿
-用法:
-  python3 archive_session.py                    # 归档最近一次会话
-  python3 archive_session.py --session-id ID    # 归档指定会话
-  python3 archive_session.py --last N           # 归档最近N场会话
-  python3 archive_session.py --dry-run          # 预览不推送
-  python3 archive_session.py --auto             # 自动归档首个未归档会话(供 hook/cron)
-  python3 archive_session.py --list             # 列出最近会话
+Session archiving — Hermes conversations → Mnemosyne Memory Palace
+Usage:
+  python3 archive_session.py                    # archive the most recent session
+  python3 archive_session.py --session-id ID    # archive a specific session
+  python3 archive_session.py --last N           # archive the last N sessions
+  python3 archive_session.py --dry-run          # preview without pushing
+  python3 archive_session.py --auto             # auto-archive the first un-archived session (for hooks/cron)
+  python3 archive_session.py --list             # list recent sessions
 
-v7.8.4 (2026-09-24) 归档质量三改 —— 触发: 收尾汇报里的交付物路径/哈希/实测数字在语义层查不到
-  1. 分级截断: 收尾汇报 + 用户消息 **全文保留**, 只压缩过程消息。
-     旧版对每条消息一刀切 `content[:2000]`, 而汇报常 >2000 字 —— 被切的正是精华。
-  2. 证据签名: 带 tool_calls 的消息附 `⟪工具: terminal×3, read_file×2⟫`, 让语义层看得见"这轮干了什么"。
-  3. 短会话不弃: message_count < 5 改为入库并打 `[短]` 前缀 (旧版直接跳过 → 小任务无痕)。
+v7.8.4 (2026-09-24) three archiving-quality fixes — triggered by: deliverable paths/hashes/measured
+numbers inside the final report were not found at the semantic-search layer
+  1. Tiered truncation: the final report + user messages are **kept in full**; only process
+     messages get compressed.
+     The old version blanket-truncated every message with `content[:2000]`, but reports are
+     often >2000 chars — exactly the part that got cut was the valuable part.
+  2. Evidence signature: messages carrying tool_calls get a `⟪工具: terminal×3, read_file×2⟫`
+     suffix appended, so the semantic layer can see "what happened in this turn".
+  3. Short sessions are no longer dropped: message_count < 5 is now stored with a `[短]` prefix
+     instead (the old version just skipped it → small tasks left no trace).
 """
 import collections
 import re
@@ -29,30 +34,33 @@ HERMES_DB = os.path.expanduser("~/.hermes/state.db")
 MNEMOSYNE_API = "http://127.0.0.1:18010/api/v1/sessions/archive"
 TRACKING_FILE = os.path.expanduser("~/.hermes/archived_sessions.json")
 
-# ---- v7.8.4 分级截断预算 ----
-LIMIT_FINAL_REPORT = 12000   # 会话最后一条 AI 消息(收尾汇报) — 全文保留
-LIMIT_USER = 8000            # 用户消息 — 全文保留(上限仅防极端粘贴)
-LIMIT_PROCESS = 1200         # 过程消息(工具往返/中间分析) — 压缩
-MAX_TOTAL = 120000           # 单会话总预算(旧版同会话实测入档 12.5 万字符且生产无恙, 不订更低)
-                             # 超限时只从"过程消息"里让位; 受保护内容(汇报/用户消息)永不裁剪
-TOOL_SIG_MAX = 5             # 证据签名最多列几种工具
-SHORT_SESSION = 5            # 低于此数叫"短会话": 入库但打 [短] 前缀
+# ---- v7.8.4 tiered-truncation budget ----
+LIMIT_FINAL_REPORT = 12000   # last AI message of the session (final report) — kept in full
+LIMIT_USER = 8000            # user messages — kept in full (cap only guards against extreme pastes)
+LIMIT_PROCESS = 1200         # process messages (tool round-trips/intermediate analysis) — compressed
+MAX_TOTAL = 120000           # total budget per session (the old version measured 125k chars archived
+                             # for one session in production with no issues, so this isn't set lower)
+                             # once over budget, only "process messages" yield space; protected
+                             # content (report/user messages) is never trimmed
+TOOL_SIG_MAX = 5             # max number of distinct tools listed in the evidence signature
+SHORT_SESSION = 5            # below this count it's a "short session": still stored, but tagged [短]
 
-# 项目关键词 (从配置文件加载, 不存在返回空)
+# Project keywords (loaded from a config file; returns empty if absent)
 KEYWORDS_FILE = os.path.join(os.path.dirname(__file__), "project_keywords.json")
 try:
     with open(KEYWORDS_FILE) as f:
         PROJECT_KEYWORDS = json.load(f)
-    # 去掉注释键
+    # Drop comment keys
     PROJECT_KEYWORDS = {k: v for k, v in PROJECT_KEYWORDS.items() if not k.startswith("_")}
 except (FileNotFoundError, json.JSONDecodeError):
     PROJECT_KEYWORDS = {}
 
 
 def _compose_title(title, proj: str | None, is_short: bool) -> str:
-    """把 [项目] / [短] 合成**单个**前缀标签, 幂等。
+    """Compose [project] / [短] into a **single** prefix tag, idempotently.
 
-    旧写法两次前插会得到 `[短] [relife] 标题` —— 方括号套娃, 且重复调用会叠加。
+    The old approach of prepending twice produced `[短] [relife] title` —— nested
+    brackets that would keep stacking on repeated calls.
     """
     title = str(title or "")
     m = re.match(r"^\[([^\]]*)\]\s*(.*)$", title)
@@ -66,7 +74,7 @@ def _compose_title(title, proj: str | None, is_short: bool) -> str:
 
 
 def _detect_project(text: str) -> str:
-    """根据文本检测所属项目 (命中关键词 >=2 才算, 避免单字误撞)"""
+    """Detect which project the text belongs to (requires >=2 keyword hits, to avoid single-word false matches)"""
     t = text.lower()
     best, best_score = None, 0
     for proj, words in PROJECT_KEYWORDS.items():
@@ -76,10 +84,10 @@ def _detect_project(text: str) -> str:
     return best if best_score >= 2 else None
 
 
-# ---- v7.8.4: 证据签名 ----
+# ---- v7.8.4: evidence signature ----
 
 def _tool_names(tool_calls) -> list:
-    """从 tool_calls(OpenAI 形态) 抽工具名列表, 容错到底。"""
+    """Extract the list of tool names from tool_calls (OpenAI-shaped), tolerating any malformed input."""
     if not tool_calls:
         return []
     try:
@@ -104,7 +112,7 @@ def _tool_names(tool_calls) -> list:
 
 
 def tool_signature(tool_calls) -> str:
-    """`⟪工具: terminal×3, read_file×2⟫` — 无工具则空串。"""
+    """Produces `⟪工具: terminal×3, read_file×2⟫` — empty string if there are no tools."""
     names = _tool_names(tool_calls)
     if not names:
         return ""
@@ -115,7 +123,7 @@ def tool_signature(tool_calls) -> str:
 
 
 def _last_report_id(messages) -> int | None:
-    """会话最后一条有正文的 AI 消息 = 收尾汇报 (要全文保留的那条)。"""
+    """The session's last AI message with body text = the final report (the one kept in full)."""
     for msg in reversed(messages):
         if msg["role"] != "user" and (msg["content"] or "").strip():
             return msg["id"]
@@ -123,10 +131,11 @@ def _last_report_id(messages) -> int | None:
 
 
 def format_session(messages) -> tuple:
-    """分级截断组装会话正文。返回 (content, stats)。
+    """Assemble the session body with tiered truncation. Returns (content, stats).
 
-    预算规则: 收尾汇报(最后一条 AI 消息)与用户消息永不裁剪;
-    总长超 MAX_TOTAL 时, 从"最早的过程消息"开始压缩让位。
+    Budget rule: the final report (last AI message) and user messages are never trimmed;
+    once the total length exceeds MAX_TOTAL, compression yields space starting from the
+    "earliest process message".
     """
     final_id = _last_report_id(messages)
     stats = {"messages": 0, "final_report_chars": 0, "truncated_process": 0, "budget_trimmed": 0}
@@ -155,14 +164,14 @@ def format_session(messages) -> tuple:
     while total > MAX_TOTAL:
         cand = [i for i, e in enumerate(entries) if not e[3] and len(e[1]) > 220]
         if not cand:
-            break                        # 只剩余"受保护"内容 → 允许超预算(汇报优先)
-        i = cand[0]                      # 最早的过程消息先让位
+            break                        # only "protected" content remains → allow going over budget (report takes priority)
+        i = cand[0]                      # the earliest process message yields first
         before = len(entries[i][1])
         new_len = max(200, before // 2)
         entries[i][1] = entries[i][1][:new_len] + "...(预算压缩)"
-        total -= before - len(entries[i][1])   # 净减量(含后缀, 旧版少算后缀 → 循环多跑)
+        total -= before - len(entries[i][1])   # net reduction (including the suffix; the old version miscounted the suffix → looped more than needed)
         trimmed.add(i)
-    stats["budget_trimmed"] = len(trimmed)     # 语义: 被让位的"消息条数"
+    stats["budget_trimmed"] = len(trimmed)     # semantics: number of "messages" that yielded space
 
     lines = [f"{e[0]}: {e[1]}{e[2]}" for e in entries]
     stats["messages"] = len(lines)
@@ -170,7 +179,7 @@ def format_session(messages) -> tuple:
 
 
 def get_session(db_path: str, session_id: str = None) -> dict:
-    """从 Hermes DB 取会话 (v7.8.4: 同时取 tool_calls, 短会话不再排除)"""
+    """Fetch a session from the Hermes DB (v7.8.4: also fetches tool_calls; short sessions are no longer excluded)"""
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
 
@@ -195,7 +204,7 @@ def get_session(db_path: str, session_id: str = None) -> dict:
             (session["id"],)
         ).fetchall()
     except sqlite3.OperationalError:
-        # 老库没有 tool_calls 列 → 退化为只取正文
+        # Older DB has no tool_calls column → fall back to fetching body text only
         messages = conn.execute(
             "SELECT id, role, content, '' AS tool_calls FROM messages "
             "WHERE session_id=? AND active=1 ORDER BY id",
@@ -206,7 +215,7 @@ def get_session(db_path: str, session_id: str = None) -> dict:
 
     content, stats = format_session(messages)
 
-    # v7.8.4: 回库项目前缀接线(部署副本 2026-09-04 已验证) + 短会话标记, 合成单标签
+    # v7.8.4: wires up the project prefix (verified in the deployed copy on 2026-09-04) + short-session tag, composed into a single label
     proj = _detect_project(content)
     title = _compose_title(session["title"], proj,
                            session["message_count"] < SHORT_SESSION)
@@ -222,7 +231,7 @@ def get_session(db_path: str, session_id: str = None) -> dict:
 
 
 def archive_to_mnemosyne(session: dict, dry_run: bool = False) -> dict:
-    """推送会话到记忆宫殿 (title 已含 [项目]/[短] 前缀)"""
+    """Push a session to the Memory Palace (title already includes the [project]/[短] prefix)"""
     payload = json.dumps({
         "user_id": "default",
         "session_id": session["session_id"],
@@ -252,7 +261,7 @@ def archive_to_mnemosyne(session: dict, dry_run: bool = False) -> dict:
 
 
 def list_sessions(db_path: str, limit: int = 10) -> list:
-    """列出最近会话"""
+    """List recent sessions"""
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     rows = conn.execute(
@@ -265,7 +274,7 @@ def list_sessions(db_path: str, limit: int = 10) -> list:
 
 
 def load_archived() -> set:
-    """加载已归档的会话ID集合"""
+    """Load the set of already-archived session IDs"""
     try:
         with open(TRACKING_FILE) as f:
             return set(json.load(f))
@@ -274,15 +283,16 @@ def load_archived() -> set:
 
 
 def save_archived(archived: set):
-    """保存已归档会话ID"""
+    """Save archived session IDs"""
     with open(TRACKING_FILE, 'w') as f:
         json.dump(list(archived), f)
 
 
 def auto_mode(include_short: bool = True):
-    """自动模式: 归档首个未归档的已完成会话
+    """Auto mode: archive the first un-archived, completed session
 
-    v7.8.4: 短会话不再跳过, 改为入库并打 [短] 前缀 (include_short=False 可还原旧行为)。
+    v7.8.4: short sessions are no longer skipped — they're now stored with a [短] prefix
+    (pass include_short=False to restore the old behavior).
     """
     archived = load_archived()
     sessions = list_sessions(HERMES_DB, limit=20)
@@ -308,7 +318,7 @@ def auto_mode(include_short: bool = True):
                             "stats": session.get("stats")}, ensure_ascii=False))
             return result
 
-        # 即使重复也算归档过了
+        # Even a duplicate counts as archived
         if result.get("reason") == "duplicate":
             archived.add(sid)
             save_archived(archived)
@@ -317,14 +327,14 @@ def auto_mode(include_short: bool = True):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Hermes 会话归档 → Mnemosyne")
-    parser.add_argument("--session-id", help="归档指定会话")
-    parser.add_argument("--last", type=int, default=1, help="归档最近N场")
-    parser.add_argument("--dry-run", action="store_true", help="预览")
-    parser.add_argument("--list", action="store_true", help="列出可归档会话")
-    parser.add_argument("--auto", action="store_true", help="自动归档首个未归档会话(供cron/hook)")
+    parser = argparse.ArgumentParser(description="Hermes session archiving → Mnemosyne")
+    parser.add_argument("--session-id", help="archive a specific session")
+    parser.add_argument("--last", type=int, default=1, help="archive the last N sessions")
+    parser.add_argument("--dry-run", action="store_true", help="preview")
+    parser.add_argument("--list", action="store_true", help="list archivable sessions")
+    parser.add_argument("--auto", action="store_true", help="auto-archive the first un-archived session (for cron/hooks)")
     parser.add_argument("--skip-short", action="store_true",
-                        help="v7.8.4 兼容开关: 还原旧行为(跳过 <5 条的短会话)")
+                        help="v7.8.4 compatibility switch: restore the old behavior (skip sessions with <5 messages)")
     args = parser.parse_args()
 
     if args.auto:
@@ -334,7 +344,7 @@ if __name__ == "__main__":
     if args.list:
         sessions = list_sessions(HERMES_DB)
         for s in sessions:
-            print(f"  {s['id'][:12]}...  [{s['message_count']}条] {s['title'] or '(无标题)'}  {str(s['started_at'])[:19]}")
+            print(f"  {s['id'][:12]}...  [{s['message_count']} msgs] {s['title'] or '(untitled)'}  {str(s['started_at'])[:19]}")
         sys.exit(0)
 
     for i in range(args.last):
@@ -349,4 +359,4 @@ if __name__ == "__main__":
         print(json.dumps(result, ensure_ascii=False, indent=2))
 
         if args.session_id:
-            break  # 指定ID只跑一次
+            break  # a specific session ID only runs once

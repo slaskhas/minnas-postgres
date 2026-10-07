@@ -1,8 +1,8 @@
 """
-Mnemosyne TMT Module — 5级时间记忆树 (TiMem 架构)
-基于 arXiv 2601.02845
+Mnemosyne TMT Module — 5-level Time Memory Tree (TiMem architecture)
+Based on arXiv 2601.02845
 
-v5.0: 豆包 Seed-2.0 API 替代本地 LLM (core.llm)
+v5.0: Doubao Seed-2.0 API replaces the local LLM (core.llm)
 """
 
 import json
@@ -12,15 +12,17 @@ from typing import Optional, List
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-# v6.5 时区修复: 生产服务器为 Asia/Shanghai (+08), 本地日期必须用本地时区构造窗口,
-# 否则 daily/weekly 端点把 8/6 本地日期标成 UTC → 窗口偏移 8h → 永远 no_children
+# v6.5 timezone fix: the production server is Asia/Shanghai (+08); local dates must
+# build windows using the local timezone,
+# otherwise the daily/weekly endpoints tag the 8/6 local date as UTC → window
+# shifted 8h → permanently no_children
 LOCAL_TZ = timezone(timedelta(hours=8))
 
 router = APIRouter(prefix="/api/v1/tmt", tags=["tmt"])
 
-# ── 从 main 注入的全局变量 ──
+# ── Globals injected from main ──
 pool = None
-embed_fn = None       # get_embedding (由 main.py 注入)
+embed_fn = None       # get_embedding (injected by main.py)
 
 # ── Pydantic Models ──
 class ConsolidateRequest(BaseModel):
@@ -39,14 +41,18 @@ class RecallRequest(BaseModel):
     complexity_hint: Optional[int] = None
     max_results: int = 20
 
-# ── 层级表映射 ──
+# ── Tier → table mapping ──
 LEVEL_TABLES = {
     2: "tmt_sessions", 3: "tmt_daily", 4: "tmt_weekly", 5: "tmt_profiles"
 }
 LEVEL_CONTENT_COLS = {2: "summary", 3: "summary", 4: "summary", 5: "summary"}
 WINDOW_SIZES = {2: 3, 3: 7, 4: 4, 5: 1}
 
-# ── 层级提升指令 I_i ──
+# ── Tier-promotion instructions I_i ──
+# NOTE: the prompt text below is sent to the LLM and instructs it to respond in
+# Chinese (per the "language: 中文/English" profile field and the Chinese JSON
+# value examples) — left untranslated intentionally, this is functional prompt
+# data, not a comment.
 CONSOLIDATE_PROMPTS = {
     2: (
         "# Role: 记忆摘要专家\n\n"
@@ -134,51 +140,53 @@ CONSOLIDATE_PROMPTS = {
     )
 }
 
-# ── v5.0: 豆包 Seed-2.0 API (替代本地 Qwen3.5-4B) ──
+# ── v5.0: Doubao Seed-2.0 API (replaces the local Qwen3.5-4B) ──
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from core.llm import call_llm_json
 
 async def call_llm(prompt: str, temperature: float = 0.3, max_tokens: int = 1024) -> str:
     """
-    调用豆包 Seed-2.0 Lite — JSON 结构化蒸馏
-    
-    v5.0: 不再依赖 WSL 本地 Qwen3.5-4B GPU 模型
-    豆包 API 从生产服务器直连，7×24 可用
+    Calls Doubao Seed-2.0 Lite — JSON-structured distillation
+
+    v5.0: no longer depends on the local WSL Qwen3.5-4B GPU model
+    The Doubao API is reached directly from the production server, available 24/7
     """
     result = call_llm_json(prompt, tier="lite")
     if result.get("error"):
-        raise HTTPException(status_code=502, detail=f"豆包 API 不可用: {result['error']}")
+        raise HTTPException(status_code=502, detail=f"Doubao API unavailable: {result['error']}")
     return result.get("content", "")
 
 def parse_json_response(text: str) -> dict:
     import re, logging
     log = logging.getLogger("tmt")
     text = text.strip()
-    
-    # 去掉 reasoning/思考前缀 (多种变体)
+
+    # Strip reasoning/thinking prefixes (several variants)
+    # NOTE: "思考" in the pattern below matches a literal prefix some LLM
+    # responses actually produce — functional data, not a comment.
     text = re.sub(r'^(Thinking\s*Process|Reasoning|思考)[:\s]*\n?', '', text, flags=re.IGNORECASE)
-    
-    # 提取 markdown JSON code block
+
+    # Extract a markdown JSON code block
     m = re.search(r'```(?:json)?\s*\n?(\{.*?\})\n?```', text, re.DOTALL)
     if m:
         text = m.group(1)
-    
-    # 找到 JSON 对象
+
+    # Locate the JSON object
     start = text.find('{')
     end = text.rfind('}')
     if start != -1 and end != -1 and end > start:
         text = text[start:end+1]
     else:
-        # 无JSON，从原始文本提取摘要
+        # No JSON found — extract a summary from the raw text instead
         log.warning(f"No JSON found in LLM output, len={len(text)}")
         clean = re.sub(r'[*#>`\-]', ' ', text)
         clean = re.sub(r'\s+', ' ', clean).strip()
         sentences = re.split(r'[.。!！\n]', clean)
         summary = ' '.join(s for s in sentences[:2] if len(s) > 5)[:200]
         return {"summary": summary or text[:200], "key_facts": [], "decisions": [], "entities": [], "importance": 0.3}
-    
-    # 宽容解析
+
+    # Lenient parsing
     text = re.sub(r',\s*}', '}', text)
     text = text.replace("'", '"')
     try:
@@ -189,7 +197,8 @@ def parse_json_response(text: str) -> dict:
             cleaned = re.sub(r'[^\x00-\x7F]+', '', text)
             return json.loads(cleaned)
         except:
-            # v6.5 兜底: 豆包截断 JSON 时, 提取 summary 字段片段, 剩余字段给默认值
+            # v6.5 fallback: when Doubao truncates the JSON, extract the summary
+            # field fragment and default the remaining fields
             m2 = re.search(r'"summary"\s*:\s*"([^"]{1,300})', text)
             summary = m2.group(1) if m2 else re.sub(r'[*#>`\-]', ' ', text)[:200]
             return {"summary": summary, "key_facts": [], "decisions": [], "entities": [], "importance": 0.3}
@@ -198,11 +207,11 @@ async def gen_embedding(text: str) -> str:
     raw = (await embed_fn([text]))[0]
     return "[" + ",".join(str(x) for x in raw) + "]"
 
-# ── 热度传播 ──
+# ── Heat propagation ──
 def compute_parent_heat(children_heats: list) -> float:
     if not children_heats:
         return 0.5
-    # v6.5 类型防御: 字符串/None 一律归一为 float (防 JSON 解析异常污染)
+    # v6.5 type defense: normalize strings/None to float across the board (prevents JSON-parse glitches from contaminating this)
     def _f(x):
         try:
             return float(x)
@@ -215,7 +224,7 @@ def compute_parent_heat(children_heats: list) -> float:
     agreement_bonus = max(0, 0.2 - variance * 2)
     return min(1.0, max(0.0, max_h * 0.6 + mean_h * 0.3 + agreement_bonus * 0.1))
 
-# ── 核心蒸馏算法 ──
+# ── Core distillation algorithm ──
 async def consolidate_level(user_id: str, level: int,
                             interval_start, interval_end) -> dict:
     async with pool.acquire() as conn:
@@ -232,10 +241,11 @@ async def consolidate_level(user_id: str, level: int,
             )
             children = [dict(r) for r in rows]
             child_id_ints = [c["id"] for c in children]  # int IDs for memories table
-            # v6.5 输入保护: 单条截断 + 条数上限 + 总预算 (豆包上下文限制, 防 400)
-            MAX_FRAGMENTS = 80          # 最多蒸馏 80 条
-            MAX_SINGLE_LEN = 3000       # 单条截断 3000 字符
-            MAX_TOTAL_LEN = 60000       # 总预算 60K 字符
+            # v6.5 input protection: per-item truncation + item cap + total budget
+            # (Doubao context limit, prevents 400s)
+            MAX_FRAGMENTS = 80          # distill at most 80 items
+            MAX_SINGLE_LEN = 3000       # truncate each item to 3000 chars
+            MAX_TOTAL_LEN = 60000       # total budget of 60K chars
             budget = 0
             kept = []
             for c in children:
@@ -283,6 +293,9 @@ async def consolidate_level(user_id: str, level: int,
                 user_id
             )
             for b in beliefs:
+                # NOTE: "信念 置信度" (belief confidence) label is embedded directly
+                # into the Chinese-language LLM prompt's {children} slot — left
+                # untranslated intentionally, this is functional prompt data.
                 child_texts.append(f"[信念 置信度{b['confidence']:.1f}] {b['content']}")
 
         if not children:
@@ -312,6 +325,9 @@ async def consolidate_level(user_id: str, level: int,
                 f"SELECT {content_col} FROM {table} WHERE user_id=$1 "
                 f"ORDER BY created_at DESC LIMIT {w}", user_id
             )
+        # NOTE: "(无历史)" ("no history") fallback is embedded into the
+        # Chinese-language LLM prompt's {history} slot — left untranslated
+        # intentionally, this is functional prompt data.
         history_text = "\n".join(f"- {r[content_col][:300]}" for r in history_rows) or "(无历史)"
 
         prompt = CONSOLIDATE_PROMPTS[level].format(
@@ -355,7 +371,7 @@ async def consolidate_level(user_id: str, level: int,
         elif level == 4:
             ws = interval_start.date() if hasattr(interval_start, 'date') else interval_start
             we = interval_end.date() if hasattr(interval_end, 'date') else interval_end
-            # v6.5 幂等: 同周重复蒸馏用 DO UPDATE (原 UniqueViolation 500)
+            # v6.5 idempotency: re-distilling the same week uses DO UPDATE (previously a 500 UniqueViolation)
             row = await conn.fetchrow(
                 "INSERT INTO tmt_weekly (user_id, week_start, week_end, summary, embedding, "
                 "heat_score, patterns, daily_ids) VALUES ($1,$2,$3,$4,$5::vector,$6,$7,$8) "
@@ -409,7 +425,7 @@ async def consolidate_level(user_id: str, level: int,
             "child_count": len(children)
         }
 
-# ── API 端点 ──
+# ── API endpoints ──
 
 @router.post("/consolidate/session")
 async def tmt_consolidate_session(req: ConsolidateRequest):
@@ -428,7 +444,7 @@ async def tmt_consolidate_session(req: ConsolidateRequest):
         end = req.interval_end
     else:
         async with pool.acquire() as conn:
-            # v6.0: 无参时聚合最近 24h 内未蒸馏的原始碎片 (tmt_level=1 或历史 NULL)
+            # v6.0: with no params, aggregate undistilled raw fragments from the last 24h (tmt_level=1 or historically NULL)
             rows = await conn.fetch(
                 "SELECT MIN(created_at) AS start, MAX(created_at) AS end "
                 "FROM memories WHERE user_id=$1 AND is_deleted=FALSE "
@@ -437,7 +453,7 @@ async def tmt_consolidate_session(req: ConsolidateRequest):
                 req.user_id
             )
             if not rows or not rows[0]["start"]:
-                # 回退: 最近 100 条未蒸馏碎片 (无论时间)
+                # Fallback: the 100 most recent undistilled fragments (regardless of time)
                 rows = await conn.fetch(
                     "SELECT MIN(created_at) AS start, MAX(created_at) AS end FROM ("
                     "SELECT created_at FROM memories WHERE user_id=$1 AND is_deleted=FALSE "
@@ -456,7 +472,7 @@ async def tmt_consolidate_daily(req: ConsolidateRequest):
         datetime.strptime(req.date, "%Y-%m-%d").date()
         if req.date else date.today()
     )
-    # v6.5: 用本地时区 (+08) 构造窗口, 不再硬标 UTC
+    # v6.5: build the window using the local timezone (+08), no longer hardcoded to UTC
     day_start = datetime.combine(target_date, datetime.min.time()).replace(tzinfo=LOCAL_TZ)
     day_end = datetime.combine(target_date, datetime.max.time()).replace(tzinfo=LOCAL_TZ)
     return await consolidate_level(req.user_id, 3, day_start, day_end)
@@ -491,8 +507,11 @@ async def tmt_consolidate_monthly(req: ConsolidateRequest):
 async def tmt_recall(req: RecallRequest):
     complexity = req.complexity_hint
     if complexity is None:
-        # 启发式复杂度分类（不调 LLM：省时 + 免疫豆包 API 慢/抖动）
+        # Heuristic complexity classification (no LLM call: saves time + immune to
+        # Doubao API slowness/jitter)
         _q = req.query.strip()
+        # NOTE: keyword tuple below is matched against Chinese user queries — kept
+        # in Chinese intentionally, this is functional data, not a comment.
         if any(w in _q for w in ("怎么", "如何", "为什么", "比较", "对比", "推荐", "预测", "分析")):
             complexity = 2
         elif len(_q) <= 8:
@@ -560,6 +579,8 @@ async def tmt_recall(req: RecallRequest):
 
     filtered = deduped
     if len(deduped) > 10:
+        # NOTE: gate_prompt below is sent to the LLM in Chinese — left untranslated
+        # intentionally, this is functional prompt data, not a comment.
         gate_prompt = (
             f"查询: \"{req.query}\"\n\n候选记忆:\n" +
             "\n".join(f"[{m['tmt_level']}] {m['content'][:200]}" for m in deduped[:20]) +
@@ -569,10 +590,10 @@ async def tmt_recall(req: RecallRequest):
             raw = await call_llm(gate_prompt, temperature=0.1, max_tokens=256)
             keep = set(parse_json_response(raw).get("keep_indices", []))
         except Exception:
-            keep = set(range(len(deduped[:20])))  # LLM 不可用/响应异常降级: 保留全部候选
+            keep = set(range(len(deduped[:20])))  # LLM unavailable/bad response: fall back to keeping all candidates
         filtered = [m for i, m in enumerate(deduped[:20]) if i in keep] + deduped[20:]
 
-    # v6.2: 召回命中加热 (最终返回的 memories 源 top3)
+    # v6.2: heat up recall hits (top 3 memories-sourced results actually returned)
     mem_hits = [m["id"] for m in filtered[:req.max_results] if m.get("src") == "memories"][:3]
     if mem_hits:
         async with pool.acquire() as conn:
@@ -658,8 +679,10 @@ async def tmt_node_detail(level: int, node_id: str, user_id: str):
 async def tmt_decay(user_id: str):
     async with pool.acquire() as conn:
         results = {}
-        # v6.2: 差异化衰减 — 近 48h 访问过的活跃记忆衰减慢 (0.995 vs 0.98), 保持热点
-        # v6.3: 保护衰减 — pinned 标记或 preference 类慢衰减 (重要记忆不被时间冲淡)
+        # v6.2: differential decay — active memories accessed in the last 48h decay
+        # slower (0.995 vs 0.98), keeping hot items hot
+        # v6.3: protected decay — pinned or preference-category memories decay
+        # slowly too (important memories aren't washed out by time)
         r = await conn.execute(
             "UPDATE memories SET heat_score=GREATEST(0.01, heat_score * "
             "CASE "

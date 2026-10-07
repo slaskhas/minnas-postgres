@@ -1,10 +1,13 @@
-"""v7.8.3 — 服务监听端口/地址由环境变量决定 (修复 main.py 入口硬编码)
+"""v7.8.3 — the service's listen port/address are determined by environment variables
+(fixes a hardcoded value in main.py's entry point)
 
-两层契约:
-  ① `config.PORT` / `config.HOST` 读 `MNEMOSYNE_PORT` / `MNEMOSYNE_HOST`(子进程验证, 不污染本进程)
-  ② 服务入口 `main._run_server()` **必须使用** 这两个值 —— 这一条才是本次真正的修复点:
-     入口曾经写死 `host="127.0.0.1", port=8010`, 环境变量被静默忽略(不报错、只是没效果)。
-     ② 用例在旧代码下会红(写死时 captured["port"] == 8010 != 9123), 反证过。
+Two-layer contract:
+  (1) `config.PORT` / `config.HOST` read `MNEMOSYNE_PORT` / `MNEMOSYNE_HOST` (verified via a
+      subprocess so this process isn't polluted)
+  (2) the service entry point `main._run_server()` **must use** these two values — this is
+      the actual fix in this change: the entry point used to hardcode
+      `host="127.0.0.1", port=8010`, silently ignoring the env vars (no error, just no effect).
+      Case (2) was confirmed to fail on the old code (hardcoded gave captured["port"] == 8010 != 9123).
 """
 import os
 import subprocess
@@ -37,7 +40,7 @@ class TestConfigReadsEnv:
 
 
 class TestServerEntryUsesConfig:
-    """入口接线契约 —— 写死端口时本用例必红(反证过)。"""
+    """Entry-point wiring contract — this case was confirmed to fail when the port was hardcoded."""
 
     def test_run_server_passes_config_host_and_port(self, monkeypatch):
         import uvicorn
@@ -50,6 +53,6 @@ class TestServerEntryUsesConfig:
 
         main._run_server()
 
-        assert captured.get("port") == 9123, f"入口未使用 config.PORT: {captured}"
-        assert captured.get("host") == "0.0.0.0", f"入口未使用 config.HOST: {captured}"
+        assert captured.get("port") == 9123, f"entry point didn't use config.PORT: {captured}"
+        assert captured.get("host") == "0.0.0.0", f"entry point didn't use config.HOST: {captured}"
         assert captured.get("app") == "main:app" or captured.get("app") is None

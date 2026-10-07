@@ -1,9 +1,9 @@
--- v7.4 WIKI 知识图谱 MD 记忆
+-- v7.4 WIKI knowledge graph MD memory
 -- 2026-08-10
--- 1) wiki_pages 加来源/指纹列 (全文快照档案馆语义)
--- 2) 清理 paper-#N 空壳占位
+-- 1) Add source/fingerprint columns to wiki_pages (full-text snapshot archive semantics)
+-- 2) Clean up empty paper-#N placeholder shells
 
--- 加列 (幂等: 已存在则跳过)
+-- Add columns (idempotent: skip if already present)
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='wiki_pages' AND column_name='source_path') THEN
@@ -23,17 +23,17 @@ BEGIN
   END IF;
 END $$;
 
--- 索引
+-- Indexes
 CREATE INDEX IF NOT EXISTS idx_wiki_source_path ON public.wiki_pages (source_path);
 CREATE INDEX IF NOT EXISTS idx_wiki_source_type ON public.wiki_pages (source_type);
 
--- 清理空壳占位 (paper-#N 0字节 + 早期测试页, 无来源无内容)
+-- Clean up empty placeholder shells (paper-#N, 0 bytes + early test pages, no source, no content)
 DELETE FROM public.wiki_pages
 WHERE source_path IS NULL AND source_url IS NULL
   AND (content IS NULL OR length(content) = 0)
   AND title LIKE 'paper-%';
 
--- 2) wiki 实体抽取升级 (v7.4): 关联表 + 抽取标记
+-- 2) wiki entity extraction upgrade (v7.4): association table + extraction marker
 CREATE TABLE IF NOT EXISTS public.wiki_entities (
     id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     wiki_page_id bigint NOT NULL REFERENCES public.wiki_pages(id) ON DELETE CASCADE,

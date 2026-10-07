@@ -1,7 +1,7 @@
 #!/bin/bash
-# Mnemosyne TMT 蒸馏定时任务
-# daily=每天1am, weekly=周日1:30am, monthly=1号2am
-# v6.5 修复: monthly month 用 $((10#$(date +%m))) 去前导零 (08 非法 JSON)
+# Mnemosyne TMT distillation cron job
+# daily=1am every day, weekly=Sunday 1:30am, monthly=2am on the 1st
+# v6.5 fix: monthly month uses $((10#$(date +%m))) to strip the leading zero (08 is invalid JSON)
 
 API="http://127.0.0.1:8010"
 LOG="/var/log/tmt-consolidate.log"

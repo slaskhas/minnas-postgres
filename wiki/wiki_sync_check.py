@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
-"""wiki_sync_check — 线上快照 vs 本地源 定期自检 (v7.4)
+"""wiki_sync_check — periodic self-check of the live snapshot vs. the local source (v7.4)
 
-设计: WSL 本地源 = 真相; 生产线上 wiki = 档案馆快照。
-WSL 会关机, 所以定期自检放生产: 对比「线上快照」与「上次同步时的 hash 清单」。
-- 若线上 hash 与清单一致 → 快照健康
-- 若不一致 → 说明发生了本地更新同步或异常, 记录
-- 同时检查: 线上页有 content 但 hash 为空 (老数据) / content 为空的孤儿页
+Design: the WSL local source is the source of truth; the production wiki is an
+archive snapshot.
+WSL gets shut down, so the periodic self-check lives in production instead:
+compare the "live snapshot" against the "hash list from the last sync".
+- If the live hashes match the list → the snapshot is healthy
+- If they don't match → a local update sync happened or something went wrong; log it
+- Also checks: live pages with content but an empty hash (stale data) / orphan
+  pages with empty content
 
-用法 (生产 crontab):
+Usage (production crontab):
     0 5 * * * cd /opt/mnemosyne && venv/bin/python wiki_sync_check.py >> /tmp/wiki_sync_check.log 2>&1
 """
 import asyncio
@@ -16,7 +19,7 @@ import os
 import sys
 import time
 
-# 仓库根入 path (wiki/ 子目录运行时需要 tmt/core)
+# add repo root to path (needed for tmt/core when run from the wiki/ subdirectory)
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from tmt.distill import load_env, PG_DSN
@@ -47,20 +50,20 @@ async def main():
     empty = [r for r in rows if not r["content_len"]]
     lost = [r for r in rows if r["source_lost"]]
 
-    print(f"[{time.strftime('%Y-%m-%d %H:%M')}] wiki 自检: 共 {total} 页")
-    print(f"  ✅ 有指纹: {len(with_hash)} | ⚠️ 无指纹(老数据): {len(no_hash)} | ⚠️ 空内容: {len(empty)} | 🏳️ 源丢失标记: {len(lost)}")
+    print(f"[{time.strftime('%Y-%m-%d %H:%M')}] wiki self-check: {total} pages total")
+    print(f"  ✅ has fingerprint: {len(with_hash)} | ⚠️ no fingerprint (stale data): {len(no_hash)} | ⚠️ empty content: {len(empty)} | 🏳️ source-lost flag: {len(lost)}")
 
     issues = []
     for r in no_hash[:10]:
-        issues.append(f"无指纹: #{r['id']} {r['title']} ({r['content_len']}ch)")
+        issues.append(f"no fingerprint: #{r['id']} {r['title']} ({r['content_len']}ch)")
     for r in empty[:10]:
-        issues.append(f"空内容: #{r['id']} {r['title']}")
+        issues.append(f"empty content: #{r['id']} {r['title']}")
     for r in lost[:10]:
-        issues.append(f"源丢失: #{r['id']} {r['title']} ({r['source_path']})")
+        issues.append(f"source lost: #{r['id']} {r['title']} ({r['source_path']})")
     for i in issues:
         print(f"  ⚠️ {i}")
 
-    # 读上次清单对比
+    # compare against the list from the previous run
     prev = {}
     if os.path.exists(SNAPSHOT_FILE):
         try:
@@ -76,19 +79,19 @@ async def main():
         if pid in prev and prev[pid] != cur:
             changed.append(f"#{pid} {r['title']}")
     if changed:
-        print(f"  🔄 相对上次清单变化 {len(changed)} 页: {'; '.join(changed[:8])}")
+        print(f"  🔄 {len(changed)} pages changed vs. the previous list: {'; '.join(changed[:8])}")
     else:
-        print("  🔄 相对上次清单: 无变化")
+        print("  🔄 No change vs. the previous list")
 
-    # 更新清单
+    # update the list
     snap = {str(r["id"]): r["content_hash"] for r in with_hash}
     with open(SNAPSHOT_FILE, "w", encoding="utf-8") as f:
         json.dump(snap, f, ensure_ascii=False)
 
-    # 退出码: 有问题返回 1 (watchdog 可感知)
+    # exit code: return 1 if there are issues (so a watchdog can detect it)
     if no_hash or empty:
         sys.exit(1)
-    print("  ✅ 自检完成")
+    print("  ✅ Self-check complete")
 
 
 if __name__ == "__main__":

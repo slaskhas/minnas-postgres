@@ -1,12 +1,12 @@
 """
-Mnemosyne 记忆核心引擎 v5.0
-认知型记忆操作系统 — 七层架构完整实现
+Mnemosyne memory core engine v5.0
+Cognitive memory operating system — full seven-layer architecture
 
-v5.0 升级:
-  - 豆包 API 全替代本地模型 (embedding-vision 1024d + seed-2.0)
-  - 模型分级路由 (Tier1-5)
-  - 生产服务器 7×24 独立运行，无反向隧道依赖
-  - 三馆闭环知识生产流水线 (Phase 2)
+v5.0 upgrade:
+  - Doubao API fully replaces local models (embedding-vision 1024d + seed-2.0)
+  - Tiered model routing (Tier1-5)
+  - Production server runs independently 24/7, no reverse-tunnel dependency
+  - Three-hall closed-loop knowledge production pipeline (Phase 2)
 """
 import os
 import sys
@@ -21,7 +21,7 @@ from typing import List, Optional
 import logging
 from contextlib import asynccontextmanager
 
-# v7.8: 真 BM25 — jieba 分词(query 与 memory_keywords 同词典), 懒加载避免启动拖慢
+# v7.8: real BM25 — jieba tokenization (query uses the same dictionary as memory_keywords), lazy-loaded to avoid slowing startup
 try:
     import jieba as _jieba
     _WIKI_DICT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "wiki", "wiki_dict.txt")
@@ -32,7 +32,7 @@ except ImportError:
 
 
 def _query_tokens(text: str) -> list:
-    """查询分词: 走 jieba(与索引一致); 无 jieba 时退化为空白/标点切分"""
+    """Query tokenization: uses jieba (consistent with the index); falls back to whitespace/punctuation splitting when jieba is unavailable"""
     if _jieba is None:
         return [w.strip() for w in re.split(r"[\s,，。.!?！？:：]+", text) if len(w.strip()) > 1]
     return [t.strip() for t in _jieba.cut(text)
@@ -40,9 +40,9 @@ def _query_tokens(text: str) -> list:
 logger = logging.getLogger("mnemosyne")
 
 
-# v7.8.1: 写入即分词 — 消除新记忆 BM25 当日失明窗口 (逻辑与 memory_tokenize.tokenize_memory 一致, 内联避免 tmt.distill 副作用)
+# v7.8.1: tokenize-on-write — eliminates the same-day BM25 blind window for new memories (logic matches memory_tokenize.tokenize_memory, inlined here to avoid tmt.distill side effects)
 async def _tokenize_on_write(conn, memory_id: int, content: str) -> None:
-    """写入钩子: 立即为该记忆建 memory_keywords (幂等; 失败只告警, 不阻塞写入)"""
+    """Write hook: immediately build memory_keywords for this memory (idempotent; failures only warn, never block the write)"""
     try:
         if _jieba is None or len(content or "") < 30:
             return
@@ -68,12 +68,15 @@ async def _tokenize_on_write(conn, memory_id: int, content: str) -> None:
             "UPDATE memories SET metadata = COALESCE(metadata,'{}'::jsonb) || '{\"kw_tokenized\":true}'::jsonb "
             "WHERE id=$1", memory_id)
     except Exception as e:
-        logger.warning(f"即时分词失败 memory_id={memory_id}: {e}")
+        logger.warning(f"Inline tokenization failed memory_id={memory_id}: {e}")
 
-# ── v6.0: 受控分类词表 (category 唯一合法值) ──
-# 单用户 (user_id=default) 语义收敛：10 类中文主键，英文为 API 兼容别名。
-# 记忆生命周期: 写入(tmt_level=1 原始碎片) → TMT蒸馏(L2会话/L3日报/L4周报/L5画像)
-# 价值分层: tier 由 reflect 按热度维护 (L1核心/L2常规/L3低频/L4待清理)
+# ── v6.0: controlled category whitelist (the only legal `category` values) ──
+# Single-user (user_id=default) semantic convergence: 10 categories, Chinese primary
+# keys with English aliases for API compatibility.
+# Memory lifecycle: write (tmt_level=1 raw fragment) → TMT distillation (L2 session /
+# L3 daily / L4 weekly / L5 profile)
+# Value tiering: `tier` is maintained by reflect based on heat (L1 core / L2 regular /
+# L3 low-frequency / L4 pending cleanup)
 CATEGORY_WHITELIST = {
     "knowledge":   ["knowledge", "架构", "architecture", "design-pattern", "设计", "概念", "知识", "fact", "pattern", "belief"],
     "pitfall":     ["pitfall", "踩坑", "坑", "教训", "故障", "experience"],
@@ -87,34 +90,34 @@ CATEGORY_WHITELIST = {
     "temp":        ["temp", "临时", "提醒"],
 }
 
-# v7.7.0: 三分类记忆打标 (对齐业界 episodic/semantic/procedural)
-# 规则映射: category → memory_type (存 metadata['memory_type'])
+# v7.7.0: three-way memory type tagging (aligned with the industry-standard episodic/semantic/procedural)
+# Rule mapping: category → memory_type (stored in metadata['memory_type'])
 CAT_MEMORY_TYPE = {
-    "session": "episodic",     # 会话/事件
-    "chat": "episodic",        # 对话
-    "worklog": "episodic",     # 工作记录(事件)
-    "fact": "semantic",        # 事实
-    "preference": "semantic",  # 偏好
-    "knowledge": "semantic",   # 知识
-    "reference": "semantic",   # 参考
-    "temp": "semantic",        # 临时
-    "pitfall": "procedural",   # 踩坑教训(操作)
-    "ops": "procedural",       # 运维操作
-    "deploy": "procedural",    # 部署步骤
-    "project": "procedural",   # 项目流程
+    "session": "episodic",     # session/event
+    "chat": "episodic",        # conversation
+    "worklog": "episodic",     # work log (event)
+    "fact": "semantic",        # fact
+    "preference": "semantic",  # preference
+    "knowledge": "semantic",   # knowledge
+    "reference": "semantic",   # reference
+    "temp": "semantic",        # temporary
+    "pitfall": "procedural",   # pitfall/lesson (operational)
+    "ops": "procedural",       # ops
+    "deploy": "procedural",    # deploy steps
+    "project": "procedural",   # project process
 }
 
 def normalize_category(cat: str) -> str:
-    """分类归一化: 中文/旧英文 → 受控词表主键。未知分类默认 knowledge。
-    匹配规则: ①全等(key/别名) ②中文别名(≥2字)子串包含。"""
+    """Category normalization: Chinese/legacy English → controlled-whitelist primary key. Unknown categories default to knowledge.
+    Matching rules: ① exact match (key/alias) ② Chinese alias (>=2 chars) substring containment."""
     if not cat:
         return "knowledge"
     c = str(cat).strip().lower()
-    # ① 全等匹配
+    # ① exact match
     for key, aliases in CATEGORY_WHITELIST.items():
         if c == key or c in [a.lower() for a in aliases]:
             return key
-    # ② 子串包含匹配 (中文别名 ≥2 字, 如 "论文研究"→reference)
+    # ② substring containment match (Chinese alias >=2 chars, e.g. "论文研究"→reference)
     for key, aliases in CATEGORY_WHITELIST.items():
         for a in aliases:
             a_l = a.lower()
@@ -122,12 +125,12 @@ def normalize_category(cat: str) -> str:
                 return key
     return "knowledge"
 
-# ── v5.0: 模块化导入 ──
+# ── v5.0: modular imports ──
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from config import PG_USER, PG_PASSWORD, PG_DB, PG_HOST, PG_PORT, PG_SEARCH_PATH, HOST, PORT
 from core.embedding import get_embedding_async
 from core.llm import call_llm as llm_call
-# TMT (兼容现有 v2.1 路由)
+# TMT (compatible with the existing v2.1 routes)
 import tmt.router as tmt_module
 from tmt.router import router as tmt_router
 
@@ -241,25 +244,25 @@ from api.security import router as security_router
 app.include_router(security_router)
 security_module.pool = None
 
-# v7.7.0 程序性记忆翼 (技能资产)
+# v7.7.0 procedural-memory wing (skill assets)
 import api.skills as skills_module
 from api.skills import router as skills_router
 app.include_router(skills_router)
 skills_module.pool = None
 
-# v7.7.0 注入调度大厅
+# v7.7.0 injection scheduling hall
 import api.injection as injection_module
 from api.injection import router as injection_router
 app.include_router(injection_router)
 
 
-# v8.0 S3-1 记忆分层模型（可执行规格）
+# v8.0 S3-1 memory layering model (executable spec)
 import core.layers as layers_mod
 injection_module.pool = None
 
-# 数据库连接池
+# Database connection pool
 
-# ── 实体同步 (v7.8: 移除 AGE 图同步, 只保留 entities 表 + memory_entities 关联) ──
+# ── Entity sync (v7.8: removed AGE graph sync, kept only the entities table + memory_entities relation) ──
 async def sync_entities(conn, memory_id: int, entities: list, user_id: str):
     for name in entities:
         name = name.strip()
@@ -281,14 +284,14 @@ async def sync_entities(conn, memory_id: int, entities: list, user_id: str):
 async def clean_entity_relations(conn, memory_id: int):
     await conn.execute("DELETE FROM memory_entities WHERE memory_id=$1", memory_id)
 
-# ── 矛盾检测 ──
+# ── Conflict detection ──
 import difflib
 
 def text_diff_ratio(a: str, b: str) -> float:
     return difflib.SequenceMatcher(None, a, b).ratio()
 
 async def detect_conflict(conn, user_id: str, new_content: str, new_embedding_str: str) -> dict:
-    """检测新记忆是否与已有记忆冲突或重复"""
+    """Detect whether a new memory conflicts with or duplicates an existing one"""
     rows = await conn.fetch(
         f"SELECT id, content, embedding <=> $1::vector AS dist, heat_score "
         "FROM memories WHERE user_id=$2 AND is_deleted=FALSE AND valid_to IS NULL "
@@ -296,18 +299,18 @@ async def detect_conflict(conn, user_id: str, new_content: str, new_embedding_st
         new_embedding_str, user_id
     )
     for r in rows:
-        if r["dist"] > 0.15:  # 语义不相似,跳过
+        if r["dist"] > 0.15:  # semantically dissimilar, skip
             continue
         ratio = text_diff_ratio(new_content, r["content"])
         if ratio > 0.85:
-            # 几乎完全重复 → 合并
+            # near-exact duplicate → merge
             return {"action": "merge", "id": r["id"]}
         elif ratio < 0.5 and r["dist"] < 0.12:
-            # 语义相似但内容冲突 → 旧记忆标记为过期
+            # semantically similar but conflicting content → mark the old memory as superseded
             return {"action": "conflict", "id": r["id"], "old_content": r["content"]}
     return {"action": "fresh"}
 
-# ── 启动/关闭 ──
+# ── Startup/shutdown ──
 
 
 class DialecticRequest(BaseModel):
@@ -325,7 +328,7 @@ async def dialectic_search(req: DialecticRequest):
     async with pool.acquire() as conn:
         r_q = (await get_embedding([query]))[0]
         q_str = "[" + ",".join(str(x) for x in r_q) + "]"
-        # v7.8 真 BM25 (同主搜索): jieba 分词 → memory_keywords TF 加权
+        # v7.8 real BM25 (same as main search): jieba tokenization → memory_keywords TF weighting
         q_tokens = _query_tokens(query)
         if q_tokens:
             bm25_sql = ("(SELECT LEAST(1.0, 0.5 + COALESCE(SUM(k.freq),0)/8.0) FROM memory_keywords k "
@@ -376,7 +379,7 @@ async def dialectic_search(req: DialecticRequest):
 
 @app.get("/api/v1/memories/{memory_id}/tiered")
 async def tiered_read(memory_id: int, level: str = "L3", user_id: str = "default"):
-    """三级读取：L5摘要 / L3概览 / L1全文+上下文"""
+    """Three-tier read: L5 summary / L3 overview / L1 full text + context"""
     level = level.upper().strip()
     if level not in ("L5", "L3", "L1"):
         return {"error": "level must be L5, L3, or L1"}
@@ -402,7 +405,7 @@ async def tiered_read(memory_id: int, level: str = "L3", user_id: str = "default
         }
         
         if level == "L5":
-            # 摘要：截取 200 字 + session 标签
+            # Summary: truncate to 200 chars + session label
             base["summary"] = (row["content"] or "")[:200]
             base["content_truncated"] = True
             if row["session_id"]:
@@ -415,7 +418,7 @@ async def tiered_read(memory_id: int, level: str = "L3", user_id: str = "default
             return base
         
         elif level == "L3":
-            # 概览：800字 + session 摘要
+            # Overview: 800 chars + session summary
             content_full = row["content"] or ""
             base["content"] = content_full[:800]
             base["content_length"] = len(content_full)
@@ -433,7 +436,7 @@ async def tiered_read(memory_id: int, level: str = "L3", user_id: str = "default
             return base
         
         else:  # L1
-            # 全文 + session 全信息 + 片段列表
+            # Full text + complete session info + fragment list
             base["content"] = row["content"] or ""
             base["content_length"] = len(row["content"] or "")
             base["access_count"] = row["access_count"]
@@ -456,7 +459,7 @@ async def tiered_read(memory_id: int, level: str = "L3", user_id: str = "default
                         "start": str(s["start_time"])[:19] if s["start_time"] else "",
                         "end": str(s["end_time"])[:19] if s["end_time"] else "",
                     }
-                    # 同 session 的其它片段
+                    # Other fragments in the same session
                     fids = s["fragment_ids"] or []
                     if fids:
                         others = await conn.fetch(
@@ -475,7 +478,7 @@ async def tiered_read(memory_id: int, level: str = "L3", user_id: str = "default
                                     "heat": o["heat_score"],
                                 })
             
-            # 每日摘要（如果属于某天）
+            # Daily summary (if it belongs to a given day)
             try:
                 d = await conn.fetchrow(
                     "SELECT d.date, d.summary FROM mnemosyne.tmt_daily d "
@@ -529,7 +532,7 @@ async def list_conflicts(user_id: str = "default", limit: int = 20):
 
 
 
-# ── WIKI 全文快照 (v7.4) ──
+# ── WIKI full-text snapshots (v7.4) ──
 class WikiPageCreate(BaseModel):
     title: str
     content: str = ""
@@ -548,7 +551,7 @@ class WikiSearchRequest(BaseModel):
     top_k: int = 5
     hybrid: bool = True
     rerank: bool = False
-    graph: bool = False  # 图谱扩展默认关 (A/B 实测会引入噪音, 作为可选增强)
+    graph: bool = False  # Graph expansion off by default (A/B testing showed it introduces noise; kept as an optional enhancement)
 
 
 @app.get("/api/v1/wiki")
@@ -569,7 +572,7 @@ async def list_wiki_pages(user_id: str = "default", limit: int = 20):
 
 @app.get("/api/v1/wiki/by-source")
 async def get_wiki_by_source(source_path: str = "", source_url: str = "", user_id: str = "default"):
-    """快速查证: 按来源路径/URL 精确查快照 (v7.4 防损毁档案馆)"""
+    """Quick lookup: find the exact snapshot by source path/URL (v7.4 tamper-resistant archive)"""
     async with pool.acquire() as conn:
         if source_path:
             row = await conn.fetchrow(
@@ -609,7 +612,7 @@ async def get_wiki_page(page_id: int):
 
 @app.post("/api/v1/wiki")
 async def create_wiki_page(body: WikiPageCreate):
-    """Create a wiki page (全文快照档案馆). v7.4: 支持来源/指纹/版本历史."""
+    """Create a wiki page (full-text snapshot archive). v7.4: supports source/fingerprint/version history."""
     import json as _json
     title = body.title
     content = body.content
@@ -621,7 +624,7 @@ async def create_wiki_page(body: WikiPageCreate):
     content_hash = body.content_hash or ""
     skip_embedding = body.skip_embedding
     async with pool.acquire() as conn:
-        # 幂等: 同一 source_path 已存在则返回已有页 (不重复建)
+        # Idempotent: if the same source_path already exists, return the existing page (no duplicate creation)
         if source_path:
             existing = await conn.fetchrow(
                 "SELECT id, content_hash, version FROM wiki_pages WHERE user_id=$1 AND source_path=$2",
@@ -630,7 +633,7 @@ async def create_wiki_page(body: WikiPageCreate):
             if existing:
                 if existing["content_hash"] == content_hash and content_hash:
                     return {"status": "exists", "id": existing["id"], "version": existing["version"], "unchanged": True}
-                # hash 不同 → 更新内容并写版本历史
+                # hash differs → update content and write version history
                 v = existing["version"] + 1
                 if not skip_embedding:
                     r_v = (await get_embedding([content]))[0]
@@ -665,7 +668,7 @@ async def create_wiki_page(body: WikiPageCreate):
                 "INSERT INTO wiki_versions (page_id, version, content, embedding) VALUES ($1,1,$2,$3::vector)",
                 page_id, content, v_str
             )
-        # v7.5: 同步关键词索引 (BM25 通道需要, 否则新页面 hybrid 搜不到)
+        # v7.5: sync the keyword index (needed by the BM25 channel, otherwise new pages won't surface in hybrid search)
         if content and len(content) >= 20:
             try:
                 import jieba
@@ -690,14 +693,14 @@ async def create_wiki_page(body: WikiPageCreate):
                         [(page_id, t, f) for t, f in cnt.items()]
                     )
             except Exception as e:
-                logger.warning(f"wiki 关键词索引同步失败: {e}")
+                logger.warning(f"wiki keyword index sync failed: {e}")
         return {"status": "created", "id": page_id, "version": 1}
 
 
 
 @app.get("/api/v1/media")
 async def list_media(user_id: str = "default", limit: int = 20, media_type: str = ""):
-    """列出媒体记忆（文件/图片/链接等）"""
+    """List media memories (files/images/links, etc.)"""
     async with pool.acquire() as conn:
         if media_type:
             rows = await conn.fetch(
@@ -718,7 +721,7 @@ async def list_media(user_id: str = "default", limit: int = 20, media_type: str 
 
 @app.get("/api/v1/media/{media_id}")
 async def get_media(media_id: int):
-    """获取媒体记忆全文"""
+    """Get the full content of a media memory"""
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
             "SELECT id, content, media_type, media_url, media_hash, importance, "
@@ -736,7 +739,7 @@ async def get_media(media_id: int):
 @app.post("/api/v1/media")
 async def create_media(content: str, media_type: str = "file", media_url: str = "",
                        media_hash: str = "", user_id: str = "default", importance: float = 0.5):
-    """创建媒体记忆（关联文件/图片/链接到记忆系统）"""
+    """Create a media memory (link a file/image/link to the memory system)"""
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
             "INSERT INTO media_memories (user_id, content, media_type, media_url, media_hash, importance) "
@@ -747,7 +750,7 @@ async def create_media(content: str, media_type: str = "file", media_url: str = 
 
 @app.delete("/api/v1/media/{media_id}")
 async def delete_media(media_id: int, user_id: str = "default"):
-    """删除媒体记忆"""
+    """Delete a media memory"""
     async with pool.acquire() as conn:
         result = await conn.execute(
             "DELETE FROM media_memories WHERE id=$1 AND user_id=$2", media_id, user_id
@@ -792,7 +795,7 @@ async def rerank_docs(query: str, documents: List[str], top_k: int = 5) -> List[
         except Exception:
             return documents[:top_k]
 
-# ── 信念模型 ──
+# ── Belief model ──
 class BeliefCreate(BaseModel):
     user_id: str
     content: str
@@ -806,16 +809,16 @@ class BeliefSearch(BaseModel):
     top_k: int = 5
     status_filter: Optional[str] = None
 
-# ── 基础记忆 API ──
+# ── Core memory API ──
 class MemoryCreate(BaseModel):
     user_id: str = "default"
-    project_id: Optional[int] = None  # v7.7.0: str→int 类型契约修复(传 proj_xxx 档号字符串→友好422,不再500)
+    project_id: Optional[int] = None  # v7.7.0: str→int type contract fix (passing a proj_xxx accession-number string now gives a friendly 422 instead of a 500)
     content: str
     category: str = "knowledge"
     metadata: dict = {}
     entities: Optional[List[str]] = None
     session_id: Optional[str] = None
-    source: Optional[str] = None  # v7.6: 写入来源标识(hermes-precompress/hermes-delegation/...), 存 metadata['source']
+    source: Optional[str] = None  # v7.6: write-source identifier (hermes-precompress/hermes-delegation/...), stored in metadata['source']
 
 SIGNAL_WEIGHTS = [
     (("待办", "下一步", "TODO", "pending", "未完成", "接着", "继续做"), 0.15, "未完成任务"),
@@ -825,12 +828,12 @@ SIGNAL_WEIGHTS = [
     (("路径", "端口", "API", "配置", "key", "密钥"), 0.05, "路径/API"),
     (("重要", "关键", "核心", "必须"), 0.05, "重要标记"),
 ]
-# 天生重要的类别
+# Inherently-important categories
 IMPORTANT_CATS = {"preference", "knowledge", "pitfall"}
 
 
 def compute_write_heat(content: str, category: str) -> float:
-    """v6.3 认知写入信号: 初始热度按内容重要性加分 (抽屉级联温度设计, 纯正则不调LLM)"""
+    """v6.3 cognitive write signal: initial heat gets a bonus based on content importance (drawer-cascade temperature design, pure regex, no LLM call)"""
     heat = 0.5
     for keywords, weight, _name in SIGNAL_WEIGHTS:
         if any(k in content for k in keywords):
@@ -841,14 +844,17 @@ def compute_write_heat(content: str, category: str) -> float:
 
 
 def should_run_conflict_detection(layer: str) -> bool:
-    """该层是否要跑 `detect_conflict` 的语义合并/覆盖。
+    """Whether this layer should run `detect_conflict`'s semantic merge/supersede.
 
-    **为什么 L0 不跑**（2026-09-25 P4 正式环境测试抓到的真问题）：
-      修好「分层幂等键」后在生产实测，L0 同来源重试确实 dedup 了，
-      但**不同来源的同文案仍被 merged** —— 因为 `detect_conflict` 在指纹判定之前
-      就把近重复内容并掉了（`text_diff_ratio > 0.85` → merge）。
-      而 L0 契约是「只增不改、允许矛盾」→ 语义合并在 L0 上等于**压缩日志**，违反契约。
-    结论：指纹分层 + 冲突检测分层，**两处都要按层分流**，只改一处是半修。
+    **Why L0 doesn't run it** (a real problem caught by the 2026-09-25 P4 production test):
+      After fixing the "layered idempotency key", production testing showed that L0
+      same-source retries did dedup correctly, but **identical text from different
+      sources was still being merged** — because `detect_conflict` merges near-duplicate
+      content (`text_diff_ratio > 0.85` → merge) *before* the fingerprint check ever runs.
+      L0's contract is "append-only, contradictions allowed" → semantic merging on L0 is
+      effectively **compacting the log**, which violates that contract.
+    Conclusion: both fingerprinting and conflict detection must be layer-aware — fixing
+    only one of them is a half-fix.
     """
     return layer != "L0"
 
@@ -856,19 +862,26 @@ def should_run_conflict_detection(layer: str) -> bool:
 def compute_write_fingerprint(content: str, category: str, user_id: str, *,
                               session_id=None, source=None, layer=None,
                               now_ts: float | None = None) -> str:
-    """写入幂等键（v8.0.1 分层化）。
+    """Write idempotency key (v8.0.1, layer-aware).
 
-    **为什么必须分层**（红队指出 → 我复核成立）：
-      初版对**所有** category 一律用 `sha256(content|category|user_id)`，
-      与自家分层模型的 L0 契约**直接矛盾** —— L0 是「只增不改、允许矛盾」，
-      但同一天说三次「好的，收到」三条指纹完全相同 → 后两条被 duplicate 吃掉。
-      幂等（同一请求重试只生效一次）≠ 去重（内容相同的多条合成一条），初版把两者混为一谈。
+    **Why it has to be layer-aware** (raised by red-team review → confirmed on re-check):
+      The first version used `sha256(content|category|user_id)` for **every** category,
+      which directly contradicts the L0 layer's own contract — L0 is "append-only,
+      contradictions allowed" — yet saying "ok, got it" three times in one day produced
+      three identical fingerprints → the last two got swallowed as duplicates.
+      Idempotency (a retry of the same request only takes effect once) is not the same
+      thing as dedup (multiple pieces of identical content collapse into one); the first
+      version conflated the two.
 
-    规则：
-      · L1~L4（版本化·只认最新族）：**内容指纹** —— 同内容重复写视为同一逻辑写入 → 幂等
-      · L0（日志层·只增不改）      ：内容指纹会误杀合法重复，故幂等键必须含**来源上下文**
-          - 有 session_id / source → 用它们区分（同一 session 的重试仍去重）
-          - 都没有（裸 temp 便签）  → 用**小时桶**：秒级重试去重，跨小时保留
+    Rules:
+      · L1-L4 (versioned, latest-wins families): **content fingerprint** — a repeated
+        write of the same content is treated as the same logical write → idempotent
+      · L0 (append-only log layer): a content fingerprint would wrongly kill legitimate
+        repeats, so the idempotency key must include **source context**:
+          - session_id / source present → use them to distinguish (retries within the
+            same session still dedup)
+          - neither present (a bare temp note) → use an **hourly bucket**: dedups
+            second-level retries, preserved across hour boundaries
     """
     import hashlib as _h
     import time as _t
@@ -886,27 +899,30 @@ def compute_write_fingerprint(content: str, category: str, user_id: str, *,
 async def create_memory(mem: MemoryCreate):
     raw_vec = (await get_embedding([mem.content]))[0]
     vec_str = "[" + ",".join(str(x) for x in raw_vec) + "]"
-    # v6.0: 分类归一化 + user_id 收敛单用户
+    # v6.0: category normalization + user_id convergence to a single user
     cat = normalize_category(mem.category)
-    # v7.6: 收敛列表移除 mnemosyne-agent/website-agent → 全分身记忆隔离(分区防污染)
-    #       content-agent/catnest-agent 本就独立; g-cat/noah/system/test/audit 仍收敛
+    # v7.6: removed mnemosyne-agent/website-agent from the convergence list → full per-persona
+    #       memory isolation (partitioned to prevent cross-contamination); content-agent/
+    #       catnest-agent were already independent; g-cat/noah/system/test/audit still converge
     uid = "default" if mem.user_id in ("g-cat", "noah", "system", "test", "audit") else (mem.user_id or "default")
-    # v6.3: 认知写入信号 — 初始热度按内容重要性加分 (抽屉级联温度设计, 纯正则不调LLM)
+    # v6.3: cognitive write signal — initial heat gets a bonus based on content importance (drawer-cascade temperature design, pure regex, no LLM call)
     heat_init = compute_write_heat(mem.content, cat)
-    # v8.0.1: 幂等键**分层化** —— L0 日志层不能套内容指纹（会误杀合法重复）
+    # v8.0.1: idempotency key is **layer-aware** — the L0 log layer can't use a content fingerprint (it would wrongly kill legitimate repeats)
     _layer_info = layers_mod.classify_layer(cat, has_artifact=bool(mem.source), source=mem.source)
     fingerprint = compute_write_fingerprint(
         mem.content, cat, uid, session_id=mem.session_id, source=mem.source,
         layer=_layer_info["layer"])
     async with pool.acquire() as conn:
-        # ══════════ v8.0 S1-1: 单事务包裹写入路径 ══════════
-        # 现状问题(实测 main.py 原文): 顺序 execute + asyncpg autocommit → 崩溃可留
-        # 「有 memories 行、无 entities / 无 memory_keywords」的半成品。
-        # 修法: detect_conflict 读 + 主写入 + 实体同步 + 分词 全部进同一事务,
-        #       任一步失败整体回滚, 不留半成品。
+        # ══════════ v8.0 S1-1: wrap the write path in a single transaction ══════════
+        # Prior problem (observed in production): sequential execute calls + asyncpg
+        # autocommit → a crash mid-write could leave a half-finished state ("a memories
+        # row exists but entities / memory_keywords don't").
+        # Fix: detect_conflict read + main write + entity sync + tokenization all run
+        # inside the same transaction — if any step fails, the whole thing rolls back,
+        # no half-finished state.
         async with conn.transaction():
-            # ══════════ v8.0 S1-2: 幂等短路 (崩溃重试 / 断线重发不再重复入库) ══════════
-            # 幂等键 = sha256(content|category|user_id), 唯一索引 dedup_fingerprint_key
+            # ══════════ v8.0 S1-2: idempotency short-circuit (crash retries / reconnect resends no longer double-insert) ══════════
+            # idempotency key = sha256(content|category|user_id), unique index dedup_fingerprint_key
             dup = await conn.fetchrow(
                 "SELECT id FROM memories WHERE dedup_fingerprint=$1 LIMIT 1", fingerprint)
             if dup:
@@ -914,20 +930,20 @@ async def create_memory(mem: MemoryCreate):
                     "UPDATE memories SET access_count = access_count + 1, last_accessed = NOW() WHERE id = $1",
                     dup["id"])
                 return {"status": "duplicate", "id": dup["id"], "action": "idempotent"}
-            # 矛盾检测（v8.0.1: 按层分流 —— L0 日志层跳过，见 should_run_conflict_detection）
+            # Conflict detection (v8.0.1: layer-aware — the L0 log layer skips this, see should_run_conflict_detection)
             if should_run_conflict_detection(_layer_info["layer"]):
                 conflict = await detect_conflict(conn, uid, mem.content, vec_str)
             else:
                 conflict = {"action": "fresh"}
             if conflict["action"] == "merge":
-                # 合并：增加访问计数，不创建新记录
+                # Merge: bump the access count, don't create a new record
                 await conn.execute(
                     "UPDATE memories SET access_count = access_count + 1, last_accessed = NOW() WHERE id = $1",
                     conflict["id"]
                 )
                 return {"status": "merged", "id": conflict["id"], "action": "merged_with_existing"}
             elif conflict["action"] == "conflict":
-                # 冲突：旧记忆标记为过期，新记忆标记冲突来源
+                # Conflict: mark the old memory as superseded, tag the new memory with the conflict source
                 old_id = conflict["id"]
                 await conn.execute(
                     "UPDATE memories SET valid_to = NOW(), invalid_at = NOW() WHERE id = $1",
@@ -937,46 +953,52 @@ async def create_memory(mem: MemoryCreate):
                     "INSERT INTO memory_traces (memory_id, action, details) VALUES ($1, 'superseded', $2)",
                     old_id, json.dumps({"new_content": mem.content[:200]})
                 )
-                # 新记忆标记冲突来源
+                # Tag the new memory with the conflict source
                 meta = dict(mem.metadata) if isinstance(mem.metadata, dict) else {}
                 meta["conflicts_with"] = old_id
                 meta["conflict_type"] = "superseded"
-            # 正常存入（含valid_from）；v6.0: 原始碎片 tmt_level=1，tier 由 reflect 维护
-            # v6.3: 写入 heat_score = 认知写入信号 (初始热度)
-            # v7.2: 初始 S 由写入信号映射 (heat_init≥0.7→7 / ≥0.6→5 / 其他→3), R=S; 4维标记进 metadata
+            # Normal insert (including valid_from); v6.0: raw fragments get tmt_level=1, tier is maintained by reflect
+            # v6.3: write heat_score = the cognitive write signal (initial heat)
+            # v7.2: initial S is mapped from the write signal (heat_init>=0.7→7 / >=0.6→5 / else→3), R=S; the 4 dimensions are tagged into metadata
             s_init = 7 if heat_init >= 0.7 else (5 if heat_init >= 0.6 else 3)
             meta_extra = dict(locals().get("meta", mem.metadata)) if isinstance(locals().get("meta", mem.metadata), dict) else {}
-            meta_extra.setdefault("novelty", 1)        # 新内容
-            meta_extra.setdefault("valence", 0)        # 中性
-            meta_extra.setdefault("relevance", 0)      # 待任务绑定
-            meta_extra.setdefault("repetition", 0)     # 访问次数 (与 access_count 联动)
-            if mem.source:                             # v7.6: source 进 metadata, 支撑按来源批次召回
+            meta_extra.setdefault("novelty", 1)        # new content
+            meta_extra.setdefault("valence", 0)        # neutral
+            meta_extra.setdefault("relevance", 0)      # pending task binding
+            meta_extra.setdefault("repetition", 0)     # access count (linked to access_count)
+            if mem.source:                             # v7.6: source goes into metadata, supports source-batch recall
                 meta_extra["source"] = mem.source
-            meta_extra["memory_type"] = CAT_MEMORY_TYPE.get(cat, "semantic")  # v7.7.0: 三分类打标
-            # v8.0 S3-1: 分层模型**在写入路径上真跑** —— 每条记忆落层可判定、可审计
-            #   （这是"文档规格 ≠ 空转"的判据: 若分层只是文档, meta 里不会有 layer）
+            meta_extra["memory_type"] = CAT_MEMORY_TYPE.get(cat, "semantic")  # v7.7.0: three-way type tagging
+            # v8.0 S3-1: the layering model **actually runs on the write path** — every
+            #   memory's layer is determinable and auditable (this is the test for
+            #   "spec, not vaporware": if layering were just documentation, `layer`
+            #   wouldn't show up in metadata)
             _layer = _layer_info
             meta_extra["layer"] = _layer["layer"]
             meta_extra["layer_family"] = _layer["family"]
             if _layer["requires_source"] and not _layer["source_provided"]:
-                meta_extra["layer_note"] = "L1 认知层建议带 source（用于冲突溯源）"
+                meta_extra["layer_note"] = "L1 cognitive-layer writes should include source (for conflict provenance)"
             row = await conn.fetchrow(
                 'INSERT INTO memories (user_id, project_id, content, category, embedding, metadata, valid_from, session_id, tmt_level, heat_score, storage_strength, retrieval_strength, dedup_fingerprint) '
                 'VALUES ($1,$2,$3,$4,$5::vector,$6,NOW(),$7,1,$8,$9,$10,$11) '
-                # ⚠️ 必须带 `WHERE dedup_fingerprint IS NOT NULL`：
-                #   dedup_fingerprint_key 是**部分唯一索引**（只对有指纹的行生效，
-                #   这样 1.6 万条历史 NULL 行不参与约束、也无需回填）。
-                #   PostgreSQL 的 ON CONFLICT 推断**要求谓词显式匹配**，否则报
+                # ⚠️ Must include `WHERE dedup_fingerprint IS NOT NULL`:
+                #   dedup_fingerprint_key is a **partial unique index** (only applies to
+                #   rows that have a fingerprint, so the ~16k pre-existing NULL rows are
+                #   exempt from the constraint and need no backfill).
+                #   PostgreSQL ON CONFLICT inference **requires the predicate to match
+                #   explicitly**, otherwise it raises
                 #   `InvalidColumnReferenceError: there is no unique or exclusion
-                #    constraint matching the ON CONFLICT specification` → 写入全线 500。
-                #   （实测: 2026-09-25 生产部署后第一发写入即触发，靠第三层功能验证抓到）
+                #    constraint matching the ON CONFLICT specification` → every write 500s.
+                #   (Observed: this tripped on the very first write right after the
+                #   2026-09-25 production deploy; caught by the third-party functional check.)
                 'ON CONFLICT (dedup_fingerprint) WHERE dedup_fingerprint IS NOT NULL DO NOTHING '
                 'RETURNING id',
                 uid, mem.project_id, mem.content, cat, vec_str,
                 json.dumps(meta_extra), mem.session_id, heat_init, s_init, s_init, fingerprint
             )
             if row is None:
-                # 并发同内容竞态兜底: 唯一索引已拦住, 回读已存在行并按幂等返回
+                # Concurrent same-content race fallback: the unique index already blocked
+                # it, so read back the existing row and return it as idempotent
                 row = await conn.fetchrow(
                     "SELECT id FROM memories WHERE dedup_fingerprint=$1 LIMIT 1", fingerprint)
                 if row is None:
@@ -988,19 +1010,19 @@ async def create_memory(mem: MemoryCreate):
             mid = row["id"]
             if mem.entities:
                 await sync_entities(conn, mid, mem.entities, uid)
-            # v7.8.1: 写入即分词 — 新记忆立即可被 BM25 检索 (消除当日失明窗口)
+            # v7.8.1: tokenize-on-write — new memories are immediately searchable via BM25 (eliminates the same-day blind window)
             await _tokenize_on_write(conn, mid, mem.content)
     return {"status": "stored", "id": mid, "category": cat}
 
 class MemorySearch(BaseModel):
     user_id: str
-    project_id: Optional[int] = None  # v7.7.0: str→int 类型契约修复(传 proj_xxx 档号字符串→友好422,不再500)
+    project_id: Optional[int] = None  # v7.7.0: str→int type contract fix (passing a proj_xxx accession-number string now gives a friendly 422 instead of a 500)
     query: str
     top_k: int = 5
     category_filter: Optional[str] = None
     tier_filter: Optional[str] = None
     sort: str = "hybrid"  # hybrid (default), created_at — time-ordered search
-    include_frozen: bool = False  # v7.3: 是否包含 frozen 区 (默认排除, 区域化检索)
+    include_frozen: bool = False  # v7.3: whether to include the frozen zone (excluded by default, zoned retrieval)
 
 @app.post("/api/v1/memories/search")
 async def search_memories(req: MemorySearch):
@@ -1011,7 +1033,7 @@ async def search_memories(req: MemorySearch):
     """
     
     async def heat_hits(conn, ids, delta: float = 0.05) -> None:
-        """v6.2 认知热度: 搜索命中 → access_count+1 + heat 加权 (noah 双权重频次分量)"""
+        """v6.2 cognitive heat: a search hit → access_count+1 + heat weighting (noah's dual-weight frequency component)"""
         ids = [int(i) for i in ids]
         if not ids:
             return
@@ -1056,7 +1078,7 @@ async def search_memories(req: MemorySearch):
             query_sql += f"ORDER BY created_at DESC LIMIT ${idx}"
             params.append(req.top_k)
             rows = await conn.fetch(query_sql, *params)
-            if rows:  # v6.2: 命中加热
+            if rows:  # v6.2: heat the hits
                 await heat_hits(conn, [r["id"] for r in rows[:5]])
         if not rows:
             return {"memories": [], "sort": "created_at"}
@@ -1072,7 +1094,7 @@ async def search_memories(req: MemorySearch):
     r_q = (await get_embedding([req.query]))[0]
     q_str = "[" + ",".join(str(x) for x in r_q) + "]"
     
-    # v7.8 真 BM25: jieba 分词 query → memory_keywords TF 加权 (替换旧 ILIKE 假 BM25)
+    # v7.8 real BM25: jieba-tokenize the query → memory_keywords TF weighting (replaces the old fake ILIKE-based BM25)
     q_tokens = _query_tokens(req.query)
     if q_tokens:
         bm25_sql = ("(SELECT LEAST(1.0, 0.5 + COALESCE(SUM(k.freq),0)/8.0) FROM memory_keywords k "
@@ -1082,8 +1104,9 @@ async def search_memories(req: MemorySearch):
     temporal_sql = "CASE WHEN m.created_at > NOW() - INTERVAL '7 days' THEN 0.15 WHEN m.created_at > NOW() - INTERVAL '30 days' THEN 0.08 ELSE 0 END"
     
     async with pool.acquire() as conn:
-        # v7.3 区域化检索: 先在高 Rank 区(hot+normal)检索 → 不足再全库 (frozen 默认排除)
-        # v7.3 评审修复: include_frozen 可选开关 (用户要搜冷记忆时可开)
+        # v7.3 zoned retrieval: search the high-Rank zone (hot+normal) first → expand to the
+        # full table if that's not enough (frozen excluded by default)
+        # v7.3 review fix: include_frozen is an optional toggle (can be turned on when the user wants to search cold memories)
         region_filter = "AND m.temp_drawer IN ('hot','normal','cool') " if not req.include_frozen else ""
         rows = await conn.fetch(
             "SELECT m.id, m.content, m.category, m.tier, m.heat_score, m.reliability, m.access_count, m.created_at "
@@ -1098,7 +1121,7 @@ async def search_memories(req: MemorySearch):
             req.user_id, q_str, req.top_k, q_tokens
         )
         if len(rows) < req.top_k:
-            # 兜底: 全库 (含 frozen) — 区域不足时扩展
+            # Fallback: the full table (including frozen) — expands when the zoned result set is too small
             fallback = await conn.fetch(
                 "SELECT m.id, m.content, m.category, m.tier, m.heat_score, m.reliability, m.access_count, m.created_at "
                 "FROM memories m WHERE m.user_id=$1 AND m.is_deleted=FALSE AND (m.valid_to IS NULL OR m.valid_to > NOW()) AND m.embedding IS NOT NULL "
@@ -1112,7 +1135,7 @@ async def search_memories(req: MemorySearch):
             )
             seen = {r["id"] for r in rows}
             rows = list(rows) + [r for r in fallback if r["id"] not in seen][:req.top_k - len(rows)]
-        if rows:  # v6.2: 命中加热
+        if rows:  # v6.2: heat the hits
             await heat_hits(conn, [r["id"] for r in rows[:5]])
     
     if not rows:
@@ -1156,7 +1179,7 @@ async def list_memories(user_id: str, limit: int = 20, tier: Optional[str] = Non
     
     sort: created_at (default), heat, updated_at
     search: optional keyword filter (ILIKE match)
-    source: v7.6 — 按 metadata->>'source' 过滤(压缩归档/子代理批次召回)
+    source: v7.6 — filter by metadata->>'source' (compaction archive / sub-agent batch recall)
     """
     query = "SELECT id, content, category, tier, heat_score, access_count, created_at, updated_at, valid_to FROM memories WHERE user_id = $1 AND is_deleted = FALSE AND (valid_to IS NULL OR valid_to > NOW())"
     params = [user_id]
@@ -1275,22 +1298,22 @@ async def delete_memory(memory_id: int, user_id: str):
             "UPDATE memories SET is_deleted = TRUE, forgotten_at = NOW() WHERE id = $1 AND user_id = $2",
             memory_id, user_id
         )
-        # v7.3 评审修复: 删除时同步清理指针 (防 stale)
+        # v7.3 review fix: clean up pointers in sync on delete (prevents staleness)
         await clean_entity_relations(conn, memory_id)
     return {"status": "soft-deleted"}
 
-# ── 更新 API (v7.1 抽屉化: 补齐记忆修改权 — 内容纠错/替换, 不删重存) ──
+# ── Update API (v7.1 drawer model: adds the ability to edit a memory in place — content correction/replacement, instead of delete-and-recreate) ──
 class MemoryUpdate(BaseModel):
     content: str | None = None
     category: str | None = None
     importance: float | None = None
     heat_score: float | None = None
     metadata: dict | None = None
-    pin: bool | None = None          # True=钉为永久卷, False=取消钉
+    pin: bool | None = None          # True = pin as a permanent volume, False = unpin
 
 @app.put("/api/v1/memories/{memory_id}")
 async def update_memory(memory_id: int, user_id: str, update: MemoryUpdate):
-    """更新记忆内容/属性。不重建 embedding 时保留原向量; content 变了会重算向量+重分类+刷新档号。"""
+    """Update a memory's content/attributes. Keeps the original vector when not rebuilding the embedding; if content changes, recomputes the vector + reclassifies + refreshes the accession number."""
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
             "SELECT id, content, category, embedding, metadata, archive_no FROM memories WHERE id = $1 AND user_id = $2 AND is_deleted = FALSE",
@@ -1324,11 +1347,11 @@ async def update_memory(memory_id: int, user_id: str, update: MemoryUpdate):
             params.append(max(0.0, min(1.0, update.heat_score)))
             idx += 1
         if update.pin is not None:
-            # pin 状态存 metadata (与 palace/pin 一致)
+            # pin status is stored in metadata (consistent with palace/pin)
             pin_flag = "true" if update.pin else "false"
             sets.append(f"metadata = COALESCE(metadata,'{{}}'::jsonb) || ('{{\"pinned\":\"{pin_flag}\"}}')::jsonb")
             if update.pin:
-                sets.append("heat_score = GREATEST(heat_score, 0.5)")  # 钉卷至少回常温
+                sets.append("heat_score = GREATEST(heat_score, 0.5)")  # pinning brings it back to at least room temperature
 
         if update.metadata is not None:
             sets.append(f"metadata = COALESCE(metadata,'{{}}'::jsonb) || ${idx}::jsonb")
@@ -1344,7 +1367,7 @@ async def update_memory(memory_id: int, user_id: str, update: MemoryUpdate):
             *params
         )
 
-        # content 变更 → 重算向量 + 重分类 + 归档档号
+        # content changed → recompute the vector + reclassify + refresh the accession number
         if new_content is not None:
             try:
                 emb = await get_embedding([new_content])
@@ -1353,8 +1376,8 @@ async def update_memory(memory_id: int, user_id: str, update: MemoryUpdate):
                     emb[0], memory_id
                 )
             except Exception:
-                pass  # 向量失败不阻塞内容更新
-            # 重新分类 (复用 palace 分类嗅探, 若无则跳过)
+                pass  # embedding failure doesn't block the content update
+            # Reclassify (reuses palace's classification sniffing; skipped if unavailable)
             try:
                 from palace import classify
                 cls = classify(new_content)
@@ -1363,7 +1386,7 @@ async def update_memory(memory_id: int, user_id: str, update: MemoryUpdate):
                     await conn.execute("UPDATE memories SET category = $1 WHERE id = $2", new_cat, memory_id)
             except Exception:
                 pass
-            # 记录 trace
+            # Record the trace
             try:
                 await conn.execute(
                     "INSERT INTO memory_traces (memory_id, action, details) VALUES ($1, 'update', $2)",
@@ -1372,7 +1395,7 @@ async def update_memory(memory_id: int, user_id: str, update: MemoryUpdate):
             except Exception:
                 pass
 
-        # v7.3 评审修复: 更新后同步指针 (rank/mention/archive_no 变化)
+        # v7.3 review fix: sync pointers after update (rank/mention/archive_no changes)
         try:
             await conn.execute("""
                 SELECT m.id, m.rank_score, m.archive_no, m.mention_count, COALESCE(m.last_mention, m.last_accessed, m.created_at)
@@ -1391,10 +1414,10 @@ async def update_memory(memory_id: int, user_id: str, update: MemoryUpdate):
 
 @app.patch("/api/v1/memories/{memory_id}")
 async def patch_memory(memory_id: int, user_id: str, update: MemoryUpdate):
-    """PATCH 别名: 与 PUT 相同语义 (部分更新)。"""
+    """PATCH alias: same semantics as PUT (partial update)."""
     return await update_memory(memory_id, user_id, update)
 
-# ── 指针 API (v7.3 综合算法: 快速全盘指针 + 提及触发) ──
+# ── Pointer API (v7.3 composite algorithm: fast whole-table pointer pass + mention-triggered) ──
 @app.post("/api/v1/memories/{memory_id}/feedback")
 async def feedback_memory(memory_id: int, user_id: str, feedback: str):
     async with pool.acquire() as conn:
@@ -1414,7 +1437,7 @@ async def get_memory_trace(memory_id: int):
         rows = await conn.fetch("SELECT * FROM memory_traces WHERE memory_id = $1 ORDER BY executed_at", memory_id)
     return {"traces": [dict(r) for r in rows]}
 
-# ── 多模态记忆（HERMES传描述文本，不调用视觉API）──
+# ── Multimodal memory (HERMES passes a description text; no vision API is called) ──
 class MultiModalCreate(BaseModel):
     user_id: str
     content: str
@@ -1447,19 +1470,19 @@ async def search_media(user_id: str, query: str, top_k: int = 5):
     return [dict(r) for r in rows]
 
 
-# ── 信念 API ──
+# ── Belief API ──
 @app.post("/api/v1/beliefs")
 async def create_belief(bel: BeliefCreate):
     raw_vec = (await get_embedding([bel.content]))[0]
     vec_str = "[" + ",".join(str(x) for x in raw_vec) + "]"
     async with pool.acquire() as conn:
-        # 检查是否存在相同信念
+        # Check whether the same belief already exists
         existing = await conn.fetchrow(
             "SELECT id, confidence, trajectory FROM beliefs WHERE user_id=$1 AND content=$2 AND status!='contradicted'",
             bel.user_id, bel.content
         )
         if existing:
-            # 更新置信度 (取平均)
+            # Update confidence (average the two)
             new_conf = (existing["confidence"] + bel.confidence) / 2
             await conn.execute(
                 "UPDATE beliefs SET confidence=$1, updated_at=NOW() WHERE id=$2",
@@ -1506,7 +1529,7 @@ async def get_belief(belief_id: int, user_id: str):
 
 @app.post("/api/v1/beliefs/{belief_id}/evolve")
 async def evolve_belief(belief_id: int, user_id: str, new_confidence: float = None, evidence_id: int = None):
-    """更新信念: 调整置信度/添加证据/状态自动演化"""
+    """Update a belief: adjust confidence/add evidence/auto-evolve status"""
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
             "SELECT id, confidence, evidence_memories, status FROM beliefs WHERE id=$1 AND user_id=$2",
@@ -1519,8 +1542,8 @@ async def evolve_belief(belief_id: int, user_id: str, new_confidence: float = No
         evidences = row["evidence_memories"] or []
         if evidence_id and evidence_id not in evidences:
             evidences.append(evidence_id)
-            new_conf = min(1.0, new_conf + 0.1)  # 新证据+0.1
-        # 状态自动演化
+            new_conf = min(1.0, new_conf + 0.1)  # new evidence +0.1
+        # Auto-evolve status
         if new_conf >= 0.7:
             new_status = "established"
         elif new_conf >= 0.4:
@@ -1537,21 +1560,23 @@ async def evolve_belief(belief_id: int, user_id: str, new_confidence: float = No
     return {"id": belief_id, "confidence": new_conf, "status": new_status}
 
 
-# ── 反思与自我进化 ──
+# ── Reflection and self-evolution ──
 @app.post("/api/v1/reflect")
 async def reflect(user_id: str, mode: str = "light"):
     async with pool.acquire() as conn:
-        # 0. 用户活跃感知 (v7.2 遗忘节流): 最近7天有写入/访问 = 活跃
-        #    主人不在场时暂停衰减 — 记忆陪主人等, 不独自变冷 (用户红线: 旅游回来全变冷)
+        # 0. User-activity awareness (v7.2 forgetting throttle): a write/access in the last
+        #    7 days = active. While the owner is away, decay is paused — memories wait for
+        #    their owner instead of cooling down alone (user's hard rule: don't let everything
+        #    go cold while they're on vacation).
         last_active = await conn.fetchval("""
             SELECT GREATEST(MAX(created_at), MAX(last_accessed)) FROM memories
             WHERE user_id = $1 AND is_deleted = FALSE
         """, user_id)
         user_active = last_active is not None and last_active >= datetime.now(timezone.utc) - timedelta(days=7)
         absence_days = (datetime.now(timezone.utc) - last_active).days if (last_active is not None and not user_active) else 0
-        # 1. 热度v2: 多维衰减
-        # 时间衰减 (最后一次访问越久越冷); v6.3: 保护衰减 — pinned/preference 几乎不衰减
-        # v7.2: 用户不活跃时暂停全部衰减 (只标记 pause 透明)
+        # 1. Heat v2: multi-dimensional decay
+        # Time decay (the longer since last access, the colder); v6.3: protected decay — pinned/preference barely decay
+        # v7.2: all decay is paused while the user is inactive (just transparently marks pause)
         if user_active:
             await conn.execute("""
                 UPDATE memories SET heat_score = GREATEST(0.0, heat_score -
@@ -1565,42 +1590,42 @@ async def reflect(user_id: str, mode: str = "light"):
                     END
                 ) WHERE user_id = $1 AND is_deleted = FALSE AND heat_score > 0.02
             """, user_id)
-            # 访问加权 (近期高频访问+0.05)
+            # Access weighting (recent high-frequency access +0.05)
             await conn.execute("""
                 UPDATE memories SET heat_score = LEAST(1.0, heat_score + 0.05)
                 WHERE user_id = $1 AND is_deleted = FALSE AND access_count >= 5
                   AND last_accessed > NOW() - INTERVAL '7 days'
             """, user_id)
         else:
-            # 主人不在: 不衰减, 打暂停标记 (透明, 恢复时清除)
+            # Owner absent: no decay, set the pause flag (transparent, cleared on return)
             await conn.execute("""
                 UPDATE memories SET metadata = COALESCE(metadata,'{}'::jsonb) ||
                   ('{"paused_absence":true,"paused_days":' || $2::text || '}')::jsonb
                 WHERE user_id = $1 AND is_deleted = FALSE
             """, user_id, absence_days)
-            # 回归检测: 若之前有暂停标记但现在活跃了, 清除 (下次活跃轮触发)
-        # 活跃回归: 清除暂停标记 (用户回来了, 记忆恢复独立衰减)
+            # Return detection: if a pause flag was set previously but the user is active now, clear it (triggered on the next active round)
+        # Active return: clear the pause flag (the user is back, memories resume independent decay)
         if user_active:
             await conn.execute("""
                 UPDATE memories SET metadata = metadata - 'paused_absence' - 'paused_days'
                 WHERE user_id = $1 AND is_deleted = FALSE
                   AND metadata ? 'paused_absence'
             """, user_id)
-        # 矛盾记忆加速衰减 (始终运行 — 矛盾是数据质量问题, 不因主人不在而保留)
+        # Accelerated decay for conflicting memories (always runs — a conflict is a data-quality issue, not something to preserve just because the owner is away)
         await conn.execute("""
             UPDATE memories SET heat_score = GREATEST(0.0, heat_score - 0.1)
             WHERE user_id = $1 AND is_deleted = FALSE AND invalid_at IS NOT NULL
         """, user_id)
-        # 2. 层级自动迁移 (v6.0: tier=价值分层, 与 TMT 时间树 tmt_level 解耦)
-        #    L4 不再直接删除 — 仅标记待清理, 保留可恢复; 清理交给 cleanup API
+        # 2. Automatic tier migration (v6.0: tier = value tiering, decoupled from the TMT time-tree's tmt_level)
+        #    L4 no longer deletes directly — just marks pending cleanup, recoverable; actual cleanup is left to the cleanup API
         await conn.execute("UPDATE memories SET tier = 'L1' WHERE user_id = $1 AND heat_score > 0.7 AND tier != 'L1'", user_id)
         await conn.execute("UPDATE memories SET tier = 'L2' WHERE user_id = $1 AND heat_score BETWEEN 0.2 AND 0.7 AND tier NOT IN ('L2','L3','L4')", user_id)
         await conn.execute("UPDATE memories SET tier = 'L3' WHERE user_id = $1 AND heat_score < 0.2 AND last_accessed < NOW() - INTERVAL '30 days' AND tier NOT IN ('L3','L4')", user_id)
         await conn.execute("UPDATE memories SET tier = 'L4', forgotten_at = NOW() WHERE user_id = $1 AND heat_score < 0.05 AND last_accessed < NOW() - INTERVAL '90 days' AND is_deleted = FALSE AND tier != 'L4'", user_id)
-        # 2.5 双抽屉流转 (v7.1 抽屉化: 温度抽屉 × 时间抽屉)
-        # 温度: hot≥0.7 / normal 0.3-0.7 / cool 0.1-0.3 / frozen<0.1 (与 tier L1-L4 对齐但独立维度)
-        # 时间: recent<30d / mid 30-90d / long≥90d (基于 last_accessed)
-        # v7.3: temp_drawer 已由 Rank 百分位段统一设置, 此处删除旧 heat 规则 (避免全表白写)
+        # 2.5 Dual-drawer flow (v7.1 drawer model: temperature drawer × time drawer)
+        # Temperature: hot>=0.7 / normal 0.3-0.7 / cool 0.1-0.3 / frozen<0.1 (aligned with tier L1-L4 but an independent dimension)
+        # Time: recent<30d / mid 30-90d / long>=90d (based on last_accessed)
+        # v7.3: temp_drawer is now uniformly set by Rank percentile bands, so the old heat-based rule is removed here (avoids a full-table no-op rewrite)
         await conn.execute("""
             UPDATE memories SET time_drawer = CASE
                 WHEN COALESCE(last_accessed, created_at) > NOW() - INTERVAL '30 days' THEN 'recent'
@@ -1615,10 +1640,10 @@ async def reflect(user_id: str, mode: str = "light"):
                   ELSE 'long'
                 END)
         """, user_id)
-        # 2.6 Bjork S/R 分离 (v7.2): 存储强度S不衰减 / 检索强度R指数衰减(半衰期30天)
-        #    R = R0 * 0.5^(天数/30), 下限1; 访问后重置 R=S; pin 兜底 R≥5
-        #    回退开关: metadata->>'use_sr' = 'false' 则跳过 (保留纯 heat 模式)
-        #    v7.2 节流: 用户不活跃(user_active=False)时 R 不衰减 (只保留访问重置), 抽屉保持
+        # 2.6 Bjork S/R separation (v7.2): storage strength S doesn't decay / retrieval strength R decays exponentially (30-day half-life)
+        #    R = R0 * 0.5^(days/30), floor 1; reset to R=S on access; pinned items floor at R>=5
+        #    Rollback switch: skipped when metadata->>'use_sr' = 'false' (keeps the pure-heat mode)
+        #    v7.2 throttle: R doesn't decay while the user is inactive (user_active=False) — only the access reset is kept, drawers stay as-is
         if user_active:
             await conn.execute("""
                 UPDATE memories SET
@@ -1640,13 +1665,13 @@ async def reflect(user_id: str, mode: str = "light"):
                   AND retrieval_strength > 1.05
             """, user_id)
         else:
-            # 主人不在: 仅保留「近期访问重置」, 不做时间衰减; 清除暂停标记由回归时处理
+            # Owner absent: only keep the "recent access reset", no time decay; clearing the pause flag is handled on return
             await conn.execute("""
                 UPDATE memories SET retrieval_strength = GREATEST(retrieval_strength, storage_strength)
                 WHERE user_id = $1 AND is_deleted = FALSE
                   AND last_accessed IS NOT NULL AND last_accessed >= NOW() - INTERVAL '7 days'
             """, user_id)
-        # 遗忘候选标记: frozen + long + 非pin + 非preference → forget_candidate=true (不物理删, 等30天宽限或用户确认)
+        # Forget-candidate flag: frozen + long + not pinned + not preference → forget_candidate=true (no physical delete; waits for a 30-day grace period or user confirmation)
         await conn.execute("""
             UPDATE memories SET metadata = COALESCE(metadata,'{}'::jsonb) || '{"forget_candidate":true}'::jsonb
             WHERE user_id = $1 AND is_deleted = FALSE
@@ -1654,16 +1679,16 @@ async def reflect(user_id: str, mode: str = "light"):
               AND COALESCE(metadata->>'pinned','false') != 'true'
               AND category != 'preference'
         """, user_id)
-        # 遗忘候选降温: 被命中过但不再相关的记忆, 每轮 reflect 额外 -0.03 (加速沉降, 对应 Mem0 salience 思路)
+        # Forget-candidate cooldown: memories that were hit before but are no longer relevant get an extra -0.03 each reflect round (accelerated settling, analogous to Mem0's salience idea)
         await conn.execute("""
             UPDATE memories SET heat_score = GREATEST(0.0, heat_score - 0.03)
             WHERE user_id = $1 AND is_deleted = FALSE
               AND COALESCE(metadata->>'forget_candidate','false') = 'true'
               AND COALESCE(metadata->>'pinned','false') != 'true'
         """, user_id)
-        # 2.7 综合 Rank (v7.3 整理优化): 从遗忘转向动态整理
+        # 2.7 Composite Rank (v7.3 tidy-up optimization): shifts from forgetting to dynamic tidying
         #    Rank = 0.3S + 0.3R + 0.2ln(mention+1)/ln(1001)*10 + 0.2heat*10
-        #    抽屉按 Rank 分档: hot前10% / normal 10-30% / cool 30-70% / frozen 70%+
+        #    Drawer tiers are set by Rank percentile: hot top 10% / normal 10-30% / cool 30-70% / frozen 70%+
         await conn.execute("""
             WITH ranked AS (
               SELECT id,
@@ -1691,7 +1716,7 @@ async def reflect(user_id: str, mode: str = "light"):
             FROM percentile p WHERE m.id = p.id
               AND m.rank_score IS DISTINCT FROM p.rank_score
         """, user_id)
-        # v7.3 评审修复: 每周日强制全量同步抽屉 (清除抖动缓冲边界滞留)
+        # v7.3 review fix: force a full drawer re-sync every Sunday (clears jitter-buffer boundary stragglers)
         today = datetime.now(timezone.utc)
         if today.weekday() == 6:  # Sunday
             await conn.execute("""
@@ -1720,8 +1745,8 @@ async def reflect(user_id: str, mode: str = "light"):
                   metadata = COALESCE(metadata,'{}'::jsonb) - 'auto_mention_today'
                 FROM percentile p WHERE m.id = p.id
             """, user_id)
-        # (v7.8: memory_pointer 表已切除 — 建了不用, 维护成本高)
-        # 3. 深度模式: 实体提取
+        # (v7.8: the memory_pointer table has been removed — it was built but never used, and upkeep cost was high)
+        # 3. Deep mode: entity extraction
         if mode == "deep":
             unproc = await conn.fetch("SELECT m.id, m.content FROM memories m LEFT JOIN memory_entities me ON m.id = me.memory_id WHERE m.user_id = $1 AND me.memory_id IS NULL AND m.is_deleted = FALSE LIMIT 100", user_id)
             extracted = 0
@@ -1761,12 +1786,13 @@ async def health_report(user_id: str):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# v8.0 S1-4 · 可观测：写入/召回延迟埋点 + 可靠性体检
+# v8.0 S1-4 · Observability: write/recall latency instrumentation + reliability check
 # ══════════════════════════════════════════════════════════════════════════════
-# 现状（实测）: `perf_alert.py` 里写了 2000ms 阈值，但**全无埋点**
-#   → README 声称的 100–400ms 从未被实测过, 报警阈值也因此形同虚设。
-# 修法: 进程内环形缓冲记录每个端点的耗时, 暴露 p50/p95/p99 + 计数。
-#   成本 ~0（无外部依赖、无 IO）; 上限 _LATENCY_CAP 条/路由, 超了丢弃最旧。
+# Prior state (as measured): `perf_alert.py` has a 2000ms threshold written in, but there's
+#   **no instrumentation at all** → the 100-400ms README claims were never actually
+#   measured, so the alert threshold was meaningless in practice.
+# Fix: an in-process ring buffer records every endpoint's latency, exposing p50/p95/p99 + counts.
+#   Cost ~0 (no external dependency, no I/O); capped at _LATENCY_CAP entries/route, oldest dropped when full.
 _LATENCY: dict = {}
 _LATENCY_CAP = 500
 _LATENCY_ROUTES = (
@@ -1778,7 +1804,7 @@ _LATENCY_ROUTES = (
 
 
 def _latency_key(method: str, path: str) -> str:
-    """只对**在册的关键路由**计分（避免高基数路径把内存吃光）。"""
+    """Only scores **registered key routes** (avoids high-cardinality paths eating up memory)."""
     for r in _LATENCY_ROUTES:
         m, p = r.split(" ", 1)
         if method == m and (path == p or path.startswith(p + "/") or path.startswith(p + "?")):
@@ -1810,10 +1836,11 @@ async def latency_middleware(request, call_next):
 
 @app.get("/api/v1/metrics")
 async def metrics():
-    """v8.0 S1-4: 延迟实测 + 可靠性体检（一条请求看全）。
+    """v8.0 S1-4: measured latency + a reliability check, all in one request.
 
-    设计原则: 暴露**实测数字**而不是"运行正常"四个字。
-    延迟统计是进程内的（多 worker 各自一份），因此额外给出 PID 供辨识。
+    Design principle: expose **actual measured numbers**, not just "status: ok".
+    Latency stats are per-process (each worker keeps its own), so the PID is
+    included to tell them apart.
     """
     lat = {}
     for k, buf in _LATENCY.items():
@@ -1845,7 +1872,7 @@ async def metrics():
             "tombstone": db["tombstone"],
             "tombstone_ratio": round(db["tombstone"] / max(db["total"], 1), 4),
             "table_mb": round(db["bytes"] / 1048576, 1),
-            # v8.0 S1-2 自证: 幂等键唯一索引若生效, 这里恒为 0
+            # v8.0 S1-2 self-check: if the idempotency key's unique index is working, this is always 0
             "duplicate_fingerprint_groups": dup,
             "idempotency_index_effective": dup == 0,
         },
@@ -1853,10 +1880,10 @@ async def metrics():
     }
 
 
-# ── v8.0 S3-1 · 记忆分层模型（可执行规格的对外入口）────────────────────────
+# ── v8.0 S3-1 · Memory layering model (public entry point for the executable spec) ────────────────────────
 @app.get("/api/v1/layers")
 async def layers_spec():
-    """分层模型全貌 + **自检结果**（不是文档，是可运行断言）。"""
+    """The full layering model + **self-check results** (not documentation — a runnable assertion)."""
     return {"layers": layers_mod.LAYERS,
             "artifact_index": layers_mod.ARTIFACT_INDEX,
             "category_to_layer": layers_mod.CATEGORY_TO_LAYER,
@@ -1866,12 +1893,12 @@ async def layers_spec():
 @app.get("/api/v1/layers/classify")
 async def layers_classify(category: str = "knowledge", has_artifact: bool = False,
                           source: str = ""):
-    """判定一条待写记忆落哪层，并给出该层写规则与冲突策略。"""
+    """Determine which layer a pending memory write falls into, and return that layer's write rules and conflict strategy."""
     return layers_mod.classify_layer(category, has_artifact=has_artifact,
                                      source=source or None)
 
 
-# ── 自描述化 API ──
+# ── Self-describing API ──
 def _read_version() -> str:
     try:
         return open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "VERSION")).read().strip()
@@ -1929,17 +1956,17 @@ async def capabilities():
 
 @app.get("/api/v1/echo")
 async def echo():
-    # v7.8: 版本读 VERSION 文件, 根治硬编码漏同步
+    # v7.8: read the version from the VERSION file, fixing the root cause of hardcoded-version drift
     try:
         ver = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "VERSION")).read().strip()
     except Exception:
         ver = "unknown"
     return {"status": "ok", "service": "Mnemosyne OS", "version": ver}
 
-# ── v7.0 魔法记忆宫殿 API ──
+# ── v7.0 Memory Palace API ──
 @app.get("/api/v1/palace/status")
 async def palace_status(user_id: str = "default"):
-    """宫殿状态: 分类树统计 + 著录卡片数 + 档号覆盖率"""
+    """Palace status: category-tree stats + card count + accession-number coverage"""
     import palace
     async with pool.acquire() as conn:
         total = await conn.fetchval(
@@ -1960,20 +1987,21 @@ async def palace_status(user_id: str = "default"):
 
 @app.post("/api/v1/palace/archive")
 async def palace_archive(user_id: str = "default", limit: int = 500):
-    """手动触发存量归档 (幂等, 分批)"""
+    """Manually trigger backlog archiving (idempotent, batched)"""
     import palace
     result = await palace.init_palace(pool)
-    # 返回本次归档数 (只数新处理的)
+    # Return this run's archive count (counts only newly processed items)
     return {"classified": result["classified"], "cards": result["cards"]}
 
 @app.get("/api/v1/palace/summon")
 async def palace_summon(q: str, user_id: str = "default", top_k: int = 5,
                         fused: bool = False, candidate_k: int = 50):
-    """魔法召唤: 三通道 (点名精确/引导范围/共鸣语义)
+    """Magic summon: three channels (exact name match / guided scope / resonant semantics)
 
-    v8.0 S2-1: 新增 `fused=true` → 走四通道 **RRF 融合**（各通道先取 candidate_k 候选，
-    融合后统一截断 top_k）。**默认 false = 与 v7.8.4 行为完全一致** ——
-    在评测数字出来之前不改默认（R3: 先量后改）。
+    v8.0 S2-1: added `fused=true` → runs a four-channel **RRF fusion** (each channel first
+    takes candidate_k candidates, then the fused result is truncated to top_k).
+    **Default false = behaves identically to v7.8.4** — the default isn't changed until
+    the evaluation numbers are in (R3: measure first, change later).
     """
     import palace
     if fused:
@@ -1983,25 +2011,25 @@ async def palace_summon(q: str, user_id: str = "default", top_k: int = 5,
 
 @app.post("/api/v1/palace/refine")
 async def palace_refine(limit: int = 20):
-    """资料室精炼: LLM 生成题名/摘要/标签"""
+    """Archive-room refinement: LLM generates titles/summaries/tags"""
     import palace
     return await palace.refine_cards(pool, limit=limit)
 
 @app.post("/api/v1/palace/extract")
 async def palace_extract(batch: int = 20):
-    """资料室事实提取: 对话→facts→自动建档 (幂等)"""
+    """Archive-room fact extraction: conversation → facts → auto-filing (idempotent)"""
     import palace
     return await palace.extract_facts_pipeline(pool, batch=batch)
 
 @app.post("/api/v1/palace/lifecycle")
 async def palace_lifecycle():
-    """永恒分级: 短期过期撤架 + 永久卷热度保护"""
+    """Eternal tiering: short-term expiry removal + heat protection for permanent volumes"""
     import palace
     return await palace.apply_lifecycle(pool)
 
 @app.post("/api/v1/palace/pin")
 async def palace_pin(memory_id: int, retention: str = "permanent"):
-    """把某条记忆钉为永久卷 (规则/红线/身份类)"""
+    """Pin a memory as a permanent volume (rules/hard-limits/identity-type content)"""
     if retention not in ("permanent", "long", "short"):
         raise HTTPException(status_code=400, detail="retention must be permanent/long/short")
     async with pool.acquire() as conn:
@@ -2011,7 +2039,7 @@ async def palace_pin(memory_id: int, retention: str = "permanent"):
 
 @app.post("/api/v1/graph/search")
 async def graph_search(query: str, user_id: str, max_hops: int = 2):
-    """实体关联记忆检索 (v7.8: 移除 AGE 多跳 — 图已切除, max_hops 参数保留兼容)"""
+    """Entity-linked memory retrieval (v7.8: removed AGE multi-hop — the graph has been cut; max_hops is kept for compatibility)"""
     r_q = (await get_embedding([query]))[0]
     q_str = "[" + ",".join(str(x) for x in r_q) + "]"
     async with pool.acquire() as conn:
@@ -2029,7 +2057,7 @@ async def graph_search(query: str, user_id: str, max_hops: int = 2):
 
 @app.post("/api/v1/wiki/search")
 async def search_wiki(body: WikiSearchRequest):
-    """语义搜索 Wiki (v7.5: hybrid = 向量 HNSW + BM25 关键词 + 图谱扩展, RRF 融合)"""
+    """Semantic search over Wiki (v7.5: hybrid = vector HNSW + BM25 keywords + graph expansion, RRF-fused)"""
     query = body.query
     user_id = body.user_id
     top_k = body.top_k
@@ -2045,11 +2073,11 @@ async def search_wiki(body: WikiSearchRequest):
             "wp.embedding <=> $1::vector AS dist "
             "FROM wiki_pages wp WHERE wp.user_id = $2 AND wp.content IS NOT NULL AND wp.embedding IS NOT NULL "
             "ORDER BY wp.embedding <=> $1::vector LIMIT $3",
-            q_str, user_id, 50  # v7.5: 候选池 50, 防止 BM25 命中的新页面被向量排名挤出
+            q_str, user_id, 50  # v7.5: candidate pool of 50, so new pages that BM25 hits aren't crowded out of the vector ranking
         )
         vec_ranked = [(r["id"], r["dist"]) for r in rows]
 
-        # BM25 关键词通道
+        # BM25 keyword channel
         bm25_scores = {}
         if hybrid:
             try:
@@ -2057,7 +2085,7 @@ async def search_wiki(body: WikiSearchRequest):
                 import os as _os
                 _dict_path = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "wiki", "wiki_dict.txt")
                 if _os.path.exists(_dict_path):
-                    jieba.load_userdict(_dict_path)  # v7.5: 专业词典 (专家评审 P1)
+                    jieba.load_userdict(_dict_path)  # v7.5: domain dictionary (expert review P1)
                 from wiki.wiki_bm25 import compute_bm25_scores, rrf_fuse
                 query_tokens = [t.strip() for t in jieba.cut(query) if len(t.strip()) >= 2]
                 if query_tokens:
@@ -2070,9 +2098,9 @@ async def search_wiki(body: WikiSearchRequest):
                     total_pages = await conn.fetchval("SELECT count(*) FROM wiki_pages WHERE user_id=$1 AND content IS NOT NULL", user_id)
                     bm25_scores = compute_bm25_scores(list(kw_rows), query_tokens, total_pages or 71)
             except Exception as e:
-                logger.warning(f"wiki BM25 通道失败(降级): {e}")
+                logger.warning(f"wiki BM25 channel failed (degraded): {e}")
 
-        # 图谱扩展通道 (v7.5 P1: 实体锚定 + 1跳)
+        # Graph expansion channel (v7.5 P1: entity anchoring + 1 hop)
         graph_scores = {}
         if use_graph:
             try:
@@ -2080,9 +2108,9 @@ async def search_wiki(body: WikiSearchRequest):
                 gres = await graph_expand(conn, query, user_id, top_k)
                 graph_scores = gres.get("page_scores", {})
             except Exception as e:
-                logger.warning(f"wiki 图谱通道失败(降级): {e}")
+                logger.warning(f"wiki graph channel failed (degraded): {e}")
 
-        # 三方 RRF 融合
+        # Three-way RRF fusion
         if bm25_scores or graph_scores:
             fused = rrf_fuse(vec_ranked, bm25_scores, graph_scores)
             id2row = {r["id"]: r for r in rows}
@@ -2092,8 +2120,8 @@ async def search_wiki(body: WikiSearchRequest):
                 if pid in id2row:
                     ranked.append(id2row[pid])
                 else:
-                    missing_ids.append(pid)  # BM25 独有页面 (向量候选外)
-            # 补查 BM25 独有页面
+                    missing_ids.append(pid)  # Pages unique to BM25 (outside the vector candidates)
+            # Look up the BM25-only pages
             if missing_ids:
                 try:
                     extra = await conn.fetch(
@@ -2103,11 +2131,11 @@ async def search_wiki(body: WikiSearchRequest):
                     )
                     ranked.extend(extra)
                 except Exception as e:
-                    logger.warning(f"wiki 补查 BM25 独有页面失败: {e}")
+                    logger.warning(f"wiki BM25-only page lookup failed: {e}")
         else:
             ranked = rows[:top_k]
 
-        # rerank (可选): 豆包 embedding 相似度重排
+        # rerank (optional): Doubao embedding similarity re-ranking
         if do_rerank and ranked:
             try:
                 docs = [r["content"][:3000] for r in ranked]
@@ -2115,7 +2143,7 @@ async def search_wiki(body: WikiSearchRequest):
                 text2row = {r["content"][:3000]: r for r in ranked}
                 ranked = [text2row[d] for d in reordered if d in text2row] or ranked
             except Exception as e:
-                logger.warning(f"wiki rerank 失败(保持原序): {e}")
+                logger.warning(f"wiki rerank failed (keeping original order): {e}")
 
         return [{
             "id": r["id"], "title": r["title"],
@@ -2175,41 +2203,41 @@ class SessionArchiveRequest(BaseModel):
     user_id: str = "default"
     session_id: str = ""
     title: str = ""
-    content: str  # 完整对话文本
+    content: str  # full conversation text
 
 
 @app.post("/api/v1/sessions/archive")
 async def archive_session(req: SessionArchiveRequest):
-    """归档完整对话到记忆宫殿 — 自动向量化+入TMT蒸馏"""
+    """Archive a full conversation into the Memory Palace — auto-vectorized + fed into TMT distillation"""
     content = req.content.strip()
     if not content:
         return {"archived": False, "reason": "empty_content"}
     
     async with pool.acquire() as conn:
-        # 生成 embedding
+        # Generate the embedding
         raw = (await get_embedding([content[:2000]]))[0]
         vec_str = "[" + ",".join(str(x) for x in raw) + "]"
         
-        # 检测冲突
+        # Detect conflicts
         conflict = await detect_conflict(conn, req.user_id, content, vec_str)
         
         if conflict["action"] == "merge":
             return {"archived": False, "reason": "duplicate", "merged_into": conflict["id"]}
         
-        # 存入记忆
+        # Store the memory
         row = await conn.fetchrow(
             "INSERT INTO memories (user_id, content, category, embedding, heat_score, "
             "metadata, tmt_level) VALUES ($1,$2,$3,$4::vector,$5,$6,$7) RETURNING id",
             req.user_id, content, "session", vec_str, 0.6,
             json.dumps({"session_id": req.session_id, "title": req.title}),
-            1  # tmt_level=1，纳入蒸馏
+            1  # tmt_level=1, included in distillation
         )
         memory_id = row["id"]
         
-        # v7.8.1: 会话归档同样即时分词
+        # v7.8.1: session archiving also tokenizes immediately on write
         await _tokenize_on_write(conn, memory_id, content)
         
-        # 实体提取 (异步，不阻塞)
+        # Entity extraction (async, non-blocking)
         try:
             from core.llm import call_llm_json
             entities_prompt = f"从以下对话中提取关键实体(项目名/人名/技术名/概念)，输出JSON: {{\"entities\": [\"实体1\", \"实体2\"]}}\n\n对话片段:\n{content[:1500]}"
@@ -2221,7 +2249,7 @@ async def archive_session(req: SessionArchiveRequest):
         except Exception:
             pass
         
-        # 生成一句话摘要
+        # Generate a one-line summary
         summary = ""
         try:
             from core.llm import call_llm_fast
@@ -2236,17 +2264,18 @@ async def archive_session(req: SessionArchiveRequest):
             "summary": summary,
             "content_length": len(content)
         }
-# ── 会话消息同步 (Hermes state.db → Mnemosyne) ──
+# ── Session message sync (Hermes state.db → Mnemosyne) ──
 
 class SessionMessagesUpload(BaseModel):
     messages: list  # [{role, content, tool_call_id, tool_calls, tool_name, timestamp, token_count, finish_reason, reasoning}, ...]
 
 
 def _run_server() -> None:
-    """启动服务 —— 监听地址/端口取自 config(MNEMOSYNE_HOST / MNEMOSYNE_PORT), 不写死。
+    """Start the service — listen address/port come from config (MNEMOSYNE_HOST / MNEMOSYNE_PORT), never hardcoded.
 
-    抽成函数是为了可测: 契约测试直接钉住"入口用的是 config 值"(main.py 曾写死 127.0.0.1:8010,
-    导致两个环境变量静默失效)。
+    Pulled out into its own function so it's testable: a contract test pins down that
+    "the entry point actually uses the config values" (main.py once hardcoded
+    127.0.0.1:8010, which silently made both env vars no-ops).
     """
     import uvicorn
     uvicorn.run("main:app", host=HOST, port=PORT, workers=4, log_level="info")
