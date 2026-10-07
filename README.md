@@ -3,7 +3,7 @@
 
 ### This is a fork of https://github.com/gymaira1990-jpg/Mnemosyne-OS
 
-### But Heavily altered
+### Heavily altered
 
 ---
 
