@@ -2,6 +2,15 @@
 
 # Minnas
 
+<p align="center">
+  <img src="https://img.shields.io/badge/version-8.1.0-brightgreen?style=flat-square" alt="version">
+  <img src="https://img.shields.io/github/actions/workflow/status/slaskhas/minnas-postgres/test.yml?style=flat-square&label=CI" alt="CI">
+  <img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="license">
+  <img src="https://img.shields.io/badge/python-3.11+-blue?style=flat-square" alt="python">
+  <img src="https://img.shields.io/badge/DB-PostgreSQL%2016%20%2B%20pgvector-336791?style=flat-square" alt="postgres">
+  <img src="https://img.shields.io/badge/agent-Hermes%20native-8A2BE2?style=flat-square" alt="hermes">
+</p>
+
 > Fork of [Mnemosyne OS](https://github.com/gymaira1990-jpg/Mnemosyne-OS) — heavily altered.
 > This project was developed and documented as "Mnemosyne OS" through 2026-10-08; it has since
 > been renamed **Minnas**. Historical sections below (e.g. the Version History table) retain the
@@ -46,20 +55,20 @@ Every step is **LLM-driven** — not templated. The same pipeline handles agent 
 
 ## What Sets It Apart
 
-| Feature | Minnas | Chroma/Pinecone | Mem0 |
-|---|---|---|---|
-| 🏰 Palace taxonomy (7 wings × 20 rooms) | ✅ | ❌ | ❌ |
-| Archive-no system (number = position) | ✅ | ❌ | ❌ |
-| Tome cards (standardized description) | ✅ | ❌ | ❌ |
-| 3-channel summon (name/guide/resonate) | ✅ | ❌ | ❌ |
-| Fact extraction (dialogue→facts) | ✅ LLM pipeline | ❌ | ✅ |
-| Vector search (1536d HNSW) | ✅ | ✅ | ✅ |
-| Full-text (BM25 + ILIKE) | ✅ | ❌ | ❌ |
-| Retention tiers (permanent/long/short) | ✅ | ❌ | ❌ |
-| Entity graph (table-based) | ✅ entities + memory_entities | ❌ | ❌ |
-| Conversation history (lossless) | ✅ state.db → PG | ❌ | ❌ |
-| Edge-cloud sync | ✅ SQLite ↔ PG | ❌ | ❌ |
-| Agent-native hooks | ✅ 14 tools | ❌ | Limited |
+| Feature                                 | Minnas                        | Chroma/Pinecone | Mem0    |
+| ---                                     | ---                           | ---             | ---     |
+| 🏰 Palace taxonomy (7 wings × 20 rooms) | ✅                            | ❌              | ❌      |
+| Archive-no system (number = position)   | ✅                            | ❌              | ❌      |
+| Tome cards (standardized description)   | ✅                            | ❌              | ❌      |
+| 3-channel summon (name/guide/resonate)  | ✅                            | ❌              | ❌      |
+| Fact extraction (dialogue→facts)        | ✅ LLM pipeline               | ❌              | ✅      |
+| Vector search (1536d HNSW)              | ✅                            | ✅              | ✅      |
+| Full-text (BM25 + ILIKE)                | ✅                            | ❌              | ❌      |
+| Retention tiers (permanent/long/short)  | ✅                            | ❌              | ❌      |
+| Entity graph (table-based)              | ✅ entities + memory_entities | ❌              | ❌      |
+| Conversation history (lossless)         | ✅ state.db → PG              | ❌              | ❌      |
+| Edge-cloud sync                         | ✅ SQLite ↔ PG                | ❌              | ❌      |
+| Agent-native hooks                      | ✅ 14 tools                   | ❌              | Limited |
 
 ### 🏰 Magic Memory Palace
 
@@ -80,11 +89,11 @@ Every memory gets an **archive number** — `K·NET·PROXY·2026-0007` — so "n
 
 Knowledge comes when you call it — three channels, each with a job:
 
-| Channel | Mechanism | Latency |
-|---|---|---|
-| ① **Name** (exact) | archive-no / title / tag direct hit | <100ms |
-| ② **Guide** (range) | taxonomy wing/room narrowing | ~200ms |
-| ③ **Resonate** (fuzzy) | vector search (pgvector HNSW) | ~300ms |
+| Channel                | Mechanism                           | Latency |
+| ---                    | ---                                 | ---     |
+| ① **Name** (exact)     | archive-no / title / tag direct hit | <100ms  |
+| ② **Guide** (range)    | taxonomy wing/room narrowing        | ~200ms  |
+| ③ **Resonate** (fuzzy) | vector search (pgvector HNSW)       | ~300ms  |
 
 ```bash
 # Summon: exact + guided + fuzzy, one call
@@ -166,37 +175,37 @@ WSL offline? Local SQLite cache. Back online? Silent push to PostgreSQL. Cron jo
 
 ```
 ┌──────────────────────────────────────────────────────┐
-│            Minnas v7.0 · Magic Memory Palace          │
-│                                                        │
-│  FastAPI (50+ endpoints)                               │
-│  ├── /api/v1/palace/*        🏰 Palace (core)         │
-│  │   ├── status             palace state (coverage)   │
-│  │   ├── summon             3-channel (name/guide/rs)  │
-│  │   ├── archive            classify + archive-no     │
-│  │   ├── extract            fact extraction pipeline  │
-│  │   ├── refine             LLM card refinement       │
-│  │   └── lifecycle          retention tiers           │
-│  ├── /api/v1/memories       CRUD + search (legacy)    │
-│  ├── /api/v1/sessions       Conversation history      │
-│  ├── /api/v1/wiki           Knowledge base            │
-│  └── /api/v1/echo           Health check              │
-│                                                        │
-│  PostgreSQL 16 · pgvector 1536d (HNSW)                │
-│  Entity graph (entities + memory_entities tables)                     │
-│  asyncpg connection pool                               │
-│                                                        │
-│  🏰 Palace data model                                   │
-│  archive_taxonomy (7 wings × 20 rooms)                 │
-│  tome_cards (description cards) + entities               │
-│  memories.archive_no (K·NET·PROXY·2026-0007)          │
-│                                                        │
-│  Fact pipeline (dual LLM: DeepSeek / Doubao)           │
-│  dialogue → facts → classify → archive-no → tome card  │
-│                                                        │
-│  Integrations                                          │
-│  ├── Hermes Memory Provider (14 tools)                 │
-│  ├── Hermes auto-extract (on_session_end)              │
-│  └── Python SDK                                        │
+│            Minnas v7.0 · Magic Memory Palace         │
+│                                                      │
+│  FastAPI (50+ endpoints)                             │
+│  ├── /api/v1/palace/*        🏰 Palace (core)        │
+│  │   ├── status             palace state (coverage)  │
+│  │   ├── summon             3-channel (name/guide/rs)│
+│  │   ├── archive            classify + archive-no    │
+│  │   ├── extract            fact extraction pipeline │
+│  │   ├── refine             LLM card refinement      │
+│  │   └── lifecycle          retention tiers          │
+│  ├── /api/v1/memories       CRUD + search (legacy)   │
+│  ├── /api/v1/sessions       Conversation history     │
+│  ├── /api/v1/wiki           Knowledge base           │
+│  └── /api/v1/echo           Health check             │
+│                                                      │
+│  PostgreSQL 16 · pgvector 1536d (HNSW)               │
+│  Entity graph (entities + memory_entities tables)    │
+│  asyncpg connection pool                             │
+│                                                      │
+│  🏰 Palace data model                                │
+│  archive_taxonomy (7 wings × 20 rooms)               │
+│  tome_cards (description cards) + entities           │
+│  memories.archive_no (K·NET·PROXY·2026-0007)         │
+│                                                      │
+│  Fact pipeline (dual LLM: DeepSeek / Doubao)         │
+│  dialogue → facts → classify → archive-no → tome card│
+│                                                      │
+│  Integrations                                        │
+│  ├── Hermes Memory Provider (14 tools)               │
+│  ├── Hermes auto-extract (on_session_end)            │
+│  └── Python SDK                                      │
 └──────────────────────────────────────────────────────┘
 ```
 
