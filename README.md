@@ -2,6 +2,15 @@
 
 # Minnas
 
+<p align="center">
+  <img src="https://img.shields.io/badge/version-8.1.0-brightgreen?style=flat-square" alt="version">
+  <img src="https://img.shields.io/github/actions/workflow/status/slaskhas/minnas-postgres/test.yml?style=flat-square&label=CI" alt="CI">
+  <img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="license">
+  <img src="https://img.shields.io/badge/python-3.11+-blue?style=flat-square" alt="python">
+  <img src="https://img.shields.io/badge/DB-PostgreSQL%2016%20%2B%20pgvector-336791?style=flat-square" alt="postgres">
+  <img src="https://img.shields.io/badge/agent-Hermes%20native-8A2BE2?style=flat-square" alt="hermes">
+</p>
+
 > Fork of [Mnemosyne OS](https://github.com/gymaira1990-jpg/Mnemosyne-OS) — heavily altered.
 > This project was developed and documented as "Mnemosyne OS" through 2026-10-08; it has since
 > been renamed **Minnas**. Historical sections below (e.g. the Version History table) retain the
