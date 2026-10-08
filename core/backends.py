@@ -1,5 +1,5 @@
 """
-Mnemosyne OS v5.0 — multi-backend model configuration
+Minnas v5.0 — multi-backend model configuration
 Supports: Doubao (ARK, chat only) / OpenAI-compatible (embedding + chat) / local models
 """
 import os

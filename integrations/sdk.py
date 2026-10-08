@@ -1,5 +1,5 @@
 """
-Mnemosyne v5.0 — Hermes MemoryProvider SDK
+Minnas v5.0 — Hermes MemoryProvider SDK
 Whitepaper §6.2 workflow-level deep mapping + §6.4 official native SDK
 
 Zero-intrusion replacement for Hermes' native memory base class
@@ -9,13 +9,13 @@ import urllib.request
 from typing import Dict, List, Optional
 
 
-class MnemosyneHermesMemory:
+class MinnasHermesMemory:
     """
     Hermes native SDK — 3-line integration
-    
+
     Usage:
-        from mnemosyne_hermes_sdk import MnemosyneHermesMemory
-        memory = MnemosyneHermesMemory(endpoint="http://127.0.0.1:18010")
+        from minnas_hermes_sdk import MinnasHermesMemory
+        memory = MinnasHermesMemory(endpoint="http://127.0.0.1:18010")
         memory.add("User prefers Python 3.10", memory_type="preference")
     """
     

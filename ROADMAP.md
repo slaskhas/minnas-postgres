@@ -1,4 +1,4 @@
-# Mnemosyne OS · Roadmap
+# Minnas · Roadmap
 
 > v7.8.3 | 2026-09-12 🔧 Service port / host env vars take effect (MNEMOSYNE_PORT / MNEMOSYNE_HOST) + doc fixes
 > v7.8.0 | 2026-08-18 🧹 Precise defusing + architecture slimming

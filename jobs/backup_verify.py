@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Mnemosyne OS v8.0 · Backup re-verification job (S1-4, second half)
+Minnas v8.0 · Backup re-verification job (S1-4, second half)
 ===================================================================
 
 Why this exists

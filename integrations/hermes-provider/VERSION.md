@@ -1,4 +1,4 @@
-# Mnemosyne Memory Provider
+# Minnas Memory Provider
 
 Version: 7.8.2 | Status: Released | Date: 2026-09-12
 Architecture: Hermes ABC MemoryProvider plugin (evolved from v1.1.0)
@@ -32,5 +32,5 @@ Architecture: Hermes ABC MemoryProvider plugin (evolved from v1.1.0)
 
 ## Dependencies
 
-- Mnemosyne OS service v5.5.1+ (v7.x recommended)
+- Minnas service v5.5.1+ (v7.x recommended)
 - Hermes v0.19.0+

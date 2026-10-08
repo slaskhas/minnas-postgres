@@ -1,6 +1,6 @@
-# Mnemosyne Memory Provider
+# Minnas Memory Provider
 
-> The official Memory Provider that gives **Hermes Agent** access to the Mnemosyne OS memory palace.
+> The official Memory Provider that gives **Hermes Agent** access to the Minnas memory palace.
 > Version: v7.8.2 | Compatible with: Hermes Agent (ABC MemoryProvider protocol)
 
 ---
@@ -21,7 +21,7 @@ Comparable to: Mem0 / Zep / Honcho. What's different: palace-style organization 
 ## Quick setup
 
 ```bash
-# 1. Prerequisite: the Mnemosyne OS service is already running (see the repo's INSTALL.md)
+# 1. Prerequisite: the Minnas service is already running (see the repo's INSTALL.md)
 #    Local: http://127.0.0.1:8010  |  Remote: SSH tunnel mapped to 18010
 
 # 2. Configure Hermes to use the mnemosyne provider
@@ -41,7 +41,7 @@ echo "MNEMOSYNE_USER_ID=default" >> ~/.hermes/.env
 
 | Env var | Default | Description |
 |---------|------|------|
-| `MNEMOSYNE_ENDPOINT` | `http://127.0.0.1:18010` | Mnemosyne API address |
+| `MNEMOSYNE_ENDPOINT` | `http://127.0.0.1:18010` | Minnas API address |
 | `MNEMOSYNE_USER_ID` | `default` | User ID (for multi-user isolation) |
 | `MNEMOSYNE_API_KEY` | none | If the service requires auth (`X-API-Key` header) |
 
@@ -74,10 +74,10 @@ echo "MNEMOSYNE_USER_ID=default" >> ~/.hermes/.env
 | `on_turn_start` | New turn | Prefetches relevant memories into context |
 | `on_pre_compress` | Before context compression | Archives key insights to prevent loss |
 | `on_delegation` | Subtask completes | Logs the task + result into the palace |
-| `on_memory_write` | Built-in memory write | Mirrors it to Mnemosyne |
+| `on_memory_write` | Built-in memory write | Mirrors it to Minnas |
 | `on_session_switch` | Session switch | Flushes the write queue |
 
-> Crash-safe write queue + circuit-breaker protection: unique in the field — no memory is lost even if Mnemosyne is briefly unavailable.
+> Crash-safe write queue + circuit-breaker protection: unique in the field — no memory is lost even if Minnas is briefly unavailable.
 
 ---
 
@@ -97,10 +97,10 @@ echo "MNEMOSYNE_USER_ID=default" >> ~/.hermes/.env
 
 ## Compatibility notes
 
-- Requires Mnemosyne OS service v5.3.0+ (v7.x recommended)
+- Requires Minnas service v5.3.0+ (v7.x recommended)
 - Depends on Hermes's `agent.memory_provider.MemoryProvider` base class
-- No local model dependency: all LLM/embedding calls go through the Mnemosyne service
+- No local model dependency: all LLM/embedding calls go through the Minnas service
 
 ---
 
-*Mnemosyne OS · Memory isn't meant to be stored — it's meant to be lived.*
+*Minnas · Memory isn't meant to be stored — it's meant to be lived.*

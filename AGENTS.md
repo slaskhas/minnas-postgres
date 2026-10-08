@@ -1,4 +1,6 @@
-# Mnemosyne OS · Agent Handbook
+# Minnas · Agent Handbook
+
+> Fork of [Mnemosyne OS](https://github.com/gymaira1990-jpg/Mnemosyne-OS), heavily altered.
 
 > An operational manual for AI coding assistants. **Keep it lean**: details in `docs/`, the truth of capabilities in `openspec/specs/`, history in `CHANGELOG.md`.
 > **Goal**: any agent (Hermes / Claude Code / Cursor / Codex) completes onboarding in 5 minutes.
@@ -27,7 +29,7 @@ pytest tests/          # all green; MCP bridge contract + in-process /mcp mount 
 ## Development contributions
 
 ```bash
-git clone https://github.com/gymaira1990-jpg/Mnemosyne-OS.git
+git clone https://github.com/slaskhas/minnas-postgres.git
 ```
 
 - Commits: `feat:` / `fix:` / `docs:` / `chore:` / `release:`

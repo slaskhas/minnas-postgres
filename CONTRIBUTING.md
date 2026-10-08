@@ -6,7 +6,7 @@ Titles are imperative, short English sentences; descriptions explain **why**, no
 
 ## Branching & Merging
 1. `git fetch origin`, confirm local `main` matches `origin/main`
-2. Create a feature branch: `git worktree add ../wt/mnemosyne-<topic> -b <type>/<topic> origin/main`
+2. Create a feature branch: `git worktree add ../wt/minnas-<topic> -b <type>/<topic> origin/main`
 3. Change → `pytest tests/` → commit → push → open PR → **watch CI until all green**
 
 ## Before Making Changes

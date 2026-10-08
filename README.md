@@ -1,9 +1,11 @@
 
 
+# Minnas
 
-### This is a fork of https://github.com/gymaira1990-jpg/Mnemosyne-OS
-
-### Heavily altered
+> Fork of [Mnemosyne OS](https://github.com/gymaira1990-jpg/Mnemosyne-OS) — heavily altered.
+> This project was developed and documented as "Mnemosyne OS" through 2026-10-08; it has since
+> been renamed **Minnas**. Historical sections below (e.g. the Version History table) retain the
+> old name where it's part of the accurate historical record.
 
 ---
 
@@ -44,7 +46,7 @@ Every step is **LLM-driven** — not templated. The same pipeline handles agent 
 
 ## What Sets It Apart
 
-| Feature | Mnemosyne | Chroma/Pinecone | Mem0 |
+| Feature | Minnas | Chroma/Pinecone | Mem0 |
 |---|---|---|---|
 | 🏰 Palace taxonomy (7 wings × 20 rooms) | ✅ | ❌ | ❌ |
 | Archive-no system (number = position) | ✅ | ❌ | ❌ |
@@ -61,7 +63,7 @@ Every step is **LLM-driven** — not templated. The same pipeline handles agent 
 
 ### 🏰 Magic Memory Palace
 
-Memory is organized like a real palace — inspired by library classification (Dewey Decimal), archive description standards (DA/T18), and the Chinese medicine cabinet (position registry). These systems served humanity for centuries without computers; Mnemosyne brings them to AI.
+Memory is organized like a real palace — inspired by library classification (Dewey Decimal), archive description standards (DA/T18), and the Chinese medicine cabinet (position registry). These systems served humanity for centuries without computers; Minnas brings them to AI.
 
 ```
 Lobby       → high-frequency memories (always-injected)
@@ -151,7 +153,7 @@ standard LRU cache + exponential-backoff retry (7.7x faster cold batches, ~0ms c
 ```text
 on_session_end   → sync + fact extraction     on_turn_start    → prefetch
 on_pre_compress  → inject before compression  on_delegation    → log subtasks
-on_memory_write  → mirror to Mnemosyne        on_session_switch → flush queue
+on_memory_write  → mirror to Minnas           on_session_switch → flush queue
 ```
 
 ### ☁️ Edge-Cloud Resilience
@@ -164,7 +166,7 @@ WSL offline? Local SQLite cache. Back online? Silent push to PostgreSQL. Cron jo
 
 ```
 ┌──────────────────────────────────────────────────────┐
-│            Mnemosyne OS v7.0 · Magic Memory Palace    │
+│            Minnas v7.0 · Magic Memory Palace          │
 │                                                        │
 │  FastAPI (50+ endpoints)                               │
 │  ├── /api/v1/palace/*        🏰 Palace (core)         │
@@ -207,7 +209,7 @@ WSL offline? Local SQLite cache. Back online? Silent push to PostgreSQL. Cron jo
 | You want to… | Do this | Time |
 |---|---|---|
 | 🤖 Give your Hermes Agent long-term memory | `hermes config set memory.provider mnemosyne` | ~2 min |
-| 🐍 Call Mnemosyne from your own code | Install + Python SDK | ~15 min |
+| 🐍 Call Minnas from your own code | Install + Python SDK | ~15 min |
 | 🏠 Self-host the full service | Follow [INSTALL.md](INSTALL.md) | ~15 min |
 
 ### Prerequisites
@@ -217,7 +219,7 @@ WSL offline? Local SQLite cache. Back online? Silent push to PostgreSQL. Cron jo
 
 ### Hermes Agent (one command)
 
-The Mnemosyne Memory Provider ships with Hermes — tools appear after `/reset`:
+The Minnas Memory Provider ships with Hermes — tools appear after `/reset`:
 
 ```bash
 hermes config set memory.provider mnemosyne
@@ -231,8 +233,8 @@ No other configuration needed.
 > Full step-by-step guide: **[INSTALL.md](INSTALL.md)** (database setup, permissions, model backends, FAQ).
 
 ```bash
-git clone https://github.com/gymaira1990-jpg/Mnemosyne-OS.git
-cd Mnemosyne-OS
+git clone https://github.com/slaskhas/minnas-postgres.git
+cd minnas-postgres
 pip install -r requirements.txt
 
 # 1. PostgreSQL 16 + pgvector (Ubuntu example):
@@ -248,8 +250,8 @@ python main.py  # → :8010
 ### Python SDK
 
 ```python
-from integrations.sdk import MnemosyneHermesMemory
-m = MnemosyneHermesMemory(endpoint="http://127.0.0.1:18010")
+from integrations.sdk import MinnasHermesMemory
+m = MinnasHermesMemory(endpoint="http://127.0.0.1:18010")
 
 m.add("pgvector HNSW outperforms IVFFlat for high-dimensional recall")
 results = m.get_relevant("which pgvector index is better?")

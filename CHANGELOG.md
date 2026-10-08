@@ -1,3 +1,14 @@
+# Changelog
+
+> This project was developed and documented as **"Mnemosyne OS"** from inception through
+> 2026-10-08; entries below reflect that name as it was recorded at the time. The project has
+> since been renamed **Minnas** (same codebase — "Mnemosyne OS" was itself a fork of
+> github.com/gymaira1990-jpg/Mnemosyne-OS, heavily altered). This note covers all historical
+> documents across the repo (this changelog, docs/archive/, docs/design/, docs/adr/) — no
+> per-file disclaimers were added to those, since each already carries its own date.
+
+---
+
 ## unreleased · Memory GC job fix (2026-09-26) — Oversized field in the voucher caused whole-batch compaction to fail
 
 > Rationale: **production-measured** (a real instance, batch `GC-20260926`, 549 items pending) — a genuine defect surfaced by production use.

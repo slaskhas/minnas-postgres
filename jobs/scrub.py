@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Mnemosyne OS v8.0 · Integrity scrub job
+Minnas v8.0 · Integrity scrub job
 ========================================
 
 Filesystem analogy: Btrfs csum tree / ZFS checksum + scrub — a background job that
@@ -144,7 +144,7 @@ async def run(args) -> int:
 
 
 def main() -> int:
-    p = argparse.ArgumentParser(description="Mnemosyne OS v8.0 integrity scrub (read-only)")
+    p = argparse.ArgumentParser(description="Minnas v8.0 integrity scrub (read-only)")
     p.add_argument("--json", action="store_true", help="JSON output")
     p.add_argument("--window-days", type=int, default=30, help="overdue-reclamation check window (default 30 days)")
     p.add_argument("--dsn", default=None)
