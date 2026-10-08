@@ -1,4 +1,6 @@
-# Mnemosyne OS · Installation Guide
+# Minnas · Installation Guide
+
+> Fork of [Mnemosyne OS](https://github.com/gymaira1990-jpg/Mnemosyne-OS), heavily altered.
 
 > The complete guide from zero to running. Three integration options — pick what you need.
 > Version: v8.0.0 | Updated: 2026-09-25
@@ -54,7 +56,7 @@
 
 ## Option 1: Hermes Agent One-Click Onboarding (Fastest)
 
-If you already use [Hermes Agent](https://hermes-agent.nousresearch.com/docs), the Mnemosyne Memory Provider ships built into Hermes:
+If you already use [Hermes Agent](https://hermes-agent.nousresearch.com/docs), the Minnas Memory Provider ships built into Hermes:
 
 ```bash
 # 1. Configure mnemosyne as the memory provider
@@ -66,7 +68,7 @@ hermes config set memory.provider mnemosyne
 #    mnemosyne_wiki        · mnemosyne_tree      · mnemosyne_media
 ```
 
-> Prerequisite: you already have an accessible Mnemosyne service (local port 18010 or remote). Don't have one? Deploy the service itself first via [Option 2](#option-2-standalone-deployment-full-version).
+> Prerequisite: you already have an accessible Minnas service (local port 18010 or remote). Don't have one? Deploy the service itself first via [Option 2](#option-2-standalone-deployment-full-version).
 
 **Remote services (e.g., deployed on a server)** are accessed through an SSH tunnel:
 
@@ -113,8 +115,8 @@ brew install pgvector
 ### 2. Import Database Schema
 
 ```bash
-git clone https://github.com/gymaira1990-jpg/Mnemosyne-OS.git
-cd Mnemosyne-OS
+git clone https://github.com/slaskhas/minnas-postgres.git
+cd minnas-postgres
 
 # Import the full table structure (21 tables, including palaces / knowledge base)
 # ⚠️ Must run as a database superuser (e.g., postgres): CREATE EXTENSION requires elevated privileges
@@ -191,7 +193,7 @@ python main.py
 ```bash
 # Health check
 curl http://127.0.0.1:8010/api/v1/echo
-# → {"status":"ok","service":"Mnemosyne OS","version":"8.1.0"}
+# → {"status":"ok","service":"Minnas","version":"8.1.0"}
 
 # Store a memory
 curl -X POST http://127.0.0.1:8010/api/v1/memories \
@@ -221,9 +223,9 @@ curl -i -N -X POST http://127.0.0.1:8010/mcp \
 On top of the service deployed via Option 2, any Python application can integrate:
 
 ```python
-from integrations.sdk import MnemosyneHermesMemory
+from integrations.sdk import MinnasHermesMemory
 
-m = MnemosyneHermesMemory(endpoint="http://127.0.0.1:8010")
+m = MinnasHermesMemory(endpoint="http://127.0.0.1:8010")
 
 # Store
 m.add("pgvector HNSW beats IVFFlat on high-dim recall")
@@ -289,4 +291,4 @@ A: Standard `pg_dump` works: `pg_dump -U mnemosyne -d mnemosyne -Fc > backup.dum
 
 ---
 
-*Mnemosyne OS · MIT License · Build thinking agents with memory*
+*Minnas · MIT License · Build thinking agents with memory*

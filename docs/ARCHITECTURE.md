@@ -6,7 +6,7 @@
 ## Architecture Overview
 
 ```
-Mnemosyne OS (FastAPI, 50+ endpoints)
+Minnas (FastAPI, 50+ endpoints)
   ├── main.py            Service entry point + core routes (memories/search/palace/wiki/...)
   ├── palace.py          🏰 Palace core (categorization/accession numbers/cards/summon/lifecycle)
   ├── core/              LLM / Embedding / Chunker engines

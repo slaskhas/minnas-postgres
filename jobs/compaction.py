@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Mnemosyne OS v8.0 · Memory reclamation job (GC / compaction)
+Minnas v8.0 · Memory reclamation job (GC / compaction)
 ==============================================================
 
 Problem (observed 2026-09-25): nowhere in the repo is there a `DELETE FROM memories`
@@ -376,7 +376,7 @@ async def _log(conn, batch, dry_run, summary, purged, csv_path, traces_kept=None
 
 
 def main() -> int:
-    p = argparse.ArgumentParser(description="Mnemosyne OS v8.0 memory reclamation job (GC)")
+    p = argparse.ArgumentParser(description="Minnas v8.0 memory reclamation job (GC)")
     p.add_argument("--apply", action="store_true", help="actually perform the deletion (dry run by default)")
     p.add_argument("--dry-run", action="store_true",
                    help="explicitly declare a dry run (this is already the default; a self-documenting flag for gate scripts)")

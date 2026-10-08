@@ -219,7 +219,7 @@ async def _mcp_lifespan(_app: "FastAPI"):
             yield
         else:
             async with run_cm():
-                logger.info("MCP (/mcp) mounted — 15 Mnemosyne tools via streamable HTTP")
+                logger.info("MCP (/mcp) mounted — 15 Minnas tools via streamable HTTP")
                 yield
             logger.info("MCP (/mcp) session manager stopped")
     finally:
@@ -228,7 +228,7 @@ async def _mcp_lifespan(_app: "FastAPI"):
 
 pool: Optional[asyncpg.Pool] = None
 
-app = FastAPI(title="Mnemosyne OS v8.1.0 — 认知型记忆操作系统", lifespan=_mcp_lifespan)
+app = FastAPI(title="Minnas v8.1.0 — 认知型记忆操作系统", lifespan=_mcp_lifespan)
 
 # ── mount v5.0 routes ──
 app.include_router(tmt_router)
@@ -1907,13 +1907,13 @@ def _read_version() -> str:
 
 @app.get("/")
 async def root():
-    return {"service": f"Mnemosyne OS v{_read_version()}", "docs": "/api/v1/capabilities"}
+    return {"service": f"Minnas v{_read_version()}", "docs": "/api/v1/capabilities"}
 
 @app.get("/api/v1/capabilities")
 async def capabilities():
     _ver = _read_version()
     return {
-        "service": f"Mnemosyne OS v{_ver}",
+        "service": f"Minnas v{_ver}",
         "version": _ver,
         "description": "个人AI记忆库 — 存入、搜索、追溯、演化",
         "auth": "X-API-Token (Nginx层)",
@@ -1961,7 +1961,7 @@ async def echo():
         ver = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "VERSION")).read().strip()
     except Exception:
         ver = "unknown"
-    return {"status": "ok", "service": "Mnemosyne OS", "version": ver}
+    return {"status": "ok", "service": "Minnas", "version": ver}
 
 # ── v7.0 Memory Palace API ──
 @app.get("/api/v1/palace/status")

@@ -1,4 +1,6 @@
-# Mnemosyne OS
+# Minnas
+
+> Fork of [Mnemosyne OS](https://github.com/gymaira1990-jpg/Mnemosyne-OS), heavily altered.
 
 > Project charter — read this first when taking over any session; in 3 minutes you'll know what it is, why it exists, and where it stands.
 
@@ -17,7 +19,7 @@ General LLMs have no cross-session memory: every conversation starts from zero, 
 - No distillation → raw fragments pile up, never forming knowledge
 - No structure → you can't find or explain "why the system is the way it is"
 
-Mnemosyne turns this "memory lifecycle governance" into a system: classification tree + accession numbers + catalog cards, three-channel summoning, cognitive heat and permanence tiers.
+Minnas turns this "memory lifecycle governance" into a system: classification tree + accession numbers + catalog cards, three-channel summoning, cognitive heat and permanence tiers.
 
 ## 3. Scope Boundaries
 
@@ -49,7 +51,8 @@ Mnemosyne turns this "memory lifecycle governance" into a system: classification
 
 | Thing | Where |
 |---|---|
-| Code | https://github.com/gymaira1990-jpg/Mnemosyne-OS |
+| This fork | https://github.com/slaskhas/minnas-postgres |
+| Upstream origin | https://github.com/gymaira1990-jpg/Mnemosyne-OS |
 | Production deployment | GZ server `/opt/mnemosyne` (see `DEPLOY` notes; production git is frozen — do not pull) |
 | Capabilities truth | `openspec/specs/` |
 | Data layer | PostgreSQL 16 + pgvector (1536d HNSW) |

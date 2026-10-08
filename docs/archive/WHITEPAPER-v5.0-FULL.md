@@ -1,6 +1,9 @@
 # Mnemosyne Memory Palace v5.0
 ## Cognitive Memory Operating System Product Whitepaper "Final Edition · Part 1"
 
+> Archived historical document — written under the project's original name, "Mnemosyne OS"
+> (since renamed to Minnas). Content preserved as-is for historical accuracy.
+
 **Version**: v5.2
 **Release date**: June 2026
 **Core positioning**: The world's first cognitive-grade independent memory operating system · natively co-designed with Hermes

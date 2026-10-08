@@ -3,7 +3,7 @@ context injection before storage.
 
 Reference: Supermemory (_is_trivial_message, message cleaning)
 Purpose: strip tags Hermes injects into its own context before storing to
-Mnemosyne, and filter out meaningless messages.
+Minnas, and filter out meaningless messages.
 
 v1.1 upgrade (0706): Chinese acknowledgement-phrase filtering + tool-call JSON
 filtering + information-density detection.
@@ -17,7 +17,8 @@ logger = logging.getLogger(__name__)
 # ── Context-injection tags to strip ──
 
 _CONTEXT_INJECTION_PATTERNS = [
-    r"## Mnemosyne related memories[\s\S]*?(?:\n---|\n\n)",
+    r"## Minnas related memories[\s\S]*?(?:\n---|\n\n)",
+    r"## Mnemosyne related memories[\s\S]*?(?:\n---|\n\n)",  # legacy header (pre-rename)
     r"## Mnemosyne 关联记忆[\s\S]*?(?:\n---|\n\n)",  # legacy Chinese header (pre-translation)
     r"## 关联记忆[\s\S]*?(?:\n---|\n\n)",
     r"<hermes-context>[\s\S]*?</hermes-context>",

@@ -1,5 +1,8 @@
 # Mnemosyne OS v5.2 · Product Whitepaper
 
+> Archived historical document — written under the project's original name, "Mnemosyne OS"
+> (since renamed to Minnas). Content preserved as-is for historical accuracy.
+
 **Version**: v5.2.0
 **Updated**: 2026-06-25
 **Positioning**: Cognitive memory operating system · personal AI long-term memory infrastructure

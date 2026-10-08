@@ -28,9 +28,9 @@ curl "http://127.0.0.1:8010/api/v1/palace/summon?q=keyword&user_id=default&top_k
 ### Option 2: Python SDK
 
 ```python
-from integrations.sdk import MnemosyneHermesMemory
+from integrations.sdk import MinnasHermesMemory
 
-m = MnemosyneHermesMemory(endpoint="http://127.0.0.1:8010")
+m = MinnasHermesMemory(endpoint="http://127.0.0.1:8010")
 m.add("knowledge content", category="knowledge")
 results = m.get_relevant("query")
 m.search_by_hall("archive")       # verified knowledge
@@ -86,7 +86,7 @@ mcp_servers:
 
 ### MCP in-process endpoint (/mcp, streamable HTTP · v8.1)
 
-Since v8.1, the 15 Mnemosyne tools are also mounted directly in the core's uvicorn
+Since v8.1, the 15 Minnas tools (named `mnemosyne_*` for backward compatibility) are also mounted directly in the core's uvicorn
 process (`main.py` mounts them automatically) — **no stdio subprocess, no SSH tunnel**.
 Any streamable-HTTP client can connect to `http://<host>:8010/mcp`.
 The stdio bridge is retained (existing stdio client configs / `mcp_adapt_test.py` still work);
@@ -113,6 +113,6 @@ curl -i -N -X POST http://127.0.0.1:8010/mcp \
 | `on_turn_start` | New turn | Prefetch and inject relevant memories |
 | `on_pre_compress` | Before compression | Archive to prevent loss |
 | `on_delegation` | Subtask | Record subtask memories |
-| `on_memory_write` | Memory write | Mirror to Mnemosyne |
+| `on_memory_write` | Memory write | Mirror to Minnas |
 
 ---

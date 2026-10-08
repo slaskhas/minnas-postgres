@@ -1,11 +1,13 @@
-# Mnemosyne OS v7.0 · Magic Memory Palace
+# Minnas v7.0 · Magic Memory Palace
 
 > Product whitepaper · 2026-08-06 · v7.0.0
 > Previous: v5.2 (archived in docs/archive/)
+> Note: written under the project's original name, "Mnemosyne OS"; the project has since been
+> renamed to Minnas (same codebase/fork lineage).
 
 ## What This Is
 
-Mnemosyne OS is a personal AI memory operating system. It stores, organizes, refines,
+Minnas is a personal AI memory operating system. It stores, organizes, refines,
 and retrieves an individual's knowledge — the memories, decisions, preferences, and
 lessons accumulated across a lifetime of work with AI agents.
 
@@ -16,7 +18,7 @@ drawer-label/position registry). No computers needed; these systems worked for c
 
 ## Core Ideas
 
-| Human wisdom | Mechanism | Mnemosyne mapping |
+| Human wisdom | Mechanism | Minnas mapping |
 |---|---|---|
 | Library: number = position | Classification number IS the shelf location | Archive-no: `K·NET·PROXY·2026-0007` |
 | Archive: standardized description | Every item has a description card | `tome_cards` (title/summary/tags/retention) |

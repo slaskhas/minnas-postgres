@@ -1,4 +1,4 @@
-# Mnemosyne OS Status
+# Minnas Status
 
 ## Status: v8.0.0 — 267 tests green locally; production deployed (with two corrections), P4 retest pending
 

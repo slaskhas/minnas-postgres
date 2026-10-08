@@ -1,13 +1,13 @@
 """
-Mnemosyne Memory Provider — replaces OpenViking, uses the in-house memory palace.
+Minnas Memory Provider — replaces OpenViking, uses the in-house memory palace.
 
 Provider v1.1.0 (2026-07-29)
   - v1.0.0: initial version, full sync_turn + hot memories + prefetch
   - v1.1.0: write filtering (skip low-value messages) + first-turn cold start + formatting improvements (cat_emoji)
-  - Mnemosyne dependency: v5.5.1+ (production server)
+  - Minnas dependency: v5.5.1+ (production server)
   - Compatible with: Hermes v0.19.0+
 
-Connects over an SSH tunnel to the Mnemosyne REST API on the production server
+Connects over an SSH tunnel to the Minnas REST API on the production server
 (localhost:18010). Provides full memory storage, semantic retrieval, TMT-tier
 distillation, and heat management.
 
@@ -63,7 +63,7 @@ _HEADER_API_KEY = "X-API-Key"
 
 SEARCH_SCHEMA = {
     "name": "mnemosyne_search",
-    "description": "Four-dimensional search of the Mnemosyne memory palace (semantic + keyword + heat + graph). Returns the best-matching historical memories.",
+    "description": "Four-dimensional search of the Minnas memory palace (semantic + keyword + heat + graph). Returns the best-matching historical memories.",
     "parameters": {
         "type": "object",
         "properties": {
@@ -78,7 +78,7 @@ SEARCH_SCHEMA = {
 
 REMEMBER_SCHEMA = {
     "name": "mnemosyne_remember",
-    "description": "Actively store an important memory in the Mnemosyne memory palace. Automatically added to the semantic index and heat system.",
+    "description": "Actively store an important memory in the Minnas memory palace. Automatically added to the semantic index and heat system.",
     "parameters": {
         "type": "object",
         "properties": {
@@ -224,8 +224,8 @@ def _get_httpx():
         return None
 
 
-class _MnemosyneClient:
-    """Thin HTTP client wrapping the Mnemosyne REST API."""
+class _MinnasClient:
+    """Thin HTTP client wrapping the Minnas REST API."""
 
     def __init__(self, endpoint: str, user_id: str):
         self._endpoint = endpoint.rstrip("/")
@@ -416,10 +416,10 @@ class _MnemosyneClient:
 
 # ── MemoryProvider implementation ──────────────────────────────────
 
-class MnemosyneMemoryProvider(MemoryProvider):
+class MinnasMemoryProvider(MemoryProvider):
 
     def __init__(self):
-        self._client: Optional[_MnemosyneClient] = None
+        self._client: Optional[_MinnasClient] = None
         self._endpoint = ""
         self._user_id = ""
         self._session_id = ""
@@ -440,14 +440,14 @@ class MnemosyneMemoryProvider(MemoryProvider):
         return [
             {
                 "key": "endpoint",
-                "description": "Mnemosyne API address",
+                "description": "Minnas API address",
                 "required": True,
                 "default": _DEFAULT_ENDPOINT,
                 "env_var": "MNEMOSYNE_ENDPOINT",
             },
             {
                 "key": "user_id",
-                "description": "Mnemosyne user ID",
+                "description": "Minnas user ID",
                 "default": _DEFAULT_USER_ID,
                 "env_var": "MNEMOSYNE_USER_ID",
             },
@@ -461,15 +461,15 @@ class MnemosyneMemoryProvider(MemoryProvider):
         self._hot_cache = []  # preheat cache
 
         try:
-            self._client = _MnemosyneClient(self._endpoint, self._user_id)
+            self._client = _MinnasClient(self._endpoint, self._user_id)
             if not self._client.health():
-                logger.warning("Mnemosyne at %s not reachable", self._endpoint)
+                logger.warning("Minnas at %s not reachable", self._endpoint)
                 self._client = None
             else:
                 # P3-T2a: startup preheat — preload popular memories
                 self._preheat_memories()
         except ImportError:
-            logger.warning("httpx not installed — Mnemosyne plugin disabled")
+            logger.warning("httpx not installed — Minnas plugin disabled")
             self._client = None
 
     def _preheat_memories(self) -> None:
@@ -489,7 +489,7 @@ class MnemosyneMemoryProvider(MemoryProvider):
         """Fetch the hottest non-test memories, formatted as inline text. Applies time decay."""
         try:
             from datetime import datetime, timezone
-            client = _MnemosyneClient(self._endpoint, self._user_id)
+            client = _MinnasClient(self._endpoint, self._user_id)
             hot = client.get_hot_memories(limit=12, min_heat=0.1)
             if not hot:
                 return ""
@@ -567,7 +567,7 @@ class MnemosyneMemoryProvider(MemoryProvider):
             tax_count = len(palace_stats.get("taxonomy", [])) if isinstance(palace_stats.get("taxonomy"), list) else "?"
 
             parts = [
-                f"Mnemosyne memory palace (Endpoint: {self._endpoint})",
+                f"Minnas memory palace (Endpoint: {self._endpoint})",
                 f"User: {self._user_id} | Total memories: {total_mem} | Categories: {cat_str}",
                 f"🏰 Palace: archive coverage {archive_coverage}% | catalog cards {tome_cards} | category tree {tax_count} nodes",
             ]
@@ -583,7 +583,7 @@ class MnemosyneMemoryProvider(MemoryProvider):
             return "\n\n".join(parts)
         except Exception:
             return (
-                "# Mnemosyne memory palace\n"
+                "# Minnas memory palace\n"
                 f"Endpoint: {self._endpoint}\n"
                 "📌 Use mnemosyne_search/mnemosyne_recall to retrieve memories.\n"
                 "📌 When the user brings up a known topic, proactively search and cite it."
@@ -604,11 +604,11 @@ class MnemosyneMemoryProvider(MemoryProvider):
             try:
                 hot = self._fetch_hot_memories()
                 if hot:
-                    return f"## Mnemosyne hot memories (cold start)\n{hot}"
+                    return f"## Minnas hot memories (cold start)\n{hot}"
             except Exception:
                 pass
             return ""
-        return f"## Mnemosyne related memories\n{result}"
+        return f"## Minnas related memories\n{result}"
 
     def queue_prefetch(self, query: str, *, session_id: str = "") -> None:
         """Search for relevant memories in the background, inject context on the next turn.
@@ -621,7 +621,7 @@ class MnemosyneMemoryProvider(MemoryProvider):
 
         def _run():
             try:
-                client = _MnemosyneClient(self._endpoint, self._user_id)
+                client = _MinnasClient(self._endpoint, self._user_id)
                 memories = client.search_memories(query, limit=5)
                 if not memories:
                     memories = client.recall_simple(query)
@@ -676,7 +676,7 @@ class MnemosyneMemoryProvider(MemoryProvider):
                     with self._prefetch_lock:
                         self._prefetch_result = result_text
             except Exception as e:
-                logger.debug("Mnemosyne prefetch failed: %s", e)
+                logger.debug("Minnas prefetch failed: %s", e)
 
         self._prefetch_thread = threading.Thread(
             target=_run, daemon=True, name="mnemosyne-prefetch"
@@ -685,7 +685,7 @@ class MnemosyneMemoryProvider(MemoryProvider):
 
     def sync_turn(self, user_content: str, assistant_content: str, *,
                   session_id: str = "", messages: Optional[List[Dict[str, Any]]] = None) -> None:
-        """Automatically store to Mnemosyne after every conversation turn (via the
+        """Automatically store to Minnas after every conversation turn (via the
         persistent write queue, crash-safe).
 
         Write optimization v1.1: filters out low-value short messages (hmm/okay/ok/
@@ -738,11 +738,11 @@ class MnemosyneMemoryProvider(MemoryProvider):
             q = get_queue()
 
             if q.is_circuit_open():
-                logger.debug("Mnemosyne circuit breaker OPEN, skipping this round's send")
+                logger.debug("Minnas circuit breaker OPEN, skipping this round's send")
                 return
 
             try:
-                client = _MnemosyneClient(self._endpoint, self._user_id)
+                client = _MinnasClient(self._endpoint, self._user_id)
                 items = q.dequeue(batch_size=3)
                 for item in items:
                     try:
@@ -762,10 +762,10 @@ class MnemosyneMemoryProvider(MemoryProvider):
                     except Exception as e:
                         q.mark_failed(item["id"], str(e))
                         q.record_failure()
-                        logger.debug("Mnemosyne send failed (id=%d): %s", item["id"], e)
+                        logger.debug("Minnas send failed (id=%d): %s", item["id"], e)
             except Exception as e:
                 q.record_failure()
-                logger.debug("Mnemosyne sync_turn client failed: %s", e)
+                logger.debug("Minnas sync_turn client failed: %s", e)
 
         if self._sync_thread and self._sync_thread.is_alive():
             self._sync_thread.join(timeout=5.0)
@@ -778,7 +778,7 @@ class MnemosyneMemoryProvider(MemoryProvider):
     def on_session_end(self, messages: List[Dict[str, Any]]) -> None:
         """On session end: trigger TMT L2 distillation.
         (v7.8: removed full-fidelity conversation_messages sync — Hermes's state.db is
-         already the authoritative session store, so Mnemosyne no longer keeps a second
+         already the authoritative session store, so Minnas no longer keeps a second
          copy; use session_search for the raw session text if needed.)"""
         if not self._client:
             return
@@ -792,23 +792,23 @@ class MnemosyneMemoryProvider(MemoryProvider):
         # ② TMT L2 distillation
         try:
             result = self._client.consolidate_session()
-            logger.info("Mnemosyne L2 consolidation triggered (%d turns): %s",
+            logger.info("Minnas L2 consolidation triggered (%d turns): %s",
                         self._turn_count, result.get("skipped", False))
         except Exception as e:
-            logger.warning("Mnemosyne session consolidation failed: %s", e)
+            logger.warning("Minnas session consolidation failed: %s", e)
 
         # ③ Archive fact extraction (v7.0): this session's newly written session
         # fragments → facts → filed into the archive
         try:
             ex = self._client._call("POST", "/palace/extract?batch=30", json={"batch": 30})
-            logger.info("Mnemosyne palace extract: processed=%s facts=%s",
+            logger.info("Minnas palace extract: processed=%s facts=%s",
                         ex.get("processed", "?"), ex.get("facts_created", "?"))
         except Exception as e:
-            logger.warning("Mnemosyne palace extract failed: %s", e)
+            logger.warning("Minnas palace extract failed: %s", e)
 
     def on_memory_write(self, action: str, target: str, content: str,
                         metadata: Optional[Dict[str, Any]] = None) -> None:
-        """Mirror built-in memory-tool writes to Mnemosyne."""
+        """Mirror built-in memory-tool writes to Minnas."""
         if not self._client or action != "add" or not content:
             return
 
@@ -820,7 +820,7 @@ class MnemosyneMemoryProvider(MemoryProvider):
 
         def _write():
             try:
-                client = _MnemosyneClient(self._endpoint, self._user_id)
+                client = _MinnasClient(self._endpoint, self._user_id)
                 client.store_memory(
                     content=content,
                     category=category,
@@ -828,7 +828,7 @@ class MnemosyneMemoryProvider(MemoryProvider):
                     source="hermes-memorytool"
                 )
             except Exception as e:
-                logger.debug("Mnemosyne memory mirror failed: %s", e)
+                logger.debug("Minnas memory mirror failed: %s", e)
 
         t = threading.Thread(target=_write, daemon=True, name="mnemosyne-memwrite")
         t.start()
@@ -840,7 +840,7 @@ class MnemosyneMemoryProvider(MemoryProvider):
 
     def handle_tool_call(self, tool_name: str, args: dict, **kwargs) -> str:
         if not self._client:
-            return tool_error("Mnemosyne not connected")
+            return tool_error("Minnas not connected")
 
         try:
             if tool_name == "mnemosyne_search":
@@ -875,7 +875,7 @@ class MnemosyneMemoryProvider(MemoryProvider):
                 t.join(timeout=5.0)
 
     def on_pre_compress(self, messages: List[Dict[str, Any]]) -> str:
-        """Before context compression: extract key insights, store them to Mnemosyne,
+        """Before context compression: extract key insights, store them to Minnas,
         and return a compression summary.
 
         Comparable to Honcho dialectic + Mem0 fact extraction.
@@ -925,7 +925,7 @@ class MnemosyneMemoryProvider(MemoryProvider):
 
             insight_text = "\n".join(blocks)
 
-            # Sync-archive to Mnemosyne and get back the entity ID (loss-prevention
+            # Sync-archive to Minnas and get back the entity ID (loss-prevention
             # loop: details dropped by compression can still be recalled)
             mid = None
             try:
@@ -940,7 +940,7 @@ class MnemosyneMemoryProvider(MemoryProvider):
                 logger.debug("pre_compress store failed: %s", e)
 
             if mid:
-                return f"[Compression insight archived as Mnemosyne#{mid}, full detail recallable] {insight_text}"
+                return f"[Compression insight archived as Minnas#{mid}, full detail recallable] {insight_text}"
             return insight_text
         except Exception as e:
             logger.debug("on_pre_compress failed: %s", e)
@@ -970,7 +970,7 @@ class MnemosyneMemoryProvider(MemoryProvider):
 
             def _store():
                 try:
-                    client = _MnemosyneClient(self._endpoint, self._user_id)
+                    client = _MinnasClient(self._endpoint, self._user_id)
                     client.store_memory(
                         content=content,
                         category="work",
@@ -1017,7 +1017,7 @@ class MnemosyneMemoryProvider(MemoryProvider):
         category = args.get("category", "")
 
         # Create a temporary client scoped to the given user_id
-        client = _MnemosyneClient(self._endpoint, user_id)
+        client = _MinnasClient(self._endpoint, user_id)
         memories = client.search_memories(query, limit, category)
 
         if not memories:
@@ -1197,5 +1197,5 @@ class MnemosyneMemoryProvider(MemoryProvider):
 # ── Plugin entry point ────────────────────────────────────────────
 
 def register(ctx) -> None:
-    """Register Mnemosyne as a Hermes memory provider."""
-    ctx.register_memory_provider(MnemosyneMemoryProvider())
+    """Register Minnas as a Hermes memory provider."""
+    ctx.register_memory_provider(MinnasMemoryProvider())
