@@ -307,6 +307,7 @@ Single user + 5 agent workers, 7×24 on a modest cloud instance:
 
 | Version | Date | Ships |
 |---|---|---|
+| v8.1.1 | 2026-10-09 | 🧹 Schema cleanup: drop legacy `project_id_old` column (superseded since v7.6.2, zero data) · add `source_doc` (URL/path provenance) |
 | v8.1.0 | 2026-10-06 | 🔌 MCP bridge folded into core: 15 tools now serve `/mcp` over streamable HTTP (stdio transport kept) |
 | v8.0.0 | 2026-09-25 | 🏰 Memory Palace OS 8.0: write right · recover back · find precisely · clarify |
 | [v7.8.4](https://github.com/gymaira1990-jpg/Mnemosyne-OS/releases/tag/v7.8.4) | 2026-09-24 | 🩹 Fix: archive quality — final report & user messages kept whole (no more 2000-char chop), tool-call evidence signatures, short sessions no longer dropped; ➕ report cards (`category=worklog`) + 23 contract tests |

@@ -228,7 +228,7 @@ async def _mcp_lifespan(_app: "FastAPI"):
 
 pool: Optional[asyncpg.Pool] = None
 
-app = FastAPI(title="Minnas v8.1.0 — 认知型记忆操作系统", lifespan=_mcp_lifespan)
+app = FastAPI(title="Minnas v8.1.1 — 认知型记忆操作系统", lifespan=_mcp_lifespan)
 
 # ── mount v5.0 routes ──
 app.include_router(tmt_router)
@@ -819,6 +819,7 @@ class MemoryCreate(BaseModel):
     entities: Optional[List[str]] = None
     session_id: Optional[str] = None
     source: Optional[str] = None  # v7.6: write-source identifier (hermes-precompress/hermes-delegation/...), stored in metadata['source']
+    source_doc: Optional[str] = None  # v8.1.1: source document this memory was derived from (URL or file path)
 
 SIGNAL_WEIGHTS = [
     (("待办", "下一步", "TODO", "pending", "未完成", "接着", "继续做"), 0.15, "未完成任务"),
@@ -979,8 +980,8 @@ async def create_memory(mem: MemoryCreate):
             if _layer["requires_source"] and not _layer["source_provided"]:
                 meta_extra["layer_note"] = "L1 cognitive-layer writes should include source (for conflict provenance)"
             row = await conn.fetchrow(
-                'INSERT INTO memories (user_id, project_id, content, category, embedding, metadata, valid_from, session_id, tmt_level, heat_score, storage_strength, retrieval_strength, dedup_fingerprint) '
-                'VALUES ($1,$2,$3,$4,$5::vector,$6,NOW(),$7,1,$8,$9,$10,$11) '
+                'INSERT INTO memories (user_id, project_id, content, category, embedding, metadata, valid_from, session_id, tmt_level, heat_score, storage_strength, retrieval_strength, dedup_fingerprint, source_doc) '
+                'VALUES ($1,$2,$3,$4,$5::vector,$6,NOW(),$7,1,$8,$9,$10,$11,$12) '
                 # ⚠️ Must include `WHERE dedup_fingerprint IS NOT NULL`:
                 #   dedup_fingerprint_key is a **partial unique index** (only applies to
                 #   rows that have a fingerprint, so the ~16k pre-existing NULL rows are
@@ -994,7 +995,7 @@ async def create_memory(mem: MemoryCreate):
                 'ON CONFLICT (dedup_fingerprint) WHERE dedup_fingerprint IS NOT NULL DO NOTHING '
                 'RETURNING id',
                 uid, mem.project_id, mem.content, cat, vec_str,
-                json.dumps(meta_extra), mem.session_id, heat_init, s_init, s_init, fingerprint
+                json.dumps(meta_extra), mem.session_id, heat_init, s_init, s_init, fingerprint, mem.source_doc
             )
             if row is None:
                 # Concurrent same-content race fallback: the unique index already blocked
@@ -2185,7 +2186,7 @@ async def extract_entities(user_id: str, max_memories: int = 50):
 @app.get("/api/v1/memories/{memory_id}")
 async def get_memory(memory_id: int, user_id: str):
     async with pool.acquire() as conn:
-        row = await conn.fetchrow("SELECT id, user_id, content, category, tier, heat_score, importance, reliability, metadata, created_at, last_accessed, access_count, is_deleted FROM memories WHERE id=$1 AND user_id=$2", memory_id, user_id)
+        row = await conn.fetchrow("SELECT id, user_id, content, source_doc, category, tier, heat_score, importance, reliability, metadata, created_at, last_accessed, access_count, is_deleted FROM memories WHERE id=$1 AND user_id=$2", memory_id, user_id)
         if not row:
             raise HTTPException(status_code=404, detail="Memory not found")
     return dict(row)
