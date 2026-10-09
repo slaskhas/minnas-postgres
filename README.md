@@ -34,9 +34,9 @@ Every conversation end triggers the distillation pipeline:
 Dialogue flows through the palace pipeline automatically:
 
 ```
-Conversation (Hermes)
+Conversation (MCP Client)
      │
-     ▼  state.db (lossless raw, Hermes native)
+     ▼  state.db (lossless raw, MCP Client native)
      │
      ▼  sync_turn → session memories (2,000/3,000 chars, lossless-ish)
      │
@@ -307,6 +307,8 @@ Single user + 5 agent workers, 7×24 on a modest cloud instance:
 
 | Version | Date | Ships |
 |---|---|---|
+| v8.1.0 | 2026-10-06 | 🔌 MCP bridge folded into core: 15 tools now serve `/mcp` over streamable HTTP (stdio transport kept) |
+| v8.0.0 | 2026-09-25 | 🏰 Memory Palace OS 8.0: write right · recover back · find precisely · clarify |
 | [v7.8.4](https://github.com/gymaira1990-jpg/Mnemosyne-OS/releases/tag/v7.8.4) | 2026-09-24 | 🩹 Fix: archive quality — final report & user messages kept whole (no more 2000-char chop), tool-call evidence signatures, short sessions no longer dropped; ➕ report cards (`category=worklog`) + 23 contract tests |
 | [v7.8.3](https://github.com/gymaira1990-jpg/Mnemosyne-OS/releases/tag/v7.8.3) | 2026-09-12 | 🔧 Fix: MNEMOSYNE_PORT / MNEMOSYNE_HOST env vars now effective (server entry no longer hardcodes 127.0.0.1:8010) + docs |
 | [v7.8.2](https://github.com/gymaira1990-jpg/Mnemosyne-OS/releases/tag/v7.8.2) | 2026-09-12 | 🩹 Fix: MCP bridge contract (feedback/delete/restore 422 → query params) + capabilities self-description + bridge contract tests |
