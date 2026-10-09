@@ -9,6 +9,22 @@
 
 ---
 
+## release · v8.1.1 (2026-10-09) — Schema cleanup: drop `project_id_old`, add `source_doc`
+
+- `mnemosyne.memories.project_id_old` (text) was superseded by the bigint `project_id` column
+  back in the v7.6.2 str→int type contract fix, and was never referenced by any code path since.
+  Confirmed zero non-null rows across all live production data before dropping — no legacy data
+  to migrate.
+- `migrations/v8.1.1_drop_project_id_old.sql`: `ALTER TABLE mnemosyne.memories DROP COLUMN IF EXISTS project_id_old;`
+  (idempotent, safe to re-run). Applied directly to the live database.
+- New `mnemosyne.memories.source_doc` (text, nullable): free-form string identifying the source
+  document a memory's content was derived from (a URL or a file path). Wired into
+  `MemoryCreate`/`POST /api/v1/memories` (write path) and `GET /api/v1/memories/{id}` (read path);
+  not exposed via the MCP bridge, matching how the existing `source` field is scoped (REST only).
+  `migrations/v8.1.1_add_source_doc.sql`: `ALTER TABLE mnemosyne.memories ADD COLUMN IF NOT EXISTS source_doc text;`
+  (idempotent, safe to re-run). Applied directly to the live database.
+- `docs/schema.sql` updated to match both changes.
+
 ## unreleased · Memory GC job fix (2026-09-26) — Oversized field in the voucher caused whole-batch compaction to fail
 
 > Rationale: **production-measured** (a real instance, batch `GC-20260926`, 549 items pending) — a genuine defect surfaced by production use.

@@ -300,8 +300,8 @@ ALTER SEQUENCE mnemosyne.media_memories_id_seq OWNED BY mnemosyne.media_memories
 CREATE TABLE mnemosyne.memories (
     id bigint NOT NULL,
     user_id text NOT NULL,
-    project_id_old text,
     content text NOT NULL,
+    source_doc text,
     category text DEFAULT 'knowledge'::text,
     archive_no text,
     CONSTRAINT chk_memories_category CHECK (((category)::text = ANY ((ARRAY['knowledge'::character varying, 'pitfall'::character varying, 'reference'::character varying, 'project'::character varying, 'ops'::character varying, 'deploy'::character varying, 'preference'::character varying, 'session'::character varying, 'worklog'::character varying, 'temp'::character varying])::text[]))),
