@@ -85,6 +85,10 @@ def test_w1_extracted_sql_is_the_real_one():
     assert "INSERT INTO memories" in sql
     assert "ON CONFLICT" in sql
     assert "dedup_fingerprint" in sql
+    # v8.1.1: source_doc is a real column in the write; the legacy str project_id_old
+    # was dropped (migrations/v8.1.1_drop_project_id_old.sql). Lock the transition.
+    assert "source_doc" in sql, "v8.1.1 write INSERT dropped the source_doc column"
+    assert "project_id_old" not in sql, "legacy project_id_old still in the write INSERT"
 
 
 def test_w2_on_conflict_predicate_matches_partial_index():
@@ -100,9 +104,12 @@ def test_w2_on_conflict_predicate_matches_partial_index():
 
 @_needs_db
 def test_w3_real_sql_runs_and_is_idempotent():
-    """Runs the real SQL against the database: the first insert returns an id, a second insert with the same fingerprint returns nothing (idempotent)."""
+    """Runs the real SQL against the database: the first insert returns an id, a second insert
+    with the same fingerprint returns nothing (idempotent). Since v8.1.1 the write also
+    carries `source_doc` (the 14th column / 12th bind arg) — verify it round-trips."""
     import asyncpg
     sql = _extract_insert_sql()
+    doc = "doc://W3-source-doc"
 
     async def go():
         conn = await asyncpg.connect(DSN)
@@ -110,10 +117,17 @@ def test_w3_real_sql_runs_and_is_idempotent():
             await _sync_seq(conn)
             await conn.execute(
                 "DELETE FROM memories WHERE user_id='default' AND content LIKE 'W3-%'")
+            # positional bind args ($1..$12): user_id, project_id, content, category,
+            # embedding, metadata, session_id, heat_score, storage, retrieval, fingerprint, source_doc
             args = ("default", None, "W3-probe", "knowledge", _vec(), "{}",
-                    None, 0.5, 3, 3, "FP-W3-CONTRACT")
+                    None, 0.5, 3, 3, "FP-W3-CONTRACT", doc)
             r1 = await conn.fetchrow(sql, *args)
             assert r1 is not None and r1["id"] is not None, "the first insert must return an id"
+            # source_doc must actually have persisted through the real write SQL
+            row = await conn.fetchrow(
+                "SELECT source_doc FROM memories WHERE id=$1", r1["id"])
+            assert row["source_doc"] == doc, (
+                f"source_doc not persisted by the real write SQL; got {row['source_doc']!r}")
             r2 = await conn.fetchrow(sql, *args)
             assert r2 is None, "a second insert with the same fingerprint must be blocked by ON CONFLICT (returns nothing)"
             n = await conn.fetchval(
@@ -122,6 +136,31 @@ def test_w3_real_sql_runs_and_is_idempotent():
         finally:
             await conn.execute(
                 "DELETE FROM memories WHERE dedup_fingerprint='FP-W3-CONTRACT'")
+            await conn.close()
+    asyncio.run(go())
+
+
+@_needs_db
+def test_w5_source_doc_default_stores_null():
+    """Writing without a `source_doc` must store NULL (the column is optional), not raise
+    on a missing bind arg."""
+    import asyncpg
+    sql = _extract_insert_sql()
+
+    async def go():
+        conn = await asyncpg.connect(DSN)
+        try:
+            await _sync_seq(conn)
+            await conn.execute("DELETE FROM memories WHERE content LIKE 'W5-%'")
+            # last bind arg = None → source_doc stored as NULL
+            args = ("default", None, "W5-probe", "knowledge", _vec(), "{}",
+                    None, 0.5, 3, 3, "FP-W5-NULLDOC", None)
+            r1 = await conn.fetchrow(sql, *args)
+            assert r1 is not None and r1["id"] is not None, "insert with source_doc=None must succeed"
+            row = await conn.fetchrow("SELECT source_doc FROM memories WHERE id=$1", r1["id"])
+            assert row["source_doc"] is None, f"source_doc should be NULL when omitted, got {row['source_doc']!r}"
+        finally:
+            await conn.execute("DELETE FROM memories WHERE content LIKE 'W5-%'")
             await conn.close()
     asyncio.run(go())
 

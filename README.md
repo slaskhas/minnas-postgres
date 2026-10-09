@@ -3,7 +3,7 @@
 # Minnas
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-8.1.0-brightgreen?style=flat-square" alt="version">
+  <img src="https://img.shields.io/badge/version-8.1.1-brightgreen?style=flat-square" alt="version">
   <img src="https://img.shields.io/github/actions/workflow/status/slaskhas/minnas-postgres/test.yml?style=flat-square&label=CI" alt="CI">
   <img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="license">
   <img src="https://img.shields.io/badge/python-3.11+-blue?style=flat-square" alt="python">
