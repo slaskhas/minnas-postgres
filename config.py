@@ -3,6 +3,9 @@ Mnemosyne v5.0 — unified config center
 Replaces the v2.1 inline CONFIG dict; supports env vars + multiple backends
 """
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # ── Doubao API (Volcengine ARK) ──
 ARK_API_KEY = os.getenv("ARK_API_KEY", "")
