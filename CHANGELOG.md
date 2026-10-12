@@ -9,6 +9,21 @@
 
 ---
 
+## release · v8.3.0 (2026-10-12) — Tool rebrand: `mnemosyne_*` → `minnas_*`
+
+The Hermes memory-provider tools are rebranded to match the project name
+(**Minnas**, formerly "Mnemosyne OS"). All 11 memory-provider tools now use the
+`minnas_` prefix. The REST API paths, the MCP bridge tool names
+(store_memory / search_memories / …), `MNEMOSYNE_*` env vars, and DB/file names
+are **unchanged** — this is a rename of the provider's tool namespace only.
+
+- Provider (`integrations/hermes-provider/__init__.py`): schemas, dispatch
+  comparisons, and system-prompt hints now use `minnas_` names.
+- Current docs updated: README tool lists, INSTALL.md, docs/INTEGRATION.md,
+  provider README + VERSION tool matrix.
+- Historical docs (changelogs, docs/archive/, design whitepapers) keep the
+  `mnemosyne_` spellings, per the project's "keep historical docs accurate" note.
+
 ## release · v8.2.0 (2026-10-12) — Decision models (Jev-style, Ollama `/v1/systemone`)
 
 New capability: a `decide` endpoint + MCP tool that asks an independent decision model

@@ -9,7 +9,7 @@
 
 A long-term memory plugin for Hermes Agent. Once enabled, your Agent automatically gets:
 
-- 🪄 **11 memory tools** (including the three-channel summon `mnemosyne_palace_summon`)
+- 🪄 **11 memory tools** (including the three-channel summon `minnas_palace_summon`)
 - 🔄 **Automatic hooks**: per-turn sync, end-of-session distillation, pre-compression archiving, subtask logging
 - 🧠 **Heat management**: important memories heat up, noise decays
 - 🏰 **Palace organization**: category tree + accession numbers + catalog cards
@@ -51,17 +51,17 @@ echo "MNEMOSYNE_USER_ID=default" >> ~/.hermes/.env
 
 | Tool | Purpose |
 |------|------|
-| `mnemosyne_palace_summon` | 🏰 Three-channel summon (name / guide / resonance) — the magic front-of-house |
-| `mnemosyne_search` | Four-dimensional search (semantic + keyword + heat + graph) |
-| `mnemosyne_recall` | Smart recall (cross-tier L1→L3) |
-| `mnemosyne_remember` | Actively store a memory |
-| `mnemosyne_dialectic` | Dialectical retrieval (with session context) |
-| `mnemosyne_hot_memories` | Currently hot memories |
-| `mnemosyne_tree` | Browse the memory tree (TMT tiers) |
-| `mnemosyne_tiered_read` | Three-tier read (L5/L3/L1) |
-| `mnemosyne_conflicts` | List detected conflicts |
-| `mnemosyne_wiki` | Knowledge-base retrieval |
-| `mnemosyne_media` | Media memories |
+| `minnas_palace_summon` | 🏰 Three-channel summon (name / guide / resonance) — the magic front-of-house |
+| `minnas_search` | Four-dimensional search (semantic + keyword + heat + graph) |
+| `minnas_recall` | Smart recall (cross-tier L1→L3) |
+| `minnas_remember` | Actively store a memory |
+| `minnas_dialectic` | Dialectical retrieval (with session context) |
+| `minnas_hot_memories` | Currently hot memories |
+| `minnas_tree` | Browse the memory tree (TMT tiers) |
+| `minnas_tiered_read` | Three-tier read (L5/L3/L1) |
+| `minnas_conflicts` | List detected conflicts |
+| `minnas_wiki` | Knowledge-base retrieval |
+| `minnas_media` | Media memories |
 
 ---
 
