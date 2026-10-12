@@ -193,7 +193,7 @@ python main.py
 ```bash
 # Health check
 curl http://127.0.0.1:8010/api/v1/echo
-# → {"status":"ok","service":"Minnas","version":"8.1.0"}
+# → {"status":"ok","service":"Minnas","version":"8.2.0"}
 
 # Store a memory
 curl -X POST http://127.0.0.1:8010/api/v1/memories \

@@ -15,6 +15,11 @@ import re
 import json
 from datetime import datetime
 
+try:
+    from core.decision import decide_async
+except ImportError:
+    decide_async = None  # keyword sniffing only (missing deps / standalone use)
+
 # ── Wing definitions — modeled on Chinese Library Classification major
 # categories, adapted to a personal knowledge system ──
 WINGS = {
@@ -63,25 +68,95 @@ ROOM_KEYWORDS = [
 ]
 
 
-def classify(content: str, category: str = "") -> dict:
-    """Classify one memory: returns {wing, room, shelf}"""
-    # 1. Wing: prefer mapping from category
-    wing = CATEGORY_TO_WING.get(category, "")
-    # 2. Room: sniffed from content keywords
+# ── Decision-model classification (Jev-style, via core/decision.py) ────────────
+# Room descriptions live in config/palace.json (one sentence per room, written
+# for the decision model's `criteria`). The same entries carry `keywords` — the
+# old keyword sniffing, kept as fallback when the decision endpoint is down.
+_PALACE_JSON_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                "config", "palace.json")
+UNFILED = "unfiled"
+_UNFILED_DESC = ("与以上任何房间都不匹配 — 内容过于琐碎、没有明确主题，"
+                 "或不属于上述任何一个领域。")
+_ROOMS_CACHE = None
+
+
+def _load_palace_rooms():
+    """Lazy-load [(room, description, keywords)] from config/palace.json
+    (module-level cache). Falls back to the built-in ROOM_KEYWORDS if the
+    JSON file is missing/malformed (description = room name)."""
+    global _ROOMS_CACHE
+    if _ROOMS_CACHE is None:
+        rooms = []
+        try:
+            with open(_PALACE_JSON_PATH, encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception:
+            data = None
+        if data is not None:
+            for entry in data.get("rooms", []):
+                room = (entry.get("room") or "").strip()
+                if not room:
+                    continue
+                desc = (entry.get("description") or "").strip()
+                kws = [str(k) for k in (entry.get("keywords") or []) if str(k).strip()]
+                if desc or kws:
+                    rooms.append((room, desc or room, kws))
+        if not rooms:  # JSON missing/corrupt → built-in keywords
+            rooms = [(r, r, kws) for r, kws in ROOM_KEYWORDS]
+        _ROOMS_CACHE = rooms
+    return _ROOMS_CACHE
+
+
+def _room_decision_questions(content: str, category: str) -> dict:
+    """Choice question: criteria = every room description + the 'unfiled'
+    escape hatch."""
+    criteria = {room: desc for room, desc, _ in _load_palace_rooms()}
+    criteria[UNFILED] = _UNFILED_DESC
+    return {
+        "room": {
+            "type": "choice",
+            "instructions": ("请为这段内容选择一个记忆宫殿的房间。"
+                             "从下面的房间描述中严格选一个最匹配的房间；"
+                             "如果没有任何房间匹配，请选 'unfiled'。"),
+            "criteria": criteria,
+        },
+    }
+
+
+async def classify(content: str, category: str = "") -> dict:
+    """Classify one memory: returns {wing, room, shelf}.
+
+    Room is decided by the Jev decision model (choice question, criteria = all
+    room descriptions from config/palace.json). If the decision endpoint is
+    unavailable, returns an unrecognisable answer, or picks an unknown room,
+    fall back to the old keyword sniffing (config/palace.json → ROOM_KEYWORDS).
+    Wing is still mapped from category (CATEGORY_TO_WING), defaulting to the
+    Knowledge wing.
+    """
+    wing = CATEGORY_TO_WING.get(category) or "K"
+
     room = ""
-    text = (content or "").lower()
-    for r, kws in ROOM_KEYWORDS:
-        if any(k in text for k in kws):
-            room = r
-            break
-    # 3. Fallback: no mapping → Knowledge wing · unfiled
-    if not wing:
-        wing = "K"
+    valid_rooms = {room for room, _, _ in _load_palace_rooms()} | {UNFILED}
+    if decide_async is not None:
+        try:
+            data = await decide_async(
+                {"content": content or "", "category": category or ""},
+                _room_decision_questions(content or "", category),
+            )
+            choice = str(((data.get("answers") or {}).get("room") or {}).get("choice") or "").strip()
+            if choice in valid_rooms:
+                room = choice
+        except Exception:
+            pass  # decision unavailable/malformed → keyword-sniff fallback below
+
     if not room:
-        room = "unfiled"
-    # 4. Shelf: generated from tags/keywords (simple version: take the first room keyword)
-    shelf = ""
-    return {"wing": wing, "room": room, "shelf": shelf}
+        text = (content or "").lower()
+        for r, _desc, kws in _load_palace_rooms():
+            if any(k in text for k in kws):
+                room = r
+                break
+
+    return {"wing": wing, "room": room or UNFILED, "shelf": ""}
 
 
 def gen_archive_no(wing: str, room: str, shelf: str, year: int = 0, seq: int = 0) -> str:
@@ -159,7 +234,7 @@ async def init_palace(pool) -> dict:
             "default"
         )
         for r in rows:
-            cls = classify(r["content"] or "", r["category"] or "")
+            cls = await classify(r["content"] or "", r["category"] or "")
             # Generate archive number: wing·room·year-sequence (id used as the
             # sequence to guarantee uniqueness)
             archive_no = f"{cls['wing']}·{cls['room'].upper()}·{datetime.now().year}-{r['id']:04d}"
@@ -206,7 +281,7 @@ async def summon(pool, query: str, user_id: str = "default", top_k: int = 5) -> 
                              "tags": r["tags"], "heat": r["heat_score"]} for r in rows]
 
         # ② Guide: classification-tree match (query contains wing/room keywords)
-        cls = classify(query, "")
+        cls = await classify(query, "")
         if cls["room"] != "unfiled":
             rows = await conn.fetch(
                 "SELECT m.id, m.content, c.archive_no, c.title, c.wing, c.room, c.tags "
@@ -281,7 +356,7 @@ async def _summon_channels(pool, query: str, user_id: str, limit: int) -> dict:
                           "tags": r["tags"], "heat": r["heat_score"]} for r in rows]
 
         # ② Guide: classification-tree match (descending by heat)
-        cls = classify(query, "")
+        cls = await classify(query, "")
         if cls["room"] != "unfiled":
             rows = await conn.fetch(
                 "SELECT m.id, m.content, c.archive_no, c.title, c.wing, c.room, c.tags "
@@ -478,7 +553,7 @@ async def extract_facts_pipeline(pool, batch: int = 20) -> dict:
                         # Auto-catalogue the new fact (classify + archive
                         # number + card) — uses the id returned by the
                         # insert directly, no race condition
-                        cls = classify(f, ftype)
+                        cls = await classify(f, ftype)
                         archive_no = f"F·{cls['room'].upper()}·{datetime.now().year}-{nid % 100000:05d}"
                         try:
                             async with pool.acquire() as conn:
@@ -547,7 +622,8 @@ if __name__ == "__main__":
         ("密钥在保险柜GITHUB/KEY.txt，line3细粒度PAT", "ops"),
         ("mnemosyne蒸馏链修复，双底座DeepSeek", "worklog"),
     ]
+    import asyncio
     print("=== Classification self-test ===")
     for content, cat in tests:
-        r = classify(content, cat)
+        r = asyncio.run(classify(content, cat))
         print(f"  [{cat}] {content[:30]}... → {r}")

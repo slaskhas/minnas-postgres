@@ -128,8 +128,8 @@ def _call_openai_single(text: str) -> List[float]:
                 if len(emb_val) != EMBED_DIM:
                     raise EmbeddingDimensionError(
                         f"embedding dimension mismatch: expected {EMBED_DIM}, got {len(emb_val)} "
-                        f"(model={EMBED_MODEL}, url={EMBED_URL}) — check whether EMBED_DIM/"
-                        f"OPENAI_EMBED_MODEL matches this provider's actual output dimension"
+                        f"(model={EMBED_MODEL}, url={EMBED_URL}) — set EMBED_DIM to the model's native "
+                        f"output dimension (EMBED_MODEL / EMBED_BASE_URL, or their OPENAI_* fallbacks)"
                     )
                 return emb_val
             last_err = f"empty response: {str(data)[:200]}"

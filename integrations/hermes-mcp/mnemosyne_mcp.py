@@ -9,7 +9,7 @@ MCP. Two transports share the *same* handlers:
     subprocess by any MCP client's stdio config (e.g. the slask client), optionally
     over an SSH tunnel (localhost:18010 → core 8010). Entered via
     `python3 integrations/hermes-mcp/mnemosyne_mcp.py` (see `__main__`).
-  * **streamable HTTP** — the in-process merge (v8.1). `main.py` mounts the 15
+  * **streamable HTTP** — the in-process merge (v8.1). `main.py` mounts the 16
     tools at `/mcp` inside the core FastAPI process. Handlers reach the core via
     `set_asgi_app()` — an in-process ASGI transport (no real socket, same
     Starlette routing + Pydantic validation as a real HTTP call) — so the *same*
@@ -343,6 +343,22 @@ async def list_tools(ctx, params) -> types.ListToolsResult:
                 "required": ["query"],
             },
         ),
+        # ── Decision model ──
+        types.Tool(
+            name="decide",
+            description="Ask the Jev-style decision model (Ollama /v1/systemone) to answer choice/noul/score questions over a state. Each `choice` answer is optionally saved as a belief.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "state": {"type": "object", "description": "Context payload (JSON object)"},
+                    "questions": {"type": "object", "description": "Named decision questions: {name: {type: choice|noul|score, ...}}"},
+                    "model": {"type": "string", "description": "Decision model (nimble | tev1 | tev1:0.8b); defaults to server config"},
+                    "save_belief": {"type": "boolean", "description": "Record each `choice` answer as a belief", "default": True},
+                    "user_id": {"type": "string", "description": "User ID (actual DB uses default)", "default": "default"},
+                },
+                "required": ["state", "questions"],
+            },
+        ),
     ])
 
 
@@ -463,6 +479,20 @@ async def _dispatch(name: str, arguments: dict) -> list[types.TextContent]:
             })
             return [types.TextContent(type="text", text=json.dumps(data, ensure_ascii=False))]
 
+        elif name == "decide":
+            # user_id travels in the JSON body (like store_belief / create_wiki_page);
+            # sending it as a query param would 422.
+            body = {
+                "user_id": user_id,
+                "state": arguments["state"],
+                "questions": arguments["questions"],
+                "save_belief": arguments.get("save_belief", True),
+            }
+            if arguments.get("model"):
+                body["model"] = arguments["model"]
+            data = await _call("POST", "/decide", json=body)
+            return [types.TextContent(type="text", text=json.dumps(data, ensure_ascii=False))]
+
         else:
             return [types.TextContent(type="text", text=json.dumps({"error": f"Unknown tool: {name}"}))]
 
@@ -491,7 +521,7 @@ if _MCP_AVAILABLE:
 
         `stateless_http=True` keeps every request independent — the right choice
         when the app is mounted behind `uvicorn --workers N` (no per-connection
-        state to lose or bounce across workers). All 15 Mnemosyne tools are
+        state to lose or bounce across workers). All 16 Mnemosyne tools are
         stateless anyway.
         """
         return server.streamable_http_app(

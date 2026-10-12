@@ -130,3 +130,66 @@ class TestExtractEntitiesContract:
         req = calls[-1]
         assert "text" not in req["kwargs"].get("params", {})
         assert "json" not in req["kwargs"]
+
+
+class TestDecideContract:
+    """decide is body-based — user_id/state/questions travel in the JSON body
+    (like store_belief / create_wiki_page); sending user_id as a query param
+    would get a 422 from the server. Locks down the 16th MCP tool."""
+
+    def test_decide_uses_json_body(self, bridge, calls):
+        state = {"ticket": "charged twice"}
+        questions = {
+            "team": {
+                "type": "choice",
+                "instructions": "Which team should handle this?",
+                "criteria": {"billing": "Payments and refunds", "technical": "Bugs and integrations"},
+            },
+            "urgency": {
+                "type": "score",
+                "instructions": "How urgent is this ticket?",
+                "criteria": ["Routine", "Soon", "Urgent"],
+            },
+        }
+        _dispatch(bridge, "decide", {"state": state, "questions": questions})
+        req = calls[-1]
+        assert (req["method"], req["path"]) == ("POST", "/decide")
+        body = req["kwargs"]["json"]
+        assert body["user_id"] == "default"
+        assert body["state"] == state
+        assert body["questions"] == questions
+        assert body["save_belief"] is True
+        assert "params" not in req["kwargs"], (
+            "sending user_id as a query param would get a 422 from the server"
+        )
+
+    def test_decide_honours_caller_user_id(self, bridge, calls):
+        _dispatch(bridge, "decide", {
+            "user_id": "alice",
+            "state": {"ticket": "charged twice"},
+            "questions": {
+                "team": {
+                    "type": "choice",
+                    "instructions": "Which team should handle this?",
+                    "criteria": {"billing": "Payments and refunds"},
+                }
+            },
+        })
+        assert calls[-1]["kwargs"]["json"]["user_id"] == "alice"
+
+    def test_decide_honours_save_belief_and_model(self, bridge, calls):
+        _dispatch(bridge, "decide", {
+            "state": {"ticket": "charged twice"},
+            "questions": {
+                "team": {
+                    "type": "choice",
+                    "instructions": "Which team should handle this?",
+                    "criteria": {"billing": "Payments and refunds"},
+                }
+            },
+            "save_belief": False,
+            "model": "tev1",
+        })
+        body = calls[-1]["kwargs"]["json"]
+        assert body["save_belief"] is False
+        assert body["model"] == "tev1"

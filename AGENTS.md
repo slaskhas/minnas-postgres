@@ -6,7 +6,7 @@
 > **Goal**: any agent (Hermes / Claude Code / Cursor / Codex) completes onboarding in 5 minutes.
 
 **Positioning**: cognitive memory operating system —— a long-term memory palace for AI agents. **It is not** a vector database, **not** a RAG pipeline.
-**Current version**: v8.1.0 (all test suites green locally, incl. new in-process `/mcp` mount) | production running v8.1.0 (re-verify self-reported version after deployment) | details in [PROJECT.md](PROJECT.md)
+**Current version**: v8.2.0 (decision models — POST `/api/v1/decide` + 16th MCP tool `decide` + per-`choice` belief wiring; all test suites green locally, incl. in-process `/mcp` mount) | production running v8.1.0 (re-verify self-reported version after deployment) | details in [PROJECT.md](PROJECT.md)
 
 ## How to run
 
