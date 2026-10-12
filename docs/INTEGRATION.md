@@ -42,10 +42,10 @@ m.search_by_hall("engineering")   # pitfall notes
 ```bash
 hermes config set memory.provider mnemosyne
 # You get 11 tools automatically:
-#   mnemosyne_palace_summon · mnemosyne_search · mnemosyne_recall
-#   mnemosyne_remember     · mnemosyne_dialectic · mnemosyne_hot_memories
-#   mnemosyne_wiki         · mnemosyne_tree      · mnemosyne_media
-#   mnemosyne_tiered_read  · mnemosyne_conflicts
+#   minnas_palace_summon · minnas_search · minnas_recall
+#   minnas_remember     · minnas_dialectic · minnas_hot_memories
+#   minnas_wiki         · minnas_tree      · minnas_media
+#   minnas_tiered_read  · minnas_conflicts
 ```
 
 ---

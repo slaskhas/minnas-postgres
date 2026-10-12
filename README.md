@@ -3,7 +3,7 @@
 # Minnas
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-8.2.0-brightgreen?style=flat-square" alt="version">
+  <img src="https://img.shields.io/badge/version-8.3.0-brightgreen?style=flat-square" alt="version">
   <img src="https://img.shields.io/github/actions/workflow/status/slaskhas/minnas-postgres/test.yml?style=flat-square&label=CI" alt="CI">
   <img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="license">
   <img src="https://img.shields.io/badge/python-3.11+-blue?style=flat-square" alt="python">
@@ -130,19 +130,19 @@ Hermes `state.db` (SQLite) syncs to PostgreSQL on every session end. Full exchan
 **Memory Provider** (14 tools) — automatic, no manual `remember()` calls:
 
 ```
-mnemosyne_palace_summon  → 3-channel summon (the magic front desk)
-mnemosyne_search         · mnemosyne_recall      · mnemosyne_hot_memories
-mnemosyne_remember       · mnemosyne_dialectic   · mnemosyne_wiki
-mnemosyne_media          · session_search        · mnemosyne_tree
+minnas_palace_summon  → 3-channel summon (the magic front desk)
+minnas_search         · minnas_recall      · minnas_hot_memories
+minnas_remember       · minnas_dialectic   · minnas_wiki
+minnas_media          · session_search        · minnas_tree
 mnemosyne_skill_search   · mnemosyne_skill_wakeup · mnemosyne_injection_plan  (v7.7.0)
 ```
 
 **WIKI knowledge base** (v7.4+, full-text snapshot archive for papers/plans):
 
 ```
-mnemosyne_wiki search      → semantic search (vector HNSW + BM25 keywords, RRF fusion, default on)
-mnemosyne_wiki by_source   → exact lookup by source path/URL (snapshot survives source loss)
-mnemosyne_wiki get/list    → read full text by ID / list pages
+minnas_wiki search      → semantic search (vector HNSW + BM25 keywords, RRF fusion, default on)
+minnas_wiki by_source   → exact lookup by source path/URL (snapshot survives source loss)
+minnas_wiki get/list    → read full text by ID / list pages
 Optional: rerank=true (doubao rerank, high-precision), graph=true (1-hop KG expansion, default off)
 Eval (20 queries, v7.5): precision@3 100% / recall@3 98.3% / MRR 1.0
 ```
@@ -232,7 +232,7 @@ The Minnas Memory Provider ships with Hermes — tools appear after `/reset`:
 
 ```bash
 hermes config set memory.provider mnemosyne
-# Tools: mnemosyne_palace_summon · mnemosyne_search · mnemosyne_recall · …
+# Tools: minnas_palace_summon · minnas_search · minnas_recall · …
 ```
 
 No other configuration needed.
@@ -307,6 +307,7 @@ Single user + 5 agent workers, 7×24 on a modest cloud instance:
 
 | Version | Date | Ships |
 |---|---|---|
+| v8.3.0 | 2026-10-12 | 🏷️ Tool rebrand: Hermes memory-provider tools `mnemosyne_*` → `minnas_*` (11 tools); current docs updated — REST/MCP/env/DB unchanged |
 | v8.2.0 | 2026-10-12 | 🧭 Decision models (Jev-style, Ollama `/v1/systemone`): `POST /api/v1/decide` + 16th MCP tool `decide` + per-`choice` belief wiring |
 | v8.1.1 | 2026-10-09 | 🧹 Schema cleanup: drop legacy `project_id_old` column (superseded since v7.6.2, zero data) · add `source_doc` (URL/path provenance) |
 | v8.1.0 | 2026-10-06 | 🔌 MCP bridge folded into core: 15 tools now serve `/mcp` over streamable HTTP (stdio transport kept) |

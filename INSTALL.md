@@ -63,9 +63,9 @@ If you already use [Hermes Agent](https://hermes-agent.nousresearch.com/docs), t
 hermes config set memory.provider mnemosyne
 
 # 2. Restart Hermes (or /reset); the tools appear automatically:
-#    mnemosyne_palace_summon · mnemosyne_search · mnemosyne_recall
-#    mnemosyne_remember    · mnemosyne_dialectic · mnemosyne_hot_memories
-#    mnemosyne_wiki        · mnemosyne_tree      · mnemosyne_media
+#    minnas_palace_summon · minnas_search · minnas_recall
+#    minnas_remember    · minnas_dialectic · minnas_hot_memories
+#    minnas_wiki        · minnas_tree      · minnas_media
 ```
 
 > Prerequisite: you already have an accessible Minnas service (local port 18010 or remote). Don't have one? Deploy the service itself first via [Option 2](#option-2-standalone-deployment-full-version).

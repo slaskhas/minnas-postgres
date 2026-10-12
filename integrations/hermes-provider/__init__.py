@@ -62,7 +62,7 @@ _HEADER_API_KEY = "X-API-Key"
 # ── Tool schemas ─────────────────────────────────────────
 
 SEARCH_SCHEMA = {
-    "name": "mnemosyne_search",
+    "name": "minnas_search",
     "description": "Four-dimensional search of the Minnas memory palace (semantic + keyword + heat + graph). Returns the best-matching historical memories.",
     "parameters": {
         "type": "object",
@@ -77,7 +77,7 @@ SEARCH_SCHEMA = {
 }
 
 REMEMBER_SCHEMA = {
-    "name": "mnemosyne_remember",
+    "name": "minnas_remember",
     "description": "Actively store an important memory in the Minnas memory palace. Automatically added to the semantic index and heat system.",
     "parameters": {
         "type": "object",
@@ -96,7 +96,7 @@ REMEMBER_SCHEMA = {
 }
 
 RECALL_SCHEMA = {
-    "name": "mnemosyne_recall",
+    "name": "minnas_recall",
     "description": "TMT smart recall: cross-tier (L1→L3) comprehensive retrieval from the memory palace. Deeper than search — includes session distillation and daily summaries.",
     "parameters": {
         "type": "object",
@@ -109,7 +109,7 @@ RECALL_SCHEMA = {
 }
 
 TREE_SCHEMA = {
-    "name": "mnemosyne_tree",
+    "name": "minnas_tree",
     "description": "Browse the TMT memory tree structure: L1 fragments / L2 sessions / L3 daily / L4 weekly / L5 profile — a quick overview of the whole memory system.",
     "parameters": {
         "type": "object",
@@ -118,7 +118,7 @@ TREE_SCHEMA = {
 }
 
 HOT_SCHEMA = {
-    "name": "mnemosyne_hot_memories",
+    "name": "minnas_hot_memories",
     "description": "Get the currently hottest memories. A quick way to see the most important recent information.",
     "parameters": {
         "type": "object",
@@ -130,7 +130,7 @@ HOT_SCHEMA = {
 }
 
 PALACE_SUMMON_SCHEMA = {
-    "name": "mnemosyne_palace_summon",
+    "name": "minnas_palace_summon",
     "description": "Three-channel summon for the magic memory palace: ① name (exact hit on accession number/title/tag) ② guide (narrow via the category tree) ③ resonance (vector-semantic fallback). More accurate and faster than semantic search for precisely looking up configs/keys/paths/projects.",
     "parameters": {
         "type": "object",
@@ -144,7 +144,7 @@ PALACE_SUMMON_SCHEMA = {
 }
 
 DIALECTIC_SCHEMA = {
-    "name": "mnemosyne_dialectic",
+    "name": "minnas_dialectic",
     "description": "Dialectical reasoning: searches memories with attached L2/L3 session context, returning a structured memory tree for the LLM to synthesize. Deeper than search — includes temporal relationships.",
     "parameters": {
         "type": "object",
@@ -157,7 +157,7 @@ DIALECTIC_SCHEMA = {
 }
 
 TIERED_READ_SCHEMA = {
-    "name": "mnemosyne_tiered_read",
+    "name": "minnas_tiered_read",
     "description": "Three-tier memory read: L5 summary (200 chars) / L3 overview (800 chars + session summary) / L1 full text (linked fragments + daily summary). Smarter tiering than a direct lookup.",
     "parameters": {
         "type": "object",
@@ -170,7 +170,7 @@ TIERED_READ_SCHEMA = {
 }
 
 CONFLICT_SCHEMA = {
-    "name": "mnemosyne_conflicts",
+    "name": "minnas_conflicts",
     "description": "View the list of memories with detected contradictions/conflicts. When a conflict is detected, the older memory is automatically marked as expired and evidence is kept.",
     "parameters": {
         "type": "object",
@@ -181,7 +181,7 @@ CONFLICT_SCHEMA = {
 }
 
 WIKI_SCHEMA = {
-    "name": "mnemosyne_wiki",
+    "name": "minnas_wiki",
     "description": "Query knowledge-base (Wiki) pages — a full-text snapshot archive of papers/articles/proposals. Supports: search (semantic full-text search), get (view full text by ID), by_source (verify by source path), list (listing). Use it when looking up paper/proposal details — it's there to be used.",
     "parameters": {
         "type": "object",
@@ -198,7 +198,7 @@ WIKI_SCHEMA = {
 }
 
 MEDIA_SCHEMA = {
-    "name": "mnemosyne_media",
+    "name": "minnas_media",
     "description": "Manage media memories (files/images/links). Supports list, get, create.",
     "parameters": {
         "type": "object",
@@ -577,7 +577,7 @@ class MinnasMemoryProvider(MemoryProvider):
                     f"{hot_block}"
                 )
             parts.append(
-                "📌 Use mnemosyne_search/mnemosyne_recall to retrieve relevant memories.\n"
+                "📌 Use minnas_search/minnas_recall to retrieve relevant memories.\n"
                 "📌 When the user brings up a known topic (tech/project/preference/etc.), proactively search memory and cite it."
             )
             return "\n\n".join(parts)
@@ -585,7 +585,7 @@ class MinnasMemoryProvider(MemoryProvider):
             return (
                 "# Minnas memory palace\n"
                 f"Endpoint: {self._endpoint}\n"
-                "📌 Use mnemosyne_search/mnemosyne_recall to retrieve memories.\n"
+                "📌 Use minnas_search/minnas_recall to retrieve memories.\n"
                 "📌 When the user brings up a known topic, proactively search and cite it."
             )
 
@@ -843,27 +843,27 @@ class MinnasMemoryProvider(MemoryProvider):
             return tool_error("Minnas not connected")
 
         try:
-            if tool_name == "mnemosyne_search":
+            if tool_name == "minnas_search":
                 return self._tool_search(args)
-            elif tool_name == "mnemosyne_remember":
+            elif tool_name == "minnas_remember":
                 return self._tool_remember(args)
-            elif tool_name == "mnemosyne_recall":
+            elif tool_name == "minnas_recall":
                 return self._tool_recall(args)
-            elif tool_name == "mnemosyne_tree":
+            elif tool_name == "minnas_tree":
                 return self._tool_tree(args)
-            elif tool_name == "mnemosyne_hot_memories":
+            elif tool_name == "minnas_hot_memories":
                 return self._tool_hot(args)
-            elif tool_name == "mnemosyne_palace_summon":
+            elif tool_name == "minnas_palace_summon":
                 return self._tool_palace_summon(args)
-            elif tool_name == "mnemosyne_dialectic":
+            elif tool_name == "minnas_dialectic":
                 return self._tool_dialectic(args)
-            elif tool_name == "mnemosyne_tiered_read":
+            elif tool_name == "minnas_tiered_read":
                 return self._tool_tiered(args)
-            elif tool_name == "mnemosyne_conflicts":
+            elif tool_name == "minnas_conflicts":
                 return self._tool_conflicts(args)
-            elif tool_name == "mnemosyne_wiki":
+            elif tool_name == "minnas_wiki":
                 return self._tool_wiki(args)
-            elif tool_name == "mnemosyne_media":
+            elif tool_name == "minnas_media":
                 return self._tool_media(args)
             return tool_error(f"Unknown tool: {tool_name}")
         except Exception as e:

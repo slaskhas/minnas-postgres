@@ -18,17 +18,17 @@ Architecture: Hermes ABC MemoryProvider plugin (evolved from v1.1.0)
 
 | Tool | Status |
 |------|:---:|
-| mnemosyne_palace_summon | ✅ v7 three-channel summon |
-| mnemosyne_search | ✅ |
-| mnemosyne_remember | ✅ |
-| mnemosyne_recall | ✅ |
-| mnemosyne_dialectic | ✅ |
-| mnemosyne_hot_memories | ✅ |
-| mnemosyne_tree | ✅ |
-| mnemosyne_tiered_read | ✅ |
-| mnemosyne_conflicts | ✅ |
-| mnemosyne_wiki | ✅ |
-| mnemosyne_media | ✅ |
+| minnas_palace_summon | ✅ v7 three-channel summon |
+| minnas_search | ✅ |
+| minnas_remember | ✅ |
+| minnas_recall | ✅ |
+| minnas_dialectic | ✅ |
+| minnas_hot_memories | ✅ |
+| minnas_tree | ✅ |
+| minnas_tiered_read | ✅ |
+| minnas_conflicts | ✅ |
+| minnas_wiki | ✅ |
+| minnas_media | ✅ |
 
 ## Dependencies
 
