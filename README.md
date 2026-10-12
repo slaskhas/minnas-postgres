@@ -3,7 +3,7 @@
 # Minnas
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-8.1.1-brightgreen?style=flat-square" alt="version">
+  <img src="https://img.shields.io/badge/version-8.2.0-brightgreen?style=flat-square" alt="version">
   <img src="https://img.shields.io/github/actions/workflow/status/slaskhas/minnas-postgres/test.yml?style=flat-square&label=CI" alt="CI">
   <img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="license">
   <img src="https://img.shields.io/badge/python-3.11+-blue?style=flat-square" alt="python">
@@ -307,6 +307,7 @@ Single user + 5 agent workers, 7×24 on a modest cloud instance:
 
 | Version | Date | Ships |
 |---|---|---|
+| v8.2.0 | 2026-10-12 | 🧭 Decision models (Jev-style, Ollama `/v1/systemone`): `POST /api/v1/decide` + 16th MCP tool `decide` + per-`choice` belief wiring |
 | v8.1.1 | 2026-10-09 | 🧹 Schema cleanup: drop legacy `project_id_old` column (superseded since v7.6.2, zero data) · add `source_doc` (URL/path provenance) |
 | v8.1.0 | 2026-10-06 | 🔌 MCP bridge folded into core: 15 tools now serve `/mcp` over streamable HTTP (stdio transport kept) |
 | v8.0.0 | 2026-09-25 | 🏰 Memory Palace OS 8.0: write right · recover back · find precisely · clarify |

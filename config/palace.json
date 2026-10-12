@@ -1,0 +1,58 @@
+{
+  "wings": {
+    "K": {"name": "知识", "rooms": ["arch", "memory", "ai", "tools"]},
+    "N": {"name": "网络", "rooms": ["proxy", "domain", "dns", "server"]},
+    "D": {"name": "开发", "rooms": ["repo", "deploy", "code", "database"]},
+    "O": {"name": "运维", "rooms": ["ops", "cron", "monitor", "backup"]},
+    "A": {"name": "资产", "rooms": ["secret", "key", "account", "vault"]},
+    "P": {"name": "人物", "rooms": ["user", "ai", "contact", "org"]},
+    "I": {"name": "灵感", "rooms": ["idea", "design", "brand", "content"]},
+    "S": {"name": "技能", "rooms": ["skill", "workflow", "procedure", "lesson"]},
+    "M": {"name": "元", "rooms": ["meta", "config", "roadmap", "decision"]}
+  },
+  "category_to_wing": {
+    "knowledge": "K",
+    "reference": "K",
+    "wiki": "K",
+    "session": "M",
+    "worklog": "O",
+    "chat": "M",
+    "preference": "P",
+    "ops": "O",
+    "pitfall": "S",
+    "deploy": "D",
+    "fact": "K"
+  },
+  "rooms": [
+    {"room": "proxy", "keywords": ["xray", "代理", "proxy", "2081", "2082", "1080", "clash", "分流", "geosite"], "description": "网络代理、流量分流与出口配置（xray、clash、端口 2081/2082/1080 等）的相关笔记。"},
+    {"room": "deploy", "keywords": ["部署", "deploy", "发布", "rsync", "scp", "systemd", "重启", "升级"], "description": "应用部署、发布上线、服务重启与版本升级的操作步骤和经验。"},
+    {"room": "secret", "keywords": ["密钥", "key", "token", "保险柜", "password", "pat", "凭证", "api_key"], "description": "密码、API 密钥、令牌等凭证，以及它们的存储与安全保管方法。"},
+    {"room": "security", "keywords": ["安全", "审计", "漏洞", "扫描", "权限", "ssh", "入侵", "加固"], "description": "系统安全加固、漏洞扫描、权限审计与入侵排查等安全事项。"},
+    {"room": "domain", "keywords": ["域名", "domain", "dns", "解析", "cdn"], "description": "域名注册、DNS 解析与 CDN 配置相关的笔记。"},
+    {"room": "repo", "keywords": ["仓库", "repo", "github", "git", "commit", "push", "分支"], "description": "代码仓库、Git 版本控制、分支与提交相关的操作和经验。"},
+    {"room": "cron", "keywords": ["cron", "定时", "任务", "调度", "schedule"], "description": "定时任务、cron 调度和自动化计划相关的配置与经验。"},
+    {"room": "database", "keywords": ["数据库", "postgres", "psql", "pg", "sqlite", "sql", "表"], "description": "数据库（Postgres、SQL、sqlite 等）的表结构、查询与运维经验。"},
+    {"room": "memory", "keywords": ["记忆", "mnemosyne", "memory", "蒸馏", "tmt", "宫殿", "召回", "检索"], "description": "关于记忆系统本身（mnemosyne 宫殿、记忆蒸馏、召回与检索机制）的笔记。"},
+    {"room": "server", "keywords": ["服务器", "server", "gz", "hk", "云", "vps", "lighthouse", "腾讯云"], "description": "云服务器、VPS 与机房（如 gz/hk 区域）的基础设施与运维笔记。"},
+    {"room": "design", "keywords": ["设计", "定妆", "海报", "形象", "brand", "立绘", "娘化"], "description": "视觉设计、品牌形象以及角色立绘、娘化等创意设计相关的笔记。"},
+    {"room": "skill", "keywords": ["技能", "skill", "流程", "workflow", "sop"], "description": "可复用的技能、工作流与 SOP（标准操作流程）。"},
+    {"room": "lesson", "keywords": ["坑", "教训", "pitfall", "踩过", "注意", "报错", "失败"], "description": "踩过的坑、失败教训与注意事项。"},
+    {"room": "idea", "keywords": ["灵感", "idea", "方向", "迭代", "规划", "roadmap", "设想"], "description": "灵感、想法、方向设想与迭代规划。"},
+    {"room": "user", "keywords": ["用户", "user", "偏好", "喜欢", "主人", "想要"], "description": "用户偏好、喜好，以及人物（联系人、组织）的相关信息。"},
+    {"room": "content", "keywords": ["内容", "文章", "公众号", "小红书", "文案", "视频"], "description": "文章、公众号、小红书等写作与视频创作相关的内容。"},
+    {"room": "billing", "keywords": ["余额", "充值", "账单", "billing", "费用", "价格", "额度"], "description": "账单、费用、价格、额度与充值等计费相关的笔记。"},
+    {"room": "model", "keywords": ["模型", "model", "llm", "deepseek", "豆包", "doubao", "ark", "prompt"], "description": "LLM 模型（deepseek、豆包、ark 等）、prompt 与 AI 模型使用经验。"},
+    {"room": "backup", "keywords": ["备份", "backup", "归档", "存档"], "description": "备份、归档与存档操作的经验与配置。"},
+    {"room": "workspace", "keywords": ["工作区", "workspace", "箱子", "桌面", "文件"], "description": "工作区、桌面与文件组织相关的笔记。"}
+  ],
+  "categories": {
+    "knowledge": {"rooms": ["arch", "memory", "ai", "tools", "reference", "wiki"]},
+    "session": {"rooms": ["session", "journal", "worklog"]},
+    "chat": {"rooms": ["chat", "conversation", "notes"]},
+    "preference": {"rooms": ["user", "preference", "habit"]},
+    "ops": {"rooms": ["ops", "monitor", "backup", "server"]},
+    "pitfall": {"rooms": ["lesson", "pitfall", "troubleshoot"]},
+    "deploy": {"rooms": ["deploy", "release", "pipeline"]},
+    "fact": {"rooms": ["fact", "reference", "knowledge"]}
+  }
+}

@@ -26,7 +26,7 @@ ALL_TOOLS = {
     "store_memory", "search_memories", "dialectic_search", "get_hot_memories",
     "get_memory_stats", "feedback_memory", "get_memory_traces", "delete_memory",
     "restore_memory", "search_graph", "extract_entities", "create_wiki_page",
-    "search_wiki", "store_belief", "search_beliefs",
+    "search_wiki", "store_belief", "search_beliefs", "decide",
 }
 
 
@@ -74,7 +74,7 @@ def test_set_asgi_app_routes_in_process(bridge):
 
 def test_build_server_lists_all_tools(bridge):
     """A real in-process Client drives the same Server our /mcp mount would,
-    and all 15 Mnemosyne tools are exposed."""
+    and all 16 Mnemosyne tools are exposed."""
     from mcp import Client
 
     async def run():

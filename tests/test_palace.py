@@ -2,6 +2,7 @@
 
 Coverage: classification tree / accession-number generation / lifecycle rules / SQL generation
 """
+import asyncio
 import pytest
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -9,45 +10,113 @@ import palace
 
 
 class TestClassify:
+    """Keyword sniffing — the fallback path, exercised with the decision
+    endpoint unavailable (decide_async monkeypatched to None; no network)."""
+
+    @pytest.fixture(autouse=True)
+    def no_decision(self, monkeypatch):
+        monkeypatch.setattr(palace, "decide_async", None)
+
     def test_proxy_keyword(self):
-        r = palace.classify("在生产服务器部署xray代理 2081端口", "ops")
+        r = asyncio.run(palace.classify("在生产服务器部署xray代理 2081端口", "ops"))
         assert r["room"] == "proxy"
 
     def test_deploy_keyword(self):
-        r = palace.classify("rsync部署到生产服务器", "worklog")
+        r = asyncio.run(palace.classify("rsync部署到生产服务器", "worklog"))
         assert r["room"] == "deploy"
 
     def test_secret_keyword(self):
-        r = palace.classify("密钥在保险柜KEY.txt line3", "ops")
+        r = asyncio.run(palace.classify("密钥在保险柜KEY.txt line3", "ops"))
         assert r["room"] == "secret"
 
     def test_user_preference(self):
-        r = palace.classify("用户喜欢红果短剧风格AI美女图", "preference")
+        r = asyncio.run(palace.classify("用户喜欢红果短剧风格AI美女图", "preference"))
         assert r["room"] == "user"
 
     def test_security_priority(self):
-        r = palace.classify("服务器安全审计 漏洞扫描", "ops")
+        r = asyncio.run(palace.classify("服务器安全审计 漏洞扫描", "ops"))
         assert r["room"] == "security"
 
     def test_model_room(self):
-        r = palace.classify("DeepSeek v4-flash 模型配置", "knowledge")
+        r = asyncio.run(palace.classify("DeepSeek v4-flash 模型配置", "knowledge"))
         assert r["room"] == "model"
 
     def test_billing_room(self):
-        r = palace.classify("豆包余额查询 充值", "ops")
+        r = asyncio.run(palace.classify("豆包余额查询 充值", "ops"))
         assert r["room"] == "billing"
 
     def test_content_room(self):
-        r = palace.classify("公众号文章排版 小红书", "knowledge")
+        r = asyncio.run(palace.classify("公众号文章排版 小红书", "knowledge"))
         assert r["room"] == "content"
 
     def test_unknown_falls_to_wing(self):
-        r = palace.classify("完全无关的内容xyz", "knowledge")
+        r = asyncio.run(palace.classify("完全无关的 xyz123", "knowledge"))
         assert r["wing"] in palace.WINGS
+        assert r["room"] == palace.UNFILED
 
     def test_wing_mapping(self):
-        assert palace.classify("xray部署", "ops")["wing"] == "O"
-        assert palace.classify("用户偏好", "preference")["wing"] == "P"
+        a = asyncio.run(palace.classify("xray部署", "ops"))
+        b = asyncio.run(palace.classify("用户偏好", "preference"))
+        assert a["wing"] == "O"
+        assert b["wing"] == "P"
+
+
+class TestClassifyDecision:
+    """Primary path: Jev decision model (decide_async mocked — no network)."""
+
+    @staticmethod
+    def _fake_response(choice):
+        async def fake(state, questions, model=None):
+            return {"answers": {"room": {"type": "choice", "choice": choice,
+                                         "confidence": 0.75,
+                                         "probabilities": {choice: 0.75}}}}
+        return fake
+
+    def test_choice_is_honored(self, monkeypatch):
+        monkeypatch.setattr(palace, "decide_async",
+                            TestClassifyDecision._fake_response("billing"))
+        r = asyncio.run(palace.classify("豆包余额查询 充值", "ops"))
+        assert r["room"] == "billing"
+        assert r["wing"] == "O"
+        assert r["shelf"] == ""
+
+    def test_question_shape(self, monkeypatch):
+        captured = {}
+
+        async def fake(state, questions, model=None):
+            captured.update(state=state, questions=questions)
+            return {"answers": {"room": {"type": "choice", "choice": "unfiled"}}}
+
+        monkeypatch.setattr(palace, "decide_async", fake)
+        r = asyncio.run(palace.classify("随便的测试内容", "knowledge"))
+        assert captured["state"] == {"content": "随便的测试内容", "category": "knowledge"}
+        q = captured["questions"]["room"]
+        assert q["type"] == "choice"
+        assert palace.UNFILED in q["criteria"]
+        assert len(q["criteria"]) >= 20  # all 20 rooms + unfiled
+        assert all(q["criteria"][room].strip() for room in q["criteria"])
+        assert r["room"] == palace.UNFILED
+        assert r["wing"] == "K"
+
+    def test_unknown_choice_falls_back_to_keywords(self, monkeypatch):
+        monkeypatch.setattr(palace, "decide_async",
+                            TestClassifyDecision._fake_response("not_a_room"))
+        r = asyncio.run(palace.classify("xray代理部署", "ops"))
+        assert r["room"] == "proxy"  # keyword sniffing fallback
+
+    def test_decision_failure_falls_back_to_keywords(self, monkeypatch):
+        async def boom(state, questions, model=None):
+            raise RuntimeError("endpoint down")
+        monkeypatch.setattr(palace, "decide_async", boom)
+        r = asyncio.run(palace.classify("密钥在保险柜", "ops"))
+        assert r["room"] == "secret"  # keyword sniffing fallback
+
+    def test_malformed_response_falls_back_to_keywords(self, monkeypatch):
+        async def fake(state, questions, model=None):
+            return {"model": "tev1:0.8b"}  # no 'answers'
+        monkeypatch.setattr(palace, "decide_async", fake)
+        r = asyncio.run(palace.classify("xray代理部署", "ops"))
+        assert r["room"] == "proxy"  # keyword sniffing fallback
 
 
 class TestArchiveNo:

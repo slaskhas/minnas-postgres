@@ -24,14 +24,27 @@ catch a handler that forgets to forward the new parameter.
 import asyncio
 import os
 import re
+import sys
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest  # noqa: F401 — kept for future async/fixture additions
 
-import main
-from main import MemoryCreate
+# Make `main` importable regardless of how the file is invoked.
+#
+# `import main` only succeeds when the *project root* is on sys.path. Pytest adds
+# that root itself only when collecting a directory (`pytest tests/`); running a
+# single file (`pytest tests/test_source_doc_v811.py`) leaves it off the path and
+# the module-level import below then fails. Resolve the root (same idiom as
+# tests/test_server_port_env.py) and put it on the path so the test is
+# self-contained in both modes.
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if ROOT not in sys.path:
+    sys.path.insert(0, ROOT)
 
-MAIN_PY = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "main.py")
+import main  # noqa: E402 — imported after sys.path fix-up above
+from main import MemoryCreate  # noqa: E402
+
+MAIN_PY = os.path.join(ROOT, "main.py")
 
 
 # ── request model contract ─────────────────────────────────────────────────────

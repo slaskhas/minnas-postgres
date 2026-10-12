@@ -9,6 +9,42 @@
 
 ---
 
+## release · v8.2.0 (2026-10-12) — Decision models (Jev-style, Ollama `/v1/systemone`)
+
+New capability: a `decide` endpoint + MCP tool that asks an independent decision model
+to answer Jev-style `choice`/`noul`/`score` questions over a JSON state, and (by
+default) records each `choice` answer as a belief.
+
+- `config.py`: dedicated `DECISION_*` vars — `DECISION_BASE_URL`, `DECISION_API_KEY`,
+  `DECISION_MODEL`, `DECISION_URL` — independent of the chat LLM and the embedding
+  service. `DECISION_BASE_URL` falls back to `EMBED_BASE_URL`; `DECISION_API_KEY` to
+  `OPENAI_API_KEY`. `/systemone` is appended to the base — that is the **route name,
+  not the model**; the `model` field takes `nimble` | `tev1` | `tev1:0.8b` (a model
+  actually pulled on the instance).
+- New `core/decision.py` (mirrors `core/embedding.py`): sync `decide()` + async
+  `decide_async()` (runs in a thread-pool executor so it never blocks the event loop);
+  exponential-backoff retry on 429/5xx and connection errors; `DecisionFormatError`
+  (a response missing a non-empty `answers`) is a contract/config problem that is *not*
+  retriable (analogous to `EmbeddingDimensionError`).
+- `main.py`: `POST /api/v1/decide` (`DecisionRequest` — `user_id`/`state`/`questions`/
+  `model?`/`save_belief`). Returns the raw `{model, answers, usage}`. When `save_belief`
+  (default `true`), every `choice` answer is upserted as a belief (same embed +
+  insert/merge + confidence-average as `create_belief`) with a confidence-based `status`
+  (≥0.7 → `established`, ≥0.4 → `tentative`, <0.3 → `hypothesis`, else `tentative`).
+  The belief-write loop is non-fatal: a DB/embedding failure surfaces as
+  `result["belief_error"]` instead of 500ing the decision. Listed in
+  `/api/v1/capabilities` (tag `decision`).
+- `integrations/hermes-mcp/mnemosyne_mcp.py`: the 16th MCP tool `decide` (body-based —
+  `user_id` travels in the JSON body, matching `store_belief`/`create_wiki_page`),
+  `list_tools` schema, and `_dispatch` branch. Tool count 15 → 16.
+- Tests: new `tests/test_decision.py` (no-network contract, retry, `DecisionFormatError`,
+  async) plus `TestDecideContract` in `tests/test_mcp_bridge_contract.py` (locks the
+  body shape and the `"params" not in kwargs` 422-regression). `tests/test_mcp_http_mount.py`
+  `ALL_TOOLS` now includes `decide` (asserts all 16 tools via a live in-process `mcp.Client`).
+- Docs/env: `.env` + `.env.template` document the `DECISION_*` vars (Ollama `/v1` example).
+  Version 8.1.1 → **8.2.0** in `VERSION`, the README badge + changelog row, `CHANGELOG.md`,
+  `AGENTS.md`, and `INSTALL.md`.
+
 ## release · v8.1.1 (2026-10-09) — Schema cleanup: drop `project_id_old`, add `source_doc`
 
 - `mnemosyne.memories.project_id_old` (text) was superseded by the bigint `project_id` column

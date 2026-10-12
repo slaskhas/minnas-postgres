@@ -130,6 +130,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from config import PG_USER, PG_PASSWORD, PG_DB, PG_HOST, PG_PORT, PG_SEARCH_PATH, HOST, PORT
 from core.embedding import get_embedding_async
 from core.llm import call_llm as llm_call
+from core.decision import decide_async, DecisionFormatError
 # TMT (compatible with the existing v2.1 routes)
 import tmt.router as tmt_module
 from tmt.router import router as tmt_router
@@ -228,7 +229,7 @@ async def _mcp_lifespan(_app: "FastAPI"):
 
 pool: Optional[asyncpg.Pool] = None
 
-app = FastAPI(title="Minnas v8.1.1 — 认知型记忆操作系统", lifespan=_mcp_lifespan)
+app = FastAPI(title="Minnas v8.2.0 — 认知型记忆操作系统", lifespan=_mcp_lifespan)
 
 # ── mount v5.0 routes ──
 app.include_router(tmt_router)
@@ -809,7 +810,16 @@ class BeliefSearch(BaseModel):
     top_k: int = 5
     status_filter: Optional[str] = None
 
-# ── Core memory API ──
+class DecisionRequest(BaseModel):
+    """Request for the Jev-style decision model (Ollama POST /v1/systemone).
+
+    ``questions`` is ``{name: {type: choice|noul|score, ...}}`` (see core/decision.py).
+    """
+    user_id: str = "default"
+    state: dict                 # context payload (JSON object)
+    questions: dict             # named decision questions
+    model: Optional[str] = None # default -> DECISION_MODEL
+    save_belief: bool = True    # record each `choice` answer as a belief
 class MemoryCreate(BaseModel):
     user_id: str = "default"
     project_id: Optional[int] = None  # v7.7.0: str→int type contract fix (passing a proj_xxx accession-number string now gives a friendly 422 instead of a 500)
@@ -1381,7 +1391,7 @@ async def update_memory(memory_id: int, user_id: str, update: MemoryUpdate):
             # Reclassify (reuses palace's classification sniffing; skipped if unavailable)
             try:
                 from palace import classify
-                cls = classify(new_content)
+                cls = await classify(new_content)
                 if cls and cls.get("room") and cls.get("room") != "unfiled":
                     new_cat = cls["room"]
                     await conn.execute("UPDATE memories SET category = $1 WHERE id = $2", new_cat, memory_id)
@@ -1559,6 +1569,94 @@ async def evolve_belief(belief_id: int, user_id: str, new_confidence: float = No
             new_conf, evidences, new_status, trajectory, belief_id
         )
     return {"id": belief_id, "confidence": new_conf, "status": new_status}
+
+
+# ── Decision model (Jev-style; Ollama POST /v1/systemone) ──
+
+def _status_from_confidence(conf: float) -> str:
+    """Auto-evolve status from a confidence, mirroring evolve_belief."""
+    conf = float(conf)
+    if conf >= 0.7:
+        return "established"
+    if conf >= 0.4:
+        return "tentative"
+    if conf < 0.3:
+        return "hypothesis"
+    return "tentative"
+
+
+async def _upsert_belief(user_id: str, content: str, confidence: float, status: str) -> int:
+    """Embed + create/merge a belief (mirrors create_belief), returning its id."""
+    raw_vec = (await get_embedding([content]))[0]
+    vec_str = "[" + ",".join(str(x) for x in raw_vec) + "]"
+    async with pool.acquire() as conn:
+        existing = await conn.fetchrow(
+            "SELECT id, confidence, trajectory FROM beliefs WHERE user_id=$1 AND content=$2 AND status!='contradicted'",
+            user_id, content
+        )
+        if existing:
+            new_conf = (existing["confidence"] + confidence) / 2
+            await conn.execute(
+                "UPDATE beliefs SET confidence=$1, updated_at=NOW() WHERE id=$2",
+                new_conf, existing["id"]
+            )
+            return existing["id"]
+        row = await conn.fetchrow(
+            "INSERT INTO beliefs (user_id, content, confidence, evidence_memories, embedding, status) "
+            "VALUES ($1,$2,$3,$4,$5::vector,$6) RETURNING id",
+            user_id, content, confidence, [], vec_str, status
+        )
+    return row["id"]
+
+
+@app.post("/api/v1/decide")
+async def decide_endpoint(req: DecisionRequest):
+    """Jev-style decision: ask the decision model for choice/noul/score answers
+    over ``state``/``questions``, then (optionally) record each `choice` answer
+    as a belief."""
+    try:
+        data = await decide_async(req.state, req.questions, req.model)
+    except DecisionFormatError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+    answers = data.get("answers", {})
+    result = {
+        "model": data.get("model"),
+        "answers": answers,
+        "usage": data.get("usage"),
+        "save_belief": req.save_belief,
+        "beliefs": [],
+    }
+    if req.save_belief:
+        try:
+            for name, ans in answers.items():
+                if not isinstance(ans, dict) or ans.get("type") != "choice":
+                    continue
+                chosen = ans.get("choice")
+                if chosen is None:
+                    continue
+                conf = float(ans.get("confidence", 0.5))
+                status = _status_from_confidence(conf)
+                belief_id = await _upsert_belief(
+                    req.user_id,
+                    f"Decision '{name}': chose '{chosen}'",
+                    conf, status
+                )
+                result["beliefs"].append({
+                    "question": name,
+                    "chosen": chosen,
+                    "confidence": conf,
+                    "status": status,
+                    "belief_id": belief_id,
+                })
+        except Exception as e:
+            # Non-fatal: the decision is still returned. A belief-write failure
+            # (DB down, embedding dimension mismatch, ...) is surfaced in the
+            # payload rather than 500-ing the whole decision.
+            result["belief_error"] = str(e)
+    return result
 
 
 # ── Reflection and self-evolution ──
@@ -1934,6 +2032,7 @@ async def capabilities():
             {"path": "POST /api/v1/beliefs/search", "purpose": "语义搜索信念", "tags": ["belief"]},
             {"path": "GET /api/v1/beliefs/{id}", "purpose": "获取信念详情(含置信度/轨迹/证据)", "tags": ["belief"]},
             {"path": "POST /api/v1/beliefs/{id}/evolve", "purpose": "演化信念: 调整置信度+添加证据, 状态自动演进", "tags": ["belief"]},
+            {"path": "POST /api/v1/decide", "purpose": "Jev-style decision model (Ollama /v1/systemone): multi-question choice/noul/score; save_belief records each `choice` answer", "params": {"user_id": "str", "state": "object", "questions": "object", "model": "str?", "save_belief": "bool(1)"}, "tags": ["decision"]},
             {"path": "POST /api/v1/graph/search", "purpose": "AGE知识图谱多跳搜索(通过实体关联发现记忆)", "tags": ["graph"]},
             {"path": "POST /api/v1/wiki", "purpose": "创建Wiki页面(手动知识库)", "tags": ["wiki"]},
             {"path": "POST /api/v1/wiki/search", "purpose": "语义搜索Wiki", "tags": ["wiki"]},
