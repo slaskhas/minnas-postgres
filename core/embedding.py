@@ -97,11 +97,36 @@ def _cache_key(text: str) -> str:
     return hashlib.md5(text.encode("utf-8")).hexdigest()
 
 
-class EmbeddingDimensionError(RuntimeError):
+class EmbeddingError(RuntimeError):
+    """Base for embedding failures with an operator-actionable message
+    (surfaced by main.py as HTTP 503 with the message in `detail`)."""
+
+
+class EmbeddingUnavailableError(EmbeddingError):
+    """The embedding backend can't be used: unreachable, model not found,
+    or credentials rejected."""
+
+
+class EmbeddingDimensionError(EmbeddingError):
     """The vector dimension actually returned by the provider doesn't match EMBED_DIM —
     a configuration problem that retrying won't fix (e.g. Ollama silently ignores a
     `dimensions` request that exceeds the model's native dimension and returns the
     native length instead)"""
+
+
+def _describe_http_error(e: "urllib.error.HTTPError") -> str:
+    """Turn an HTTP error from the embeddings endpoint into a diagnosis."""
+    try:
+        body = e.read().decode("utf-8", "replace")[:300]
+    except Exception:
+        body = ""
+    where = f"model={EMBED_MODEL!r}, url={EMBED_URL}"
+    if e.code == 404 or (e.code == 400 and "not found" in body.lower()):
+        return (f"embedding model not found ({where}): check EMBED_MODEL / OPENAI_EMBED_MODEL "
+                f"for typos and that the model is pulled/deployed on the server. Server said: {body}")
+    if e.code in (401, 403):
+        return f"embedding API rejected credentials, HTTP {e.code} ({where}): check OPENAI_API_KEY. {body}"
+    return f"embedding API returned HTTP {e.code} {e.reason} ({where}). {body}"
 
 
 def _call_openai_single(text: str) -> List[float]:
@@ -136,15 +161,19 @@ def _call_openai_single(text: str) -> List[float]:
         except EmbeddingDimensionError:
             raise
         except urllib.error.HTTPError as e:
-            last_err = f"HTTP {e.code}: {e.reason}"
+            last_err = _describe_http_error(e)
             if e.code in (429, 500, 502, 503, 504):
                 time.sleep(RETRY_BASE * (2 ** attempt))
                 continue
-            break
-        except Exception as e:
-            last_err = str(e)
+            raise EmbeddingUnavailableError(last_err)
+        except urllib.error.URLError as e:
+            last_err = (f"embedding backend unreachable (url={EMBED_URL}, model={EMBED_MODEL!r}): "
+                        f"{e.reason} — check EMBED_URL / OPENAI_BASE_URL and that the service is running")
             time.sleep(RETRY_BASE * (2 ** attempt))
-    raise RuntimeError(f"embedding API failed: {last_err}")
+        except Exception as e:
+            last_err = f"{type(e).__name__}: {e} (url={EMBED_URL}, model={EMBED_MODEL!r})"
+            time.sleep(RETRY_BASE * (2 ** attempt))
+    raise EmbeddingUnavailableError(f"embedding API failed after {MAX_RETRIES} attempts: {last_err}")
 
 
 def get_embedding(texts: List[str]) -> List[List[float]]:
