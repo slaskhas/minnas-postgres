@@ -128,7 +128,7 @@ def normalize_category(cat: str) -> str:
 # ── v5.0: modular imports ──
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from config import PG_USER, PG_PASSWORD, PG_DB, PG_HOST, PG_PORT, PG_SEARCH_PATH, HOST, PORT
-from core.embedding import get_embedding_async
+from core.embedding import get_embedding_async, EmbeddingError
 from core.llm import call_llm as llm_call
 from core.decision import decide_async, DecisionFormatError
 # TMT (compatible with the existing v2.1 routes)
@@ -230,6 +230,16 @@ async def _mcp_lifespan(_app: "FastAPI"):
 pool: Optional[asyncpg.Pool] = None
 
 app = FastAPI(title="Minnas v8.2.0 — 认知型记忆操作系统", lifespan=_mcp_lifespan)
+
+from fastapi.responses import JSONResponse
+
+
+@app.exception_handler(EmbeddingError)
+async def _embedding_error_handler(request, exc: EmbeddingError):
+    """Embedding backend misconfigured/unreachable → 503 with the cause, not a bare 500."""
+    logger.error("embedding failure on %s: %s", request.url.path, exc)
+    return JSONResponse(status_code=503, content={"detail": f"Embedding service error: {exc}"})
+
 
 # ── mount v5.0 routes ──
 app.include_router(tmt_router)
